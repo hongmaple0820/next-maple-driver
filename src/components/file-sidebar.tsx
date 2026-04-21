@@ -145,7 +145,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <span className="text-xs font-medium text-muted-foreground">Storage</span>
             <ChevronIcon className={cn("w-3 h-3 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
           </div>
-          <Progress value={usagePercent} className="h-2 mb-2" />
+          <Progress value={usagePercent} className={cn("h-2 mb-2", usagePercent > 80 && "animate-pulse")} />
           {stats?.byType && Object.keys(stats.byType).length > 0 && (
             <div className="flex h-1.5 rounded-full overflow-hidden bg-muted/50">
               {Object.entries(stats.byType)
@@ -227,7 +227,7 @@ export function FileSidebar() {
   if (isMobile) {
     return (
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="w-72 p-0 backdrop-blur-sm">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SidebarContent onNavigate={() => setSidebarOpen(false)} />
         </SheetContent>

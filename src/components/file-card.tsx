@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
@@ -315,7 +315,7 @@ export function FileCard({ file }: FileCardProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          whileHover={{ y: -2 }}
+          whileHover={{ y: -2, scale: 1.02 }}
           layout
           onHoverStart={() => setIsHovered(true)}
           onHoverEnd={() => setIsHovered(false)}
@@ -330,17 +330,14 @@ export function FileCard({ file }: FileCardProps) {
             className={cn(
               "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden",
               isSelected
-                ? "border-emerald-500 shadow-emerald-500/10 shadow-lg bg-emerald-500/5"
+                ? "border-emerald-500 shadow-emerald-500/20 shadow-lg bg-emerald-500/5 border-b-2 border-b-emerald-500/30"
                 : isDragOver && file.type === "folder"
                 ? "border-emerald-500 shadow-emerald-500/20 shadow-lg bg-emerald-500/5 scale-[1.02]"
-                : "border-transparent hover:border-border hover:shadow-md"
+                : "border-transparent hover:border-border hover:shadow-md hover:border-b-2 hover:border-b-emerald-500/30"
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           >
-            {/* Gradient overlay at bottom for text readability */}
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/90 to-transparent pointer-events-none z-[1]" />
-
             {/* Selection indicator */}
             <motion.div
               layout
@@ -361,21 +358,20 @@ export function FileCard({ file }: FileCardProps) {
               )}
             </motion.div>
 
-            {/* Star badge */}
-            {file.starred && !isSelected && (
-              <div className="absolute top-2 left-2 z-10">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              </div>
-            )}
-
-            {/* Extension badge */}
-            {ext && !isSelected && (
-              <div className="absolute top-2 right-10 z-10">
-                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono bg-background/80 backdrop-blur-sm">
-                  .{ext}
-                </Badge>
-              </div>
-            )}
+            {/* Star badge with animation */}
+            <AnimatePresence>
+              {file.starred && !isSelected && (
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  className="absolute top-2 left-2 z-10"
+                >
+                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Action menu */}
             <div
@@ -401,10 +397,10 @@ export function FileCard({ file }: FileCardProps) {
               </DropdownMenu>
             </div>
 
-            <CardContent className="flex flex-col items-center gap-2 p-4 pb-3 relative z-[2]">
+            <CardContent className="flex flex-col items-center gap-2 sm:p-4 p-3 sm:pb-3 pb-2 relative z-[2]">
               {/* Icon / Thumbnail */}
               {isImage ? (
-                <div className="mt-1 w-full aspect-square max-w-[80px] rounded-lg overflow-hidden bg-muted relative">
+                <div className="mt-1 w-full aspect-square sm:max-w-[80px] max-w-[60px] rounded-lg overflow-hidden bg-muted relative">
                   <img
                     src={`/api/files/download?id=${file.id}&mode=inline`}
                     alt={file.name}
@@ -413,16 +409,23 @@ export function FileCard({ file }: FileCardProps) {
                 </div>
               ) : (
                 <div className="mt-1">
-                  <FileTypeIcon file={file} className="w-14 h-14" strokeWidth={1.2} />
+                  <FileTypeIcon file={file} className="sm:w-14 sm:h-14 w-10 h-10" strokeWidth={1.2} />
                 </div>
               )}
 
               {/* File name */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full mt-1">
-                    {file.name}
-                  </p>
+                  <div className="flex items-center justify-center gap-1.5 w-full sm:mt-1 mt-0">
+                    <p className="sm:text-sm text-xs font-medium text-center leading-tight line-clamp-2 min-w-0">
+                      {file.name}
+                    </p>
+                    {ext && (
+                      <Badge variant="secondary" className="shrink-0 text-[9px] px-1 py-0 h-4 font-mono hidden sm:inline-flex">
+                        .{ext}
+                      </Badge>
+                    )}
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
                   Modified {formatDate(file.updatedAt)}
@@ -430,7 +433,7 @@ export function FileCard({ file }: FileCardProps) {
               </Tooltip>
 
               {/* Meta info */}
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="sm:text-xs text-[11px] text-muted-foreground text-center">
                 {file.type === "folder"
                   ? `${file.childrenCount ?? 0} items`
                   : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}

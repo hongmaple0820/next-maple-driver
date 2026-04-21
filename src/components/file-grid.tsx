@@ -7,6 +7,7 @@ import { FolderOpen, SearchX, Star, Trash2, Clock, FolderPlus, Upload, Clipboard
 import { useFileStore, type SortField } from "@/store/file-store";
 import { FileCard } from "@/components/file-card";
 import { getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
+import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ContextMenu,
@@ -104,27 +105,10 @@ export function FileGrid() {
     if (!fileList || fileList.length === 0) return;
 
     for (const file of Array.from(fileList)) {
-      const toastId = `upload-${Date.now()}-${file.name}`;
-      toast.loading(`Uploading ${file.name}...`, { id: toastId, description: "0%" });
-
-      const formData = new FormData();
-      formData.append("files", file);
-      formData.append("parentId", currentFolderId);
-
       try {
-        const res = await fetch("/api/files/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (res.ok) {
-          toast.success(`${file.name} uploaded`, { id: toastId });
-          queryClient.invalidateQueries({ queryKey: ["files"] });
-          queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
-        } else {
-          toast.error(`Failed to upload ${file.name}`, { id: toastId });
-        }
+        await uploadFileWithProgress(file, currentFolderId, queryClient);
       } catch {
-        toast.error(`Failed to upload ${file.name}`, { id: toastId });
+        // Error already shown via toast
       }
     }
     // Reset input
@@ -306,7 +290,11 @@ export function FileGrid() {
             transition={{ duration: 0.3 }}
             className="flex flex-col items-center justify-center py-24 text-muted-foreground min-h-[300px]"
           >
-            <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6">
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6"
+            >
               {isSearch ? (
                 <SearchX className="w-10 h-10 opacity-40" />
               ) : section === "trash" ? (
@@ -320,7 +308,7 @@ export function FileGrid() {
               ) : (
                 <FolderOpen className="w-10 h-10 opacity-40" />
               )}
-            </div>
+            </motion.div>
             <p className="text-lg font-medium mb-1">
               {isSearch
                 ? "No results found"
@@ -359,8 +347,15 @@ export function FileGrid() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); }}
         >
-          {sortedFiles.map((file) => (
-            <FileCard key={file.id} file={file} />
+          {sortedFiles.map((file, index) => (
+            <motion.div
+              key={file.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: index * 0.03 }}
+            >
+              <FileCard file={file} />
+            </motion.div>
           ))}
         </div>
       </ContextMenuTrigger>

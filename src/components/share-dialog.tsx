@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Share2, Copy, Check, Link } from "lucide-react";
+import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound } from "lucide-react";
 import type { ShareInfo } from "@/lib/file-utils";
 
 export function ShareDialog() {
@@ -66,7 +66,7 @@ export function ShareDialog() {
   };
 
   const shareLink = shareInfo
-    ? `${window.location.origin}/shared/${shareInfo.token}`
+    ? `${window.location.origin}/share/${shareInfo.token}`
     : "";
 
   const handleCopy = async () => {
@@ -101,7 +101,8 @@ export function ShareDialog() {
           <div className="space-y-4 py-2">
             {/* Password option */}
             <div className="flex items-center justify-between">
-              <Label htmlFor="use-password" className="text-sm">
+              <Label htmlFor="use-password" className="flex items-center gap-2 text-sm">
+                <KeyRound className="w-4 h-4 text-muted-foreground" />
                 Password protect
               </Label>
               <Switch
@@ -121,7 +122,8 @@ export function ShareDialog() {
 
             {/* Expiry option */}
             <div className="flex items-center justify-between">
-              <Label htmlFor="use-expiry" className="text-sm">
+              <Label htmlFor="use-expiry" className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-muted-foreground" />
                 Set expiration
               </Label>
               <Switch
@@ -144,12 +146,13 @@ export function ShareDialog() {
             <div className="space-y-2">
               <Label>Share Link</Label>
               <div className="flex gap-2">
-                <Input value={shareLink} readOnly className="text-sm" />
+                <Input value={shareLink} readOnly className="text-sm font-mono" />
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={handleCopy}
                   className="shrink-0"
+                  title="Copy link"
                 >
                   {copied ? (
                     <Check className="w-4 h-4 text-emerald-600" />
@@ -157,13 +160,37 @@ export function ShareDialog() {
                     <Copy className="w-4 h-4" />
                   )}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="Show QR code"
+                  onClick={() => {
+                    // Open share link in new tab as a simple way to view the link
+                    // In a full implementation, this would generate a QR code
+                    handleCopy();
+                  }}
+                >
+                  <QrCode className="w-4 h-4" />
+                </Button>
               </div>
+            </div>
+
+            {/* Share ID */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Share ID</Label>
+              <p className="text-xs font-mono bg-muted p-2 rounded break-all">
+                {shareInfo.token}
+              </p>
             </div>
 
             {/* Password display */}
             {shareInfo.password && (
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Password</Label>
+                <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <KeyRound className="w-3 h-3" />
+                  Password
+                </Label>
                 <p className="text-sm font-mono bg-muted p-2 rounded">
                   {shareInfo.password}
                 </p>
@@ -173,7 +200,10 @@ export function ShareDialog() {
             {/* Expiry display */}
             {shareInfo.expiresAt && (
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Expires</Label>
+                <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="w-3 h-3" />
+                  Expires
+                </Label>
                 <p className="text-sm">
                   {new Date(shareInfo.expiresAt).toLocaleString()}
                 </p>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard } from "lucide-react";
+import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileMenuButton } from "@/components/file-sidebar";
+import { uploadFilesWithProgress } from "@/lib/upload-utils";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -52,6 +53,7 @@ export function FileToolbar() {
 
   const queryClient = useQueryClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Fetch breadcrumb path
   const { data: breadcrumbs = [] } = useQuery<BreadcrumbPathItem[]>({
@@ -82,25 +84,7 @@ export function FileToolbar() {
     input.onchange = async (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (!files || files.length === 0) return;
-
-      const formData = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        formData.append("files", files[i]);
-      }
-      formData.append("parentId", currentFolderId);
-
-      try {
-        const res = await fetch("/api/files/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (res.ok) {
-          queryClient.invalidateQueries({ queryKey: ["files"] });
-          queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
-        }
-      } catch {
-        // Error handled silently
-      }
+      await uploadFilesWithProgress(files, currentFolderId, queryClient);
     };
     input.click();
   };
@@ -166,7 +150,7 @@ export function FileToolbar() {
           </Breadcrumb>
         </div>
 
-        {/* Search */}
+        {/* Desktop Search */}
         <div className="relative hidden sm:block w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -176,22 +160,37 @@ export function FileToolbar() {
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
+
+        {/* Mobile Search Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="sm:hidden h-9 w-9"
+          onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+        >
+          {mobileSearchOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+        </Button>
       </div>
+
+      {/* Mobile Search Bar (expandable) */}
+      {mobileSearchOpen && (
+        <div className="sm:hidden px-4 pb-2">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search files..."
+              className="pl-9 h-9 w-full"
+              defaultValue={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+      )}
 
       {/* Bottom row: actions + view toggle */}
       <div className="flex items-center justify-between px-4 pb-3 gap-2">
         <div className="flex items-center gap-2">
-          {/* Mobile search */}
-          <div className="relative sm:hidden flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search..."
-              className="pl-9 h-9"
-              defaultValue={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-            />
-          </div>
-
           {section === "files" && (
             <>
               <Button
@@ -259,9 +258,9 @@ export function FileToolbar() {
               setSortBy(val as SortField);
             }}
           >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <ArrowUpDown className="w-3.5 h-3.5 mr-1.5" />
-              <SelectValue />
+            <SelectTrigger className="h-8 w-[130px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center">
+              <ArrowUpDown className="w-3.5 h-3.5 mr-1.5 max-[400px]:mr-0" />
+              <SelectValue className="max-[400px]:hidden" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="name">Name</SelectItem>

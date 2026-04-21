@@ -5,7 +5,7 @@ import { Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFileStore } from "@/store/file-store";
-import { toast } from "sonner";
+import { uploadFilesWithProgress } from "@/lib/upload-utils";
 
 export function UploadZone({ children }: { children: React.ReactNode }) {
   const { currentFolderId } = useFileStore();
@@ -16,36 +16,7 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
 
   const uploadFiles = useCallback(
     async (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
-      for (const file of fileArray) {
-        const toastId = `upload-${Date.now()}-${file.name}`;
-
-        toast.loading(`Uploading ${file.name}...`, {
-          id: toastId,
-          description: "0%",
-        });
-
-        const formData = new FormData();
-        formData.append("files", file);
-        formData.append("parentId", currentFolderId);
-
-        try {
-          const res = await fetch("/api/files/upload", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (res.ok) {
-            toast.success(`${file.name} uploaded`, { id: toastId });
-            queryClient.invalidateQueries({ queryKey: ["files"] });
-            queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
-          } else {
-            toast.error(`Failed to upload ${file.name}`, { id: toastId });
-          }
-        } catch {
-          toast.error(`Failed to upload ${file.name}`, { id: toastId });
-        }
-      }
+      await uploadFilesWithProgress(files, currentFolderId, queryClient);
     },
     [currentFolderId, queryClient]
   );

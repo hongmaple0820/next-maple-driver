@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
 import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
+import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -186,27 +187,10 @@ export function FileList() {
     if (!fileList || fileList.length === 0) return;
 
     for (const file of Array.from(fileList)) {
-      const toastId = `upload-${Date.now()}-${file.name}`;
-      toast.loading(`Uploading ${file.name}...`, { id: toastId, description: "0%" });
-
-      const formData = new FormData();
-      formData.append("files", file);
-      formData.append("parentId", currentFolderId);
-
       try {
-        const res = await fetch("/api/files/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (res.ok) {
-          toast.success(`${file.name} uploaded`, { id: toastId });
-          queryClient.invalidateQueries({ queryKey: ["files"] });
-          queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
-        } else {
-          toast.error(`Failed to upload ${file.name}`, { id: toastId });
-        }
+        await uploadFileWithProgress(file, currentFolderId, queryClient);
       } catch {
-        toast.error(`Failed to upload ${file.name}`, { id: toastId });
+        // Error already shown via toast
       }
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -527,7 +511,7 @@ export function FileList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedFiles.map((file) => {
+              {sortedFiles.map((file, index) => {
                 const isSelected = selectedFileIds.has(file.id);
 
                 return (
@@ -535,8 +519,11 @@ export function FileList() {
                     <ContextMenuTrigger asChild>
                       <TableRow
                         className={cn(
-                          "cursor-pointer transition-colors",
-                          isSelected && "bg-emerald-500/5 hover:bg-emerald-500/10"
+                          "cursor-pointer transition-colors duration-150",
+                          isSelected
+                            ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-[3px] border-l-emerald-500"
+                            : "border-l-[3px] border-l-transparent hover:bg-muted/50",
+                          index % 2 === 1 && !isSelected && "bg-muted/20 hover:bg-muted/40"
                         )}
                         onClick={() => handleRowClick(file)}
                         onDoubleClick={() => handleRowDoubleClick(file)}

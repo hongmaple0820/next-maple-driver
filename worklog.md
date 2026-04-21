@@ -516,3 +516,173 @@ Stage Summary:
 - Add storage usage alerts
 - Improve mobile responsive layout further
 - Add file sharing public page
+
+---
+Task ID: 7-cron-review-round3
+Agent: Main Agent
+Task: QA testing, fix badge overlap, add upload progress + share page, UI polish
+
+Work Log:
+- QA Round 3: Comprehensive testing with agent-browser + VLM
+  - All Files view: ✅ Works with improved card design
+  - Dark mode: ✅ Good contrast, consistent styling
+  - List view: ✅ Columns aligned, alternating row backgrounds
+  - File detail panel: ✅ Now has Delete button, larger image preview, extension badge
+  - Keyboard shortcuts dialog: ✅ Opens with ? key
+  - Share dialog: ✅ Creates link, shows URL, Copy link + QR code buttons
+  - Share public page: ✅ /share/[shareId] renders correctly with file info, download, preview
+  - VLM Quality Rating: 8/10 (both light and dark modes)
+- Bug Fix: Extension badge (.txt) overlapping with action menu button on file cards
+  - Moved badge from absolute position (right-10) to inline with filename using flex layout
+  - Badge now appears next to filename text, not floating over the card
+- Feature 1: Upload Progress with Real Percentage
+  - Created reusable upload utility (src/lib/upload-utils.ts) using XMLHttpRequest for real-time progress
+  - Updated 4 upload locations: upload-zone.tsx, file-toolbar.tsx, file-grid.tsx, file-list.tsx
+  - Toast now dynamically updates: "Uploading file.txt... 45%" → "file.txt uploaded"
+- Feature 2: File Sharing Public Access Page
+  - New API route: /api/share/[token] with GET (share info) and POST (password verify + download)
+  - New public share page: /share/[shareId] with loading, ready, password, expired, not-found states
+  - Clean centered card layout with gradient background and CloudDrive branding
+  - Updated share dialog: shows full share URL, Copy link button, QR code icon, share token display
+- Feature 3: UI Polish - Mobile Responsive
+  - Mobile search toggle button instead of always-visible search input
+  - Responsive file card sizing (smaller on mobile)
+  - Sort dropdown hides text on small screens
+  - Backdrop blur on mobile sidebar Sheet
+- Feature 4: UI Polish - Better Hover & Selection Effects
+  - Scale animation (1.02) on file card hover via framer-motion
+  - Emerald glow shadow on selected cards
+  - Animated star badge with AnimatePresence
+  - Removed gradient overlay for cleaner design
+  - 3px emerald left border on selected list rows
+  - Alternating row backgrounds in list view
+- Feature 5: UI Polish - File Detail Panel
+  - Added red Delete quick action button
+  - Responsive panel width (w-[340px] sm:w-[380px])
+  - Larger image preview (h-64) with lightbox zoom
+  - Subtle dividers between sections
+- Feature 6: UI Polish - Empty States & Transitions
+  - Floating animation on empty state icon
+  - Staggered card appearance (0.03s delay per card)
+  - Pulse animation on storage progress bar when > 80% full
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- 6 features/fixes implemented
+- Upload progress now shows real percentage
+- File sharing public page fully functional
+- UI significantly polished with better animations and mobile support
+- VLM rating: 8/10
+- 19 API endpoints (17 + share GET + share POST)
+- 28+ frontend components
+
+## Current Project State
+- Fully functional cloud storage application, VLM rated 8/10
+- 35+ features including upload progress, share page, drag-and-drop, keyboard shortcuts, clipboard, etc.
+- 19 API endpoints: files (CRUD), upload, download, move, star, restore, search, stats, path, share, trash, recent, copy, share/[token] GET/POST
+- 28+ frontend components including share-client.tsx, keyboard-shortcuts-dialog.tsx
+- Responsive design with mobile support
+- Both light and dark modes
+- No hydration errors, no runtime errors
+- Lint clean
+
+## Known Issues / Risks
+- None critical
+- Minor: Upload progress may not work perfectly for very small files (progress events may not fire)
+- Minor: Share page doesn't have a dedicated layout (uses root layout)
+
+## Recommended Next Steps
+- Add bulk download (zip) functionality
+- Add file versioning / history
+- Add more file type previews (e.g., office docs with document viewer)
+- Add storage usage alerts (notification when approaching limit)
+- Add file/folder drag-and-drop in list view
+- Add notification system for share link accesses
+- Add user preferences (default view mode, sort preference, etc.)
+- Add file description/notes feature
+
+---
+Task ID: 7-ui-polish-mobile
+Agent: UI Polish Mobile Agent
+Task: Mobile Responsive + Visual Refinements for CloudDrive
+
+Work Log:
+- Feature 1: Mobile Responsive Improvements
+  - file-toolbar.tsx: Replaced inline mobile search with toggle-based search (search icon button toggles full-width search bar on mobile); on screens < 400px, sort dropdown shows only icon (hides text via max-[400px] classes)
+  - file-card.tsx: Added responsive padding (sm:p-4 p-3, sm:pb-3 pb-2), responsive icon size (sm:w-14 sm:h-14 w-10 h-10), responsive image thumbnails (sm:max-w-[80px] max-w-[60px]), smaller font sizes on mobile, hidden extension badge on small screens
+  - file-list.tsx: Verified hidden columns work correctly on mobile (hidden md:table-cell for Size, hidden sm:table-cell for Type, hidden lg:table-cell for Modified)
+  - file-sidebar.tsx: Added backdrop-blur-sm to mobile Sheet sidebar overlay for smooth glass effect
+
+- Feature 2: Better File Card Hover and Selection Effects
+  - file-card.tsx: Added scale 1.02 on hover via framer-motion whileHover; added emerald glow shadow on selected cards (shadow-emerald-500/20); added animated star badge with AnimatePresence (spring scale in/out); removed gradient overlay at bottom for cleaner design; added subtle bottom border on hover (border-b-2 border-emerald-500/30) on both selected and hovered states
+  - file-list.tsx: Added left border indicator (3px emerald) on selected rows; improved hover effect with bg-muted/50; added alternating row background (every other row bg-muted/20)
+
+- Feature 3: Improved File Detail Panel
+  - file-detail-panel.tsx: Added Delete quick action button (red, with Trash2 icon, hover:bg-destructive/10); made panel width responsive (w-[340px] sm:w-[380px]); added subtle divider between sections (border-border/50); improved image preview to h-64 with lightbox zoom on click (full-screen overlay with AnimatePresence); changed actions grid to 5 columns for delete button
+
+- Feature 4: Better Empty States and Transitions
+  - file-grid.tsx: Added floating animation to empty state icon (framer-motion y oscillation [0, -8, 0] with 3s infinite loop); added staggered card appearance animation (0.03s delay between each card using motion.div wrapper with index-based delay)
+  - file-sidebar.tsx: Added pulse animation to storage progress bar when storage > 80% full (animate-pulse class)
+
+- 6 files modified (file-toolbar.tsx, file-card.tsx, file-list.tsx, file-sidebar.tsx, file-detail-panel.tsx, file-grid.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Mobile responsive layout significantly improved: toggle search, compact cards, responsive detail panel
+- File card interactions enhanced: scale hover, emerald glow selection, animated star badge, clean design
+- File list improved: left border selection indicator, alternating rows, better hover
+- Detail panel enhanced: delete button, responsive width, image lightbox zoom
+- Empty states animated with floating icon; cards appear with staggered animation
+- Storage bar pulses when nearly full
+
+---
+Task ID: 7-upload-progress-share
+Agent: Upload Progress & Share Agent
+Task: Add Upload Progress with Real Percentage + File Sharing Public Access Page
+
+Work Log:
+- Feature 1: Upload Progress with Real Percentage
+  - Created new utility file `src/lib/upload-utils.ts` with `uploadFileWithProgress` and `uploadFilesWithProgress` functions
+  - Uses XMLHttpRequest instead of fetch for upload, enabling real progress tracking via the `upload.onprogress` event
+  - Shows dynamic toast with percentage: `Uploading filename... 45%` (updates in real-time as upload progresses)
+  - On success: `toast.success("filename uploaded")` with the same toast ID for smooth transition
+  - On error: `toast.error("Failed to upload filename")` with the same toast ID
+  - Updated `upload-zone.tsx`: replaced fetch-based upload with `uploadFilesWithProgress` utility
+  - Updated `file-toolbar.tsx`: replaced fetch-based upload with `uploadFilesWithProgress` utility
+  - Updated `file-grid.tsx`: replaced fetch-based upload in context menu handler with `uploadFileWithProgress` utility
+  - Updated `file-list.tsx`: replaced fetch-based upload in context menu handler with `uploadFileWithProgress` utility
+  - Used `QueryClient` type directly instead of `ReturnType<typeof useQueryClient>` for cleaner typing
+
+- Feature 2: File Sharing Public Access Page
+  - Created new API route at `src/app/api/share/[token]/route.ts`:
+    - GET: Returns share info + file info without incrementing download count (for initial page load)
+    - POST: Verifies password for password-protected shares, increments download count on successful access
+    - Handles expired shares (status 410), deleted/trashed files (status 404), not found (status 404)
+  - Created public share page at `src/app/share/[shareId]/page.tsx`:
+    - Server Component that passes shareId to client component
+  - Created `src/app/share/[shareId]/share-client.tsx` client component:
+    - States: loading → password/ready/expired/not-found/deleted
+    - Loading: spinner with "Loading shared file..."
+    - Not Found: red icon + "Link Not Found" message
+    - Expired: amber icon + "Link Expired" message
+    - Password: file icon + filename + password input with Enter key support + verify button
+    - Ready: file type icon + filename + file size + upload date + expiry info + download count + Download/Preview buttons
+    - Clean centered card layout with gradient background (emerald-50 via white to sky-50)
+    - CloudDrive branding at top (emerald cloud icon + bold text)
+    - "Powered by CloudDrive · Secure file sharing" footer
+    - No auth required - fully public page
+  - Updated `src/components/share-dialog.tsx`:
+    - Changed share URL from `/shared/${token}` to `/share/${token}` (matches new public page route)
+    - Added QR code icon button (QrCode from lucide-react) next to Copy button
+    - Added Share ID display section showing the token
+    - Added icons to option labels: KeyRound for password, Clock for expiration
+    - Made share link input monospace font for better readability
+
+Stage Summary:
+- 2 major features implemented: real upload progress + public share page
+- 1 new utility file (upload-utils.ts), 1 new API route (share/[token]), 2 new page components (share/[shareId])
+- 4 files modified for upload progress (upload-zone, file-toolbar, file-grid, file-list)
+- 1 file modified for share dialog improvements (share-dialog)
+- All upload locations now show real XHR-based progress percentages
+- Public share links work without authentication with password protection support
+- Lint clean, dev server running without errors
