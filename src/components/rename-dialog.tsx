@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Pencil } from "lucide-react";
 
 export function RenameDialog() {
-  const { renameFile, setRenameFile } = useFileStore();
+  const { renameFile, setRenameFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,6 +39,7 @@ export function RenameDialog() {
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        addActivity({ action: "rename", fileName: name.trim() });
         setRenameFile(null);
       }
     } catch {

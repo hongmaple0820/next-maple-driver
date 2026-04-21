@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
       parentId: file.parentId ?? 'root',
       starred: file.isStarred,
       trashed: file.isTrashed,
+      description: file.description,
       createdAt: file.createdAt.toISOString(),
       updatedAt: file.updatedAt.toISOString(),
       childrenCount: file._count.children,
@@ -176,6 +177,63 @@ export async function PUT(request: NextRequest) {
     console.error('Error renaming file:', error);
     return NextResponse.json(
       { error: 'Failed to rename file' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/files - Update file/folder metadata (description, etc.)
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, description } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'File ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const file = await db.fileItem.findUnique({ where: { id } });
+    if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (description !== undefined) {
+      data.description = description;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    const updated = await db.fileItem.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      type: updated.type,
+      size: updated.size,
+      mimeType: updated.mimeType,
+      parentId: updated.parentId ?? 'root',
+      starred: updated.isStarred,
+      trashed: updated.isTrashed,
+      description: updated.description,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error updating file metadata:', error);
+    return NextResponse.json(
+      { error: 'Failed to update file metadata' },
       { status: 500 }
     );
   }

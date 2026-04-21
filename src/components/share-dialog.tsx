@@ -19,7 +19,7 @@ import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound } from "lucide-react
 import type { ShareInfo } from "@/lib/file-utils";
 
 export function ShareDialog() {
-  const { shareFile, setShareFile } = useFileStore();
+  const { shareFile, setShareFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -57,6 +57,7 @@ export function ShareDialog() {
         const data = await res.json();
         setShareInfo(data);
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        addActivity({ action: "share", fileName: shareFile.name });
       }
     } catch {
       // Error handled silently

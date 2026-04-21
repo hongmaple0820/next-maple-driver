@@ -171,9 +171,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 })}
             </div>
           )}
-          <p className="text-xs text-muted-foreground mt-1.5">
-            {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
-          </p>
+          <div className="flex items-center justify-between mt-1.5">
+            <p className="text-xs text-muted-foreground">
+              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
+            </p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {usagePercent.toFixed(usagePercent < 1 ? 2 : 0)}%
+            </p>
+          </div>
         </button>
         
         {/* Storage detail panel - expandable with animation */}
@@ -236,7 +241,7 @@ export function FileSidebar() {
   }
 
   return (
-    <aside className="hidden md:flex w-[280px] shrink-0 border-r border-border">
+    <aside className="hidden md:flex w-[280px] shrink-0 border-r border-border dark:border-border/50">
       <SidebarContent />
     </aside>
   );

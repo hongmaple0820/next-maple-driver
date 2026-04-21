@@ -14,6 +14,13 @@ export interface UploadProgress {
   status: "uploading" | "done" | "error";
 }
 
+export interface ActivityItem {
+  id: string;
+  action: "upload" | "download" | "rename" | "delete" | "star" | "share" | "move" | "copy" | "create";
+  fileName: string;
+  timestamp: number;
+}
+
 interface FileStore {
   // Navigation
   currentFolderId: string;
@@ -66,6 +73,11 @@ interface FileStore {
   // Keyboard shortcuts dialog
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
+
+  // Activity log
+  activities: ActivityItem[];
+  addActivity: (activity: Omit<ActivityItem, "id" | "timestamp">) => void;
+  clearActivities: () => void;
 
   // Detail panel
   detailFile: FileItem | null;
@@ -159,6 +171,17 @@ export const useFileStore = create<FileStore>((set) => ({
   // Keyboard shortcuts dialog
   shortcutsOpen: false,
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+
+  // Activity log
+  activities: [],
+  addActivity: (activity) =>
+    set((state) => ({
+      activities: [
+        { ...activity, id: crypto.randomUUID(), timestamp: Date.now() },
+        ...state.activities,
+      ].slice(0, 50), // Keep max 50 items
+    })),
+  clearActivities: () => set({ activities: [] }),
 
   // Sidebar
   sidebarOpen: false,

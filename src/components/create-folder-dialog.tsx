@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { FolderPlus } from "lucide-react";
 
 export function CreateFolderDialog() {
-  const { createFolderOpen, setCreateFolderOpen, currentFolderId } = useFileStore();
+  const { createFolderOpen, setCreateFolderOpen, currentFolderId, addActivity } = useFileStore();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,6 +33,7 @@ export function CreateFolderDialog() {
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        addActivity({ action: "create", fileName: name.trim() });
         setName("");
         setCreateFolderOpen(false);
       }

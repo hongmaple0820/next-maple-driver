@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +48,7 @@ export function FileCard({ file }: FileCardProps) {
     setMoveFile,
     setShareFile,
     setPreviewFile,
+    addActivity,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -93,11 +94,12 @@ export function FileCard({ file }: FileCardProps) {
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        addActivity({ action: "star", fileName: file.name });
       }
     } catch {
       // Error handled silently
     }
-  }, [file, queryClient]);
+  }, [file, queryClient, addActivity]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -109,11 +111,12 @@ export function FileCard({ file }: FileCardProps) {
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        addActivity({ action: "delete", fileName: file.name });
       }
     } catch {
       // Error handled silently
     }
-  }, [file, section, queryClient]);
+  }, [file, section, queryClient, addActivity]);
 
   const handleRestore = useCallback(async () => {
     try {
@@ -133,6 +136,34 @@ export function FileCard({ file }: FileCardProps) {
 
   const handleDownload = useCallback(() => {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
+    addActivity({ action: "download", fileName: file.name });
+  }, [file, addActivity]);
+
+  const handleDownloadZip = useCallback(async () => {
+    try {
+      const res = await fetch("/api/files/download-zip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileIds: [file.id] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Download failed" }));
+        toast.error(data.error || "Failed to download ZIP");
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${file.name}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded "${file.name}" as ZIP`);
+    } catch {
+      toast.error("Failed to download ZIP");
+    }
   }, [file]);
 
   const handleCopy = useCallback(async () => {
@@ -145,11 +176,12 @@ export function FileCard({ file }: FileCardProps) {
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        addActivity({ action: "copy", fileName: file.name });
       }
     } catch {
       // Error handled silently
     }
-  }, [file, queryClient]);
+  }, [file, queryClient, addActivity]);
 
   const actionItems = (
     <>
@@ -163,6 +195,11 @@ export function FileCard({ file }: FileCardProps) {
           {file.type === "file" && (
             <DropdownMenuItem onClick={handleDownload}>
               <Download className="w-4 h-4" /> Download
+            </DropdownMenuItem>
+          )}
+          {file.type === "folder" && (
+            <DropdownMenuItem onClick={handleDownloadZip}>
+              <Archive className="w-4 h-4" /> Download as ZIP
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
@@ -215,6 +252,11 @@ export function FileCard({ file }: FileCardProps) {
           {file.type === "file" && (
             <ContextMenuItem onClick={handleDownload}>
               <Download className="w-4 h-4" /> Download
+            </ContextMenuItem>
+          )}
+          {file.type === "folder" && (
+            <ContextMenuItem onClick={handleDownloadZip}>
+              <Archive className="w-4 h-4" /> Download as ZIP
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
@@ -438,6 +480,13 @@ export function FileCard({ file }: FileCardProps) {
                   ? `${file.childrenCount ?? 0} items`
                   : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}
               </p>
+
+              {/* Description preview */}
+              {file.description && (
+                <p className="sm:text-[11px] text-[10px] text-muted-foreground/70 text-center w-full line-clamp-1 leading-tight">
+                  {file.description}
+                </p>
+              )}
             </CardContent>
           </Card>
         </motion.div>

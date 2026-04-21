@@ -11,6 +11,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileMenuButton } from "@/components/file-sidebar";
 import { uploadFilesWithProgress } from "@/lib/upload-utils";
+import type { StorageStats } from "@/lib/file-utils";
+import { ActivityPanel } from "@/components/activity-panel";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -54,6 +56,17 @@ export function FileToolbar() {
   const queryClient = useQueryClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  // Fetch storage stats (for trash count)
+  const { data: stats } = useQuery<StorageStats>({
+    queryKey: ["storage-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/files/stats");
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
 
   // Fetch breadcrumb path
   const { data: breadcrumbs = [] } = useQuery<BreadcrumbPathItem[]>({
@@ -213,7 +226,7 @@ export function FileToolbar() {
               </Button>
             </>
           )}
-          {section === "trash" && (
+          {section === "trash" && (stats?.trashedCount ?? 0) > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive">
@@ -289,6 +302,9 @@ export function FileToolbar() {
         >
           <Keyboard className="w-4 h-4" />
         </Button>
+
+        {/* Activity panel */}
+        <ActivityPanel />
 
         {/* View toggle */}
         <ToggleGroup

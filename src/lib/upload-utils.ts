@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
+import { useFileStore } from "@/store/file-store";
 
 /**
  * Upload a single file using XMLHttpRequest for real progress tracking.
@@ -38,6 +39,11 @@ export function uploadFileWithProgress(
         toast.success(`${file.name} uploaded`, { id: toastId });
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        // Add activity log entry
+        try {
+          const { addActivity } = useFileStore.getState();
+          addActivity({ action: "upload", fileName: file.name });
+        } catch { /* non-critical */ }
         resolve();
       } else {
         toast.error(`Failed to upload ${file.name}`, { id: toastId });

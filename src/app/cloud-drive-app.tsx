@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { FileSidebar } from "@/components/file-sidebar";
 import { FileToolbar } from "@/components/file-toolbar";
 import { FileGrid } from "@/components/file-grid";
@@ -15,7 +15,7 @@ import { useFileStore } from "@/store/file-store";
 import { toast } from "sonner";
 
 export default function CloudDriveApp() {
-  const { viewMode, selectedFileIds, detailFile, clearSelection, setDetailFile, setShortcutsOpen, setClipboard, currentFolderId } = useFileStore();
+  const { viewMode, selectedFileIds, detailFile, clearSelection, setDetailFile, setShortcutsOpen, setClipboard, currentFolderId, section } = useFileStore();
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -112,9 +112,18 @@ export default function CloudDriveApp() {
         {/* File area with upload zone */}
         <UploadZone>
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex-1 overflow-y-auto">
-              {viewMode === "grid" ? <FileGrid /> : <FileList />}
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${section}-${currentFolderId}`}
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.15 }}
+                className="flex-1 overflow-y-auto"
+              >
+                {viewMode === "grid" ? <FileGrid /> : <FileList />}
+              </motion.div>
+            </AnimatePresence>
             <FileStatusBar />
           </div>
         </UploadZone>

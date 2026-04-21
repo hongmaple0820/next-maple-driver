@@ -25,6 +25,7 @@ export interface FileItem {
   updatedAt: string;
   url?: string;
   childrenCount?: number;
+  description?: string;
 }
 
 export interface BreadcrumbItem {

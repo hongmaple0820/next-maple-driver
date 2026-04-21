@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useFileStore } from "@/store/file-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin,
+  Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin, StickyNote, Check, X as XIcon,
 } from "lucide-react";
 import { FileTypeIcon } from "@/components/file-type-icon";
 import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension } from "@/lib/file-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import type { BreadcrumbItem } from "@/lib/file-utils";
 
 function InfoRow({ icon, label, value, delay = 0 }: { icon: React.ReactNode; label: string; value: string; delay?: number }) {
@@ -33,6 +34,56 @@ export function FileDetailPanel() {
   const { detailFile, setDetailFile, setRenameFile, setShareFile, setPreviewFile, section } = useFileStore();
   const queryClient = useQueryClient();
   const [imageZoomed, setImageZoomed] = useState(false);
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [descValue, setDescValue] = useState("");
+  const [isSavingDesc, setIsSavingDesc] = useState(false);
+  const descTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync descValue when detailFile changes
+  useEffect(() => {
+    if (detailFile) {
+      setDescValue(detailFile.description || "");
+      setIsEditingDesc(false);
+    }
+  }, [detailFile]);
+
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (isEditingDesc && descTextareaRef.current) {
+      descTextareaRef.current.focus();
+      descTextareaRef.current.setSelectionRange(
+        descTextareaRef.current.value.length,
+        descTextareaRef.current.value.length
+      );
+    }
+  }, [isEditingDesc]);
+
+  const handleSaveDescription = async () => {
+    if (!detailFile) return;
+    setIsSavingDesc(true);
+    try {
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: detailFile.id, description: descValue.trim() || null }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        setIsEditingDesc(false);
+      } else {
+        toast.error("Failed to save description");
+      }
+    } catch {
+      toast.error("Failed to save description");
+    } finally {
+      setIsSavingDesc(false);
+    }
+  };
+
+  const handleCancelDescription = () => {
+    setDescValue(detailFile?.description || "");
+    setIsEditingDesc(false);
+  };
 
   // Fetch folder path for the "Location" info
   const { data: breadcrumbs = [] } = useQuery<BreadcrumbItem[]>({
@@ -183,7 +234,7 @@ export function FileDetailPanel() {
             </motion.div>
 
             {/* File Info */}
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 border-b border-border/50">
               <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Details</h4>
 
               <div className="space-y-3">
@@ -210,6 +261,81 @@ export function FileDetailPanel() {
                 )}
               </div>
             </div>
+
+            {/* Description / Notes */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: 0.2 }}
+              className="p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <StickyNote className="w-3.5 h-3.5" />
+                  Description
+                </h4>
+                {!isEditingDesc && (
+                  <button
+                    onClick={() => setIsEditingDesc(true)}
+                    className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                    title="Edit description"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {isEditingDesc ? (
+                <div className="space-y-2">
+                  <textarea
+                    ref={descTextareaRef}
+                    value={descValue}
+                    onChange={(e) => setDescValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        handleSaveDescription();
+                      }
+                      if (e.key === "Escape") {
+                        handleCancelDescription();
+                      }
+                    }}
+                    placeholder="Add a description or notes..."
+                    className="w-full min-h-[80px] text-sm rounded-md border border-input bg-background px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-shadow"
+                    disabled={isSavingDesc}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Ctrl+Enter to save · Esc to cancel</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleCancelDescription}
+                        className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        disabled={isSavingDesc}
+                      >
+                        <XIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleSaveDescription}
+                        className="p-1 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors text-emerald-600 hover:text-emerald-700"
+                        disabled={isSavingDesc}
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setIsEditingDesc(true)}
+                  className="text-sm text-muted-foreground cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors min-h-[40px]"
+                >
+                  {detailFile.description ? (
+                    <span className="whitespace-pre-wrap">{detailFile.description}</span>
+                  ) : (
+                    <span className="italic">Add a description or notes...</span>
+                  )}
+                </div>
+              )}
+            </motion.div>
           </ScrollArea>
         </SheetContent>
       </Sheet>

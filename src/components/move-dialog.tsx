@@ -91,7 +91,7 @@ function FolderTreeItem({
 }
 
 export function MoveDialog() {
-  const { moveFile, setMoveFile } = useFileStore();
+  const { moveFile, setMoveFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -118,6 +118,7 @@ export function MoveDialog() {
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        addActivity({ action: "move", fileName: moveFile.name });
         setMoveFile(null);
       }
     } catch {

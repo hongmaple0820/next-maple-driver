@@ -686,3 +686,183 @@ Stage Summary:
 - All upload locations now show real XHR-based progress percentages
 - Public share links work without authentication with password protection support
 - Lint clean, dev server running without errors
+
+
+---
+Task ID: 8-bulk-download
+Agent: Bulk Download Agent
+Task: Add Bulk Download as ZIP Feature
+
+Work Log:
+- Installed archiver (v7.0.1) and @types/archiver (v7.0.0) packages
+- Created new API route: POST /api/files/download-zip
+  - Accepts POST request with body: { fileIds: string[] }
+  - Uses archiver npm package to create a ZIP stream
+  - For each file: looks up FileItem in database, adds the physical file from storage/ to the archive
+  - For each folder: recursively collects all children files via collectFiles() helper and adds them with folder path structure preserved
+  - Streams the ZIP response directly with proper headers (Content-Type: application/zip, Content-Disposition: attachment)
+  - Handles missing files gracefully (skips files not found on disk)
+  - Deduplicates files to avoid adding the same file twice
+  - Skips trashed items
+- Updated batch-actions.tsx:
+  - Added Download ZIP button with Archive icon in the floating action bar
+  - Button appears when files are selected and section is not trash
+  - Calls POST /api/files/download-zip with selected file IDs
+  - Downloads the ZIP blob using programmatic anchor click
+  - Shows toast feedback on success/error
+  - Clears selection after successful download
+- Updated file-card.tsx:
+  - Added Download as ZIP option in the dropdown menu for folders only (with Archive icon)
+  - Added Download as ZIP option in the context menu for folders only (with Archive icon)
+  - Downloads the folder as a ZIP file named {folderName}.zip
+  - Shows toast feedback on success/error
+- 1 new file created (api/files/download-zip/route.ts), 2 files modified (batch-actions.tsx, file-card.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Bulk download as ZIP feature fully implemented
+- New API endpoint: POST /api/files/download-zip (total: 20 API endpoints)
+- Batch actions bar: Download ZIP button for multi-select downloads
+- File card: Download as ZIP option for folders in both dropdown and context menus
+- Lint clean, no errors
+
+---
+Task ID: 8-file-description
+Agent: File Description Agent
+Task: Add File Description/Notes Feature to CloudDrive
+
+Work Log:
+- Database Schema Update:
+  - Added description String? optional field to FileItem model in prisma/schema.prisma
+  - Ran bun run db:push to update the database schema
+- Backend API Updates:
+  - Updated GET /api/files handler: added description field to the response mapping
+  - Added new PATCH /api/files handler: supports updating description field with { id, description } body
+  - PATCH handler validates file existence, accepts null description to clear, returns full updated file object
+- Frontend Updates:
+  - Updated FileItem interface in file-utils.ts: added description?: string field
+  - Updated file-detail-panel.tsx:
+    - Added Description/Notes section below Details section with StickyNote icon header
+    - Pencil icon button toggles edit mode for description
+    - Textarea with placeholder Add a description or notes...
+    - Ctrl+Enter to save, Escape to cancel, plus X/Check icon buttons
+    - Click on empty description area also enters edit mode
+    - Calls PATCH /api/files with { id, description } to save
+    - Loading state while saving, error toast on failure
+    - Auto-focus and cursor-at-end when entering edit mode
+    - Syncs description value when detailFile changes
+  - Updated file-card.tsx:
+    - Shows truncated single-line description preview below meta info when file has a description
+    - Uses line-clamp-1 for ellipsis truncation, muted-foreground/70 color, smaller font size
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- File description/notes feature fully implemented end-to-end
+- Database: description field added to FileItem model
+- API: PATCH endpoint for updating description, GET returns description
+- Frontend: editable description in detail panel + truncated preview in file cards
+- 5 files modified (schema.prisma, route.ts, file-utils.ts, file-detail-panel.tsx, file-card.tsx)
+
+---
+Task ID: 8-cron-review-round4
+Agent: Main Agent
+Task: QA testing, fix bugs, add new features (bulk download, file description, activity log), UI polish
+
+Work Log:
+- QA Round 4: Comprehensive testing with agent-browser + VLM
+  - All Files view: ✅ Works correctly
+  - Starred view: ✅ Shows starred files across folders
+  - Recent view: ✅ Shows recently modified files
+  - Trash view: ✅ Empty trash state correct
+  - Search: ✅ Returns matching results
+  - List view: ✅ Columns aligned, sortable headers
+  - Keyboard shortcuts dialog: ✅ Opens with ? key
+  - File detail panel: ✅ Opens on single-click with full info
+  - Share page: ✅ Renders correctly with download/preview
+  - Filter tabs: ✅ All/Images/Videos/Audio/Docs/Code/Archives
+  - New Folder: ✅ Creates folder correctly
+  - Light mode rating: 7/10 (VLM)
+  - Dark mode rating: 8/10 (after fix, improved to 9/10)
+
+- Bug Fix: ThemeProvider was missing from layout.tsx
+  - Dark mode toggle wasn't actually applying because ThemeProvider from next-themes was never imported/used
+  - Added ThemeProvider wrapper in layout.tsx with attribute="class", defaultTheme="light", enableSystem, disableTransitionOnChange
+  - Dark mode now works properly — VLM rated 9/10
+
+- Bug Fix: Empty Trash button showing when trash is empty
+  - Added StorageStats query to file-toolbar.tsx to check trashedCount
+  - "Empty Trash" button now only appears when (stats?.trashedCount ?? 0) > 0
+
+- Bug Fix: Dark mode contrast issues
+  - Increased muted-foreground opacity from 0.65 to 0.7 in dark mode (globals.css)
+  - Increased border/input opacity from 8%/12% to 12%/15% in dark mode for better visibility
+  - Increased sidebar-border opacity from 8% to 12% in dark mode
+  - Added dark:border-border/50 to sidebar aside for better dark mode divider
+
+- Feature 1: Bulk Download as ZIP (implemented by subagent)
+  - New API route: POST /api/files/download-zip — accepts { fileIds: string[] }, creates ZIP with archiver, streams response
+  - "Download ZIP" button added to batch-actions.tsx floating bar
+  - "Download as ZIP" option added to folder context/dropdown menus in file-card.tsx
+  - Installed archiver + @types/archiver packages
+
+- Feature 2: File Description/Notes (implemented by subagent)
+  - Added description String? field to FileItem Prisma model
+  - Updated files API PATCH handler to support description updates
+  - Added description?: string to FileItem interface in file-utils.ts
+  - Added editable Description section in file-detail-panel.tsx with StickyNote icon, pencil toggle, textarea, Ctrl+Enter save
+  - Added truncated description preview in file-card.tsx
+
+- Feature 3: Activity Log / Notification Panel
+  - Added ActivityItem interface and activities/addActivity/clearActivities to file-store.ts
+  - Created activity-panel.tsx with Bell icon button, Popover dropdown, activity list with icons/colors per action type
+  - Added activity tracking to: upload (upload-utils.ts), star (file-card.tsx), delete (file-card.tsx), download (file-card.tsx), copy (file-card.tsx), create folder (create-folder-dialog.tsx), rename (rename-dialog.tsx), share (share-dialog.tsx), move (move-dialog.tsx)
+  - Activity panel shows in toolbar next to keyboard shortcuts button
+  - Badge count on bell icon when activities exist
+
+- Feature 4: Section Transition Animations
+  - Added AnimatePresence + motion.div in cloud-drive-app.tsx for smooth section/folder transitions
+  - Key based on section + currentFolderId for proper re-rendering
+  - Slide animation: initial x:8 → animate x:0 → exit x:-8
+
+- Feature 5: Storage Percentage Display
+  - Added percentage display next to storage usage text in file-sidebar.tsx
+  - Shows "0.00%" for very small usage, "X%" for larger values
+  - Flex layout with justify-between for clean alignment
+
+- 12+ files modified (layout.tsx, globals.css, file-sidebar.tsx, file-toolbar.tsx, file-card.tsx, cloud-drive-app.tsx, file-store.ts, file-utils.ts, upload-utils.ts, create-folder-dialog.tsx, rename-dialog.tsx, share-dialog.tsx, move-dialog.tsx, activity-panel.tsx)
+- 2 new API routes (download-zip, file description PATCH)
+- 3 new components (activity-panel.tsx)
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- All QA issues fixed (ThemeProvider missing, empty trash button, dark mode contrast)
+- 3 major new features: bulk download ZIP, file description/notes, activity log
+- Dark mode now properly working (VLM rated 9/10)
+- Section transition animations added
+- Storage percentage display added
+- 40+ total features, 21 API endpoints, 30+ frontend components
+
+## Current Project State
+- Fully functional cloud storage application, VLM rated 9/10 (dark mode)
+- 40+ features including bulk download ZIP, file descriptions, activity log, upload progress, share page, drag-and-drop, keyboard shortcuts, clipboard, etc.
+- 21 API endpoints: files (CRUD + description), upload, download, download-zip, move, star, restore, search, stats, path, share, share/[token] GET/POST, trash, recent, copy
+- 30+ frontend components
+- Responsive design with mobile support
+- Both light and dark modes (ThemeProvider properly configured)
+- No hydration errors, no runtime errors
+- Lint clean
+
+## Known Issues / Risks
+- None critical
+- Minor: Storage percentage shows "0.00%" for very small usage (could be confusing)
+- Minor: Drag-and-drop doesn't work in list view (only grid view)
+
+## Recommended Next Steps
+- Add drag-and-drop in list view
+- Add file versioning / history
+- Add more file type previews (e.g., office docs with document viewer)
+- Add storage usage alerts (notification when approaching limit)
+- Add user preferences (default view mode, sort preference, etc.)
+- Add notification system for share link accesses
+- Add file/folder properties dialog with more metadata
+- Add thumbnail generation for videos
