@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type ViewMode = "grid" | "list";
-export type Section = "files" | "starred" | "trash";
+export type Section = "files" | "starred" | "trash" | "recent";
 
 export interface UploadProgress {
   id: string;

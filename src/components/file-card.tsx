@@ -22,7 +22,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 
 interface FileCardProps {
@@ -45,6 +45,11 @@ export function FileCard({ file }: FileCardProps) {
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
   const isSelected = selectedFileIds.has(file.id);
+
+  const isImage = file.type === "file" && (() => {
+    const ext = getFileExtension(file.name);
+    return ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext);
+  })();
 
   const handleClick = useCallback(() => {
     if (file.type === "folder") {
@@ -270,10 +275,20 @@ export function FileCard({ file }: FileCardProps) {
             </div>
 
             <CardContent className="flex flex-col items-center gap-2 p-4 pb-3">
-              {/* Icon */}
-              <div className="mt-2">
-                <FileTypeIcon file={file} className="w-12 h-12" strokeWidth={1.5} />
-              </div>
+              {/* Icon / Thumbnail */}
+              {isImage ? (
+                <div className="mt-2 w-12 h-12 rounded-lg overflow-hidden bg-muted">
+                  <img
+                    src={`/api/files/download?id=${file.id}&mode=inline`}
+                    alt={file.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <FileTypeIcon file={file} className="w-12 h-12" strokeWidth={1.5} />
+                </div>
+              )}
 
               {/* File name */}
               <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full">

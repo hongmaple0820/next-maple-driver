@@ -2,7 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight } from "lucide-react";
+import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2 } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,17 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import type { BreadcrumbItem as BreadcrumbPathItem } from "@/lib/file-utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function FileToolbar() {
   const {
@@ -87,6 +98,7 @@ export function FileToolbar() {
 
   const sectionLabels: Record<string, string> = {
     files: "All Files",
+    recent: "Recent",
     starred: "Starred",
     trash: "Trash",
   };
@@ -192,6 +204,41 @@ export function FileToolbar() {
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
             </>
+          )}
+          {section === "trash" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Empty Trash</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Empty Trash?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all items in the trash. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/files/trash", { method: "DELETE" });
+                        if (res.ok) {
+                          queryClient.invalidateQueries({ queryKey: ["files"] });
+                          queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+                        }
+                      } catch { /* silent */ }
+                    }}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
 

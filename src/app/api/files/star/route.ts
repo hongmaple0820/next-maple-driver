@@ -24,7 +24,18 @@ export async function POST(request: NextRequest) {
       data: { isStarred: starred },
     });
 
-    return NextResponse.json({ file: updated });
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      type: updated.type,
+      size: updated.size,
+      mimeType: updated.mimeType,
+      parentId: updated.parentId ?? 'root',
+      starred: updated.isStarred,
+      trashed: updated.isTrashed,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
   } catch (error) {
     console.error('Error starring file:', error);
     return NextResponse.json(

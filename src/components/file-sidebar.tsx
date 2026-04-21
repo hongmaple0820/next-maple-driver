@@ -1,11 +1,14 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatFileSize, type StorageStats } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
@@ -13,12 +16,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
   { id: "files", label: "All Files", icon: Folder },
+  { id: "recent", label: "Recent", icon: Clock },
   { id: "starred", label: "Starred", icon: Star },
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { section, setSection, sidebarOpen, setSidebarOpen } = useFileStore();
+  const { theme, setTheme } = useTheme();
 
   const { data: stats } = useQuery<StorageStats>({
     queryKey: ["storage-stats"],
@@ -86,6 +91,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           })}
         </nav>
       </ScrollArea>
+
+      {/* Dark Mode Toggle */}
+      <div className="px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          <span className="text-xs font-medium">Dark Mode</span>
+        </div>
+        <Switch
+          checked={theme === "dark"}
+          onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+        />
+      </div>
 
       {/* Storage Stats */}
       <div className="border-t border-sidebar-border px-4 py-4">

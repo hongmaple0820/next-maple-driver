@@ -1,35 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// GET /api/files/search - Search files
-export async function GET(request: NextRequest) {
+// GET /api/files/recent - Get recently modified files
+export async function GET() {
   try {
-    const { searchParams } = request.nextUrl;
-    const query = searchParams.get('q');
-
-    if (!query || query.trim() === '') {
-      return NextResponse.json(
-        { error: 'Search query is required' },
-        { status: 400 }
-      );
-    }
-
-    const trimmedQuery = query.trim();
-
     const files = await db.fileItem.findMany({
       where: {
-        name: {
-          contains: trimmedQuery,
-        },
         isTrashed: false,
+        type: 'file',
       },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
       include: {
         _count: {
           select: { children: true },
         },
       },
-      take: 50,
-      orderBy: [{ type: 'desc' }, { name: 'asc' }],
     });
 
     const result = files.map((file) => ({
@@ -48,9 +34,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error searching files:', error);
+    console.error('Error getting recent files:', error);
     return NextResponse.json(
-      { error: 'Failed to search files' },
+      { error: 'Failed to get recent files' },
       { status: 500 }
     );
   }

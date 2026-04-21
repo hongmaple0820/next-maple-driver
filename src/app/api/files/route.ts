@@ -13,12 +13,14 @@ export async function GET(request: NextRequest) {
     const parentId = parentIdParam === 'root' ? null : parentIdParam;
 
     const where: Record<string, unknown> = {
-      parentId,
       isTrashed: trashed,
     };
 
     if (starred) {
       where.isStarred = true;
+      // Don't filter by parentId for starred items - show all
+    } else {
+      where.parentId = parentId;
     }
 
     const files = await db.fileItem.findMany({

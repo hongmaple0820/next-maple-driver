@@ -1,0 +1,82 @@
+"use client";
+
+import { useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
+import { Star, Trash2, X } from "lucide-react";
+import { useFileStore } from "@/store/file-store";
+import { Button } from "@/components/ui/button";
+
+export function BatchActions() {
+  const { selectedFileIds, clearSelection, section } = useFileStore();
+  const queryClient = useQueryClient();
+  const count = selectedFileIds.size;
+
+  if (count === 0) return null;
+
+  const handleBatchStar = async () => {
+    for (const id of selectedFileIds) {
+      await fetch("/api/files/star", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, starred: true }),
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: ["files"] });
+    clearSelection();
+  };
+
+  const handleBatchDelete = async () => {
+    for (const id of selectedFileIds) {
+      await fetch("/api/files", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, permanent: section === "trash" }),
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: ["files"] });
+    queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+    clearSelection();
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-foreground text-background px-5 py-3 rounded-full shadow-lg"
+      >
+        <span className="text-sm font-medium">{count} selected</span>
+        <div className="w-px h-5 bg-background/20" />
+        {section !== "trash" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleBatchStar}
+            className="text-background hover:bg-background/20 gap-1.5"
+          >
+            <Star className="w-4 h-4" />
+            Star
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleBatchDelete}
+          className="text-background hover:bg-background/20 gap-1.5"
+        >
+          <Trash2 className="w-4 h-4" />
+          {section === "trash" ? "Delete" : "Trash"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={clearSelection}
+          className="text-background hover:bg-background/20 h-7 w-7"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </motion.div>
+    </AnimatePresence>
+  );
+}

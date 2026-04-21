@@ -31,7 +31,18 @@ export async function POST(request: NextRequest) {
 
     const updated = await db.fileItem.findUnique({ where: { id } });
 
-    return NextResponse.json({ file: updated });
+    return NextResponse.json({
+      id: updated!.id,
+      name: updated!.name,
+      type: updated!.type,
+      size: updated!.size,
+      mimeType: updated!.mimeType,
+      parentId: updated!.parentId ?? 'root',
+      starred: updated!.isStarred,
+      trashed: updated!.isTrashed,
+      createdAt: updated!.createdAt.toISOString(),
+      updatedAt: updated!.updatedAt.toISOString(),
+    });
   } catch (error) {
     console.error('Error restoring file:', error);
     return NextResponse.json(

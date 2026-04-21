@@ -20,13 +20,21 @@ export function FileGrid() {
         if (!res.ok) throw new Error("Search failed");
         return res.json();
       }
+      if (section === "recent") {
+        const res = await fetch("/api/files/recent");
+        if (!res.ok) throw new Error("Failed to fetch recent files");
+        return res.json();
+      }
       const trashed = section === "trash";
       const starred = section === "starred";
-      const params = new URLSearchParams({
-        parentId: starred ? "root" : currentFolderId,
-        trashed: String(trashed),
-        ...(starred ? { starred: "true" } : {}),
-      });
+      const params = new URLSearchParams();
+      if (!starred) {
+        params.set("parentId", currentFolderId);
+      }
+      params.set("trashed", String(trashed));
+      if (starred) {
+        params.set("starred", "true");
+      }
       const res = await fetch(`/api/files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch files");
       return res.json();
@@ -62,6 +70,8 @@ export function FileGrid() {
             ? "Trash is empty"
             : section === "starred"
             ? "No starred items"
+            : section === "recent"
+            ? "No recent files"
             : "Upload files or create a folder to get started"}
         </p>
       </motion.div>

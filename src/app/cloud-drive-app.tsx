@@ -6,6 +6,7 @@ import { FileGrid } from "@/components/file-grid";
 import { FileList } from "@/components/file-list";
 import { UploadZone } from "@/components/upload-zone";
 import { FileActions } from "@/components/file-actions";
+import { BatchActions } from "@/components/batch-actions";
 import { useFileStore } from "@/store/file-store";
 
 export default function CloudDriveApp() {
@@ -31,6 +32,9 @@ export default function CloudDriveApp() {
 
       {/* Dialogs */}
       <FileActions />
+
+      {/* Batch actions floating bar */}
+      <BatchActions />
     </div>
   );
 }
