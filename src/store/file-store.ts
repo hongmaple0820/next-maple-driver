@@ -59,6 +59,14 @@ interface FileStore {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
 
+  // Clipboard (for copy/cut operations)
+  clipboard: { fileIds: string[]; operation: "copy" | "cut" } | null;
+  setClipboard: (clipboard: { fileIds: string[]; operation: "copy" | "cut" } | null) => void;
+
+  // Keyboard shortcuts dialog
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (open: boolean) => void;
+
   // Detail panel
   detailFile: FileItem | null;
   setDetailFile: (file: FileItem | null) => void;
@@ -143,6 +151,14 @@ export const useFileStore = create<FileStore>((set) => ({
       uploadProgress: state.uploadProgress.filter((u) => u.id !== id),
     })),
   clearUploadProgress: () => set({ uploadProgress: [] }),
+
+  // Clipboard
+  clipboard: null,
+  setClipboard: (clipboard) => set({ clipboard }),
+
+  // Keyboard shortcuts dialog
+  shortcutsOpen: false,
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
 
   // Sidebar
   sidebarOpen: false,

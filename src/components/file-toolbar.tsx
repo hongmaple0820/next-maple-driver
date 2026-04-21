@@ -2,7 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive } from "lucide-react";
+import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ export function FileToolbar() {
     setSortDirection,
     typeFilter,
     setTypeFilter,
+    setShortcutsOpen,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -278,6 +279,17 @@ export function FileToolbar() {
             <ArrowUpDown className={cn("w-4 h-4 transition-transform", sortDirection === "desc" && "rotate-180")} />
           </Button>
         </div>
+
+        {/* Keyboard shortcuts button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setShortcutsOpen(true)}
+          title="Keyboard shortcuts (?)"
+        >
+          <Keyboard className="w-4 h-4" />
+        </Button>
 
         {/* View toggle */}
         <ToggleGroup

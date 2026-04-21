@@ -10,10 +10,12 @@ import { UploadZone } from "@/components/upload-zone";
 import { FileActions } from "@/components/file-actions";
 import { BatchActions } from "@/components/batch-actions";
 import { FileStatusBar } from "@/components/file-status-bar";
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { useFileStore } from "@/store/file-store";
+import { toast } from "sonner";
 
 export default function CloudDriveApp() {
-  const { viewMode, selectedFileIds, detailFile, clearSelection, setDetailFile } = useFileStore();
+  const { viewMode, selectedFileIds, detailFile, clearSelection, setDetailFile, setShortcutsOpen, setClipboard, currentFolderId } = useFileStore();
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -56,11 +58,41 @@ export default function CloudDriveApp() {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("clouddrive:open-selected"));
       }
+
+      // Ctrl+C / Cmd+C - Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        if (selectedFileIds.size > 0) {
+          e.preventDefault();
+          setClipboard({ fileIds: Array.from(selectedFileIds), operation: "copy" });
+          toast.success(`Copied ${selectedFileIds.size} item${selectedFileIds.size > 1 ? "s" : ""}`);
+        }
+      }
+
+      // Ctrl+X / Cmd+X - Cut
+      if ((e.ctrlKey || e.metaKey) && e.key === "x") {
+        if (selectedFileIds.size > 0) {
+          e.preventDefault();
+          setClipboard({ fileIds: Array.from(selectedFileIds), operation: "cut" });
+          toast.success(`Cut ${selectedFileIds.size} item${selectedFileIds.size > 1 ? "s" : ""}`);
+        }
+      }
+
+      // Ctrl+V / Cmd+V - Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("clouddrive:paste"));
+      }
+
+      // ? (Shift+/) - Show shortcuts dialog
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedFileIds, detailFile, setDetailFile, clearSelection]);
+  }, [selectedFileIds, detailFile, setDetailFile, clearSelection, setShortcutsOpen, setClipboard, currentFolderId]);
 
   return (
     <motion.div
@@ -93,6 +125,9 @@ export default function CloudDriveApp() {
 
       {/* Batch actions floating bar */}
       <BatchActions />
+
+      {/* Keyboard shortcuts dialog */}
+      <KeyboardShortcutsDialog />
     </motion.div>
   );
 }

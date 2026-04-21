@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +22,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
 import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface FileCardProps {
   file: FileItem;
@@ -45,11 +52,14 @@ export function FileCard({ file }: FileCardProps) {
 
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const isSelected = selectedFileIds.has(file.id);
+  const ext = file.type === "file" ? getFileExtension(file.name) : "";
 
   const isImage = file.type === "file" && (() => {
-    const ext = getFileExtension(file.name);
-    return ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext);
+    const extLower = getFileExtension(file.name);
+    return ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extLower);
   })();
 
   const handleClick = useCallback(() => {
@@ -245,42 +255,125 @@ export function FileCard({ file }: FileCardProps) {
     </>
   );
 
+  // Drag handlers
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", file.id);
+    e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+  }, [file.id]);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (file.type === "folder") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      setIsDragOver(true);
+    }
+  }, [file.type]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const draggedFileId = e.dataTransfer.getData("text/plain");
+    if (!draggedFileId || draggedFileId === file.id) return;
+    // Don't allow dropping a folder into itself
+    if (file.type !== "folder") return;
+
+    try {
+      const res = await fetch("/api/files/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draggedFileId, targetParentId: file.id }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        toast.success(`Moved to ${file.name}`);
+      } else {
+        toast.error("Failed to move item");
+      }
+    } catch {
+      toast.error("Failed to move item");
+    }
+  }, [file, queryClient]);
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <motion.div
           initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
           transition={{ duration: 0.2 }}
           whileHover={{ y: -2 }}
+          layout
           onHoverStart={() => setIsHovered(true)}
           onHoverEnd={() => setIsHovered(false)}
+          draggable
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <Card
             className={cn(
               "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden",
               isSelected
                 ? "border-emerald-500 shadow-emerald-500/10 shadow-lg bg-emerald-500/5"
+                : isDragOver && file.type === "folder"
+                ? "border-emerald-500 shadow-emerald-500/20 shadow-lg bg-emerald-500/5 scale-[1.02]"
                 : "border-transparent hover:border-border hover:shadow-md"
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           >
+            {/* Gradient overlay at bottom for text readability */}
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/90 to-transparent pointer-events-none z-[1]" />
+
             {/* Selection indicator */}
-            {isSelected && (
-              <div className="absolute top-2 left-2 z-10">
-                <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+            <motion.div
+              layout
+              className="absolute top-2 left-2 z-10"
+            >
+              {isSelected && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center"
+                >
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
-                </div>
-              </div>
-            )}
+                </motion.div>
+              )}
+            </motion.div>
 
             {/* Star badge */}
             {file.starred && !isSelected && (
               <div className="absolute top-2 left-2 z-10">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              </div>
+            )}
+
+            {/* Extension badge */}
+            {ext && !isSelected && (
+              <div className="absolute top-2 right-10 z-10">
+                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono bg-background/80 backdrop-blur-sm">
+                  .{ext}
+                </Badge>
               </div>
             )}
 
@@ -308,7 +401,7 @@ export function FileCard({ file }: FileCardProps) {
               </DropdownMenu>
             </div>
 
-            <CardContent className="flex flex-col items-center gap-2 p-4 pb-3">
+            <CardContent className="flex flex-col items-center gap-2 p-4 pb-3 relative z-[2]">
               {/* Icon / Thumbnail */}
               {isImage ? (
                 <div className="mt-1 w-full aspect-square max-w-[80px] rounded-lg overflow-hidden bg-muted relative">
@@ -325,9 +418,16 @@ export function FileCard({ file }: FileCardProps) {
               )}
 
               {/* File name */}
-              <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full mt-1">
-                {file.name}
-              </p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full mt-1">
+                    {file.name}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Modified {formatDate(file.updatedAt)}
+                </TooltipContent>
+              </Tooltip>
 
               {/* Meta info */}
               <p className="text-xs text-muted-foreground text-center">
