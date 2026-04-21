@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,11 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
   { id: "files", label: "All Files", icon: Folder },
@@ -33,7 +38,7 @@ function ChevronIcon({ className }: { className?: string }) {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { section, setSection, sidebarOpen, setSidebarOpen } = useFileStore();
+  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen } = useFileStore();
   const { theme, setTheme } = useTheme();
   const [showStorageDetail, setShowStorageDetail] = useState(false);
 
@@ -125,28 +130,61 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </nav>
       </ScrollArea>
 
-      {/* Dark Mode Toggle */}
-      <div className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          <span className="text-xs font-medium">Dark Mode</span>
+      {/* User Profile Area */}
+      <div className="border-t border-sidebar-border px-4 py-3">
+        <div
+          className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-sidebar-accent/50 transition-all duration-200 cursor-pointer"
+          onClick={() => setPreferencesOpen(true)}
+        >
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10 shrink-0">
+            U
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-sm font-semibold truncate leading-tight">My CloudDrive</span>
+            <span className="text-xs text-muted-foreground leading-tight">
+              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
+            </span>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md shrink-0"
+                onClick={(e) => { e.stopPropagation(); setPreferencesOpen(true); }}
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              Preferences
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <Switch
-          checked={theme === "dark"}
-          onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-        />
+        {/* Theme toggle row */}
+        <div className="flex items-center justify-between gap-2 mt-2 px-2">
+          <div className="flex items-center gap-2">
+            {theme === "dark" ? <Moon className="w-3.5 h-3.5 text-muted-foreground" /> : <Sun className="w-3.5 h-3.5 text-muted-foreground" />}
+            <span className="text-xs text-muted-foreground">{theme === "dark" ? "Dark" : "Light"} Mode</span>
+          </div>
+          <Switch
+            checked={theme === "dark"}
+            onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+            className="scale-90"
+          />
+        </div>
       </div>
 
       {/* Storage Stats */}
-      <div className="border-t border-sidebar-border">
+      <div className="border-t border-sidebar-border" data-storage-section>
         <button 
           className="w-full px-4 py-4 hover:bg-sidebar-accent/50 transition-colors text-left"
           onClick={() => setShowStorageDetail(!showStorageDetail)}
         >
           <div className="flex items-center gap-2 mb-2">
             <HardDrive className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">Storage</span>
-            <ChevronIcon className={cn("w-3 h-3 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
+            <span className="text-sm font-medium">Storage</span>
+            <ChevronIcon className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
           </div>
           <Progress value={usagePercent} className={cn("h-2 mb-2", usagePercent > 80 && "animate-pulse")} />
           {stats?.byType && Object.keys(stats.byType).length > 0 && (
@@ -175,10 +213,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )}
           <div className="flex items-center justify-between mt-1.5">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
             </p>
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-sm font-semibold">
               {usagePercent.toFixed(usagePercent < 1 ? 2 : 0)}%
             </p>
           </div>

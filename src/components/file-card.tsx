@@ -50,6 +50,8 @@ export function FileCard({ file }: FileCardProps) {
     setPreviewFile,
     setPropertiesFile,
     addActivity,
+    compactMode,
+    showExtensions,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -188,6 +190,7 @@ export function FileCard({ file }: FileCardProps) {
     <>
       {section !== "trash" && (
         <>
+          {/* Open/Download group */}
           {file.type === "folder" && (
             <DropdownMenuItem onClick={() => setCurrentFolderId(file.id)}>
               <FolderInput className="w-4 h-4" /> Open
@@ -203,6 +206,8 @@ export function FileCard({ file }: FileCardProps) {
               <Archive className="w-4 h-4" /> Download as ZIP
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
+          {/* Edit group */}
           <DropdownMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
             <Pencil className="w-4 h-4" /> Rename
           </DropdownMenuItem>
@@ -216,6 +221,8 @@ export function FileCard({ file }: FileCardProps) {
           <DropdownMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* Share & Info group */}
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -225,6 +232,7 @@ export function FileCard({ file }: FileCardProps) {
             <Info className="w-4 h-4" /> Properties
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {/* Destructive group */}
           <DropdownMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4" /> Move to Trash
           </DropdownMenuItem>
@@ -248,6 +256,7 @@ export function FileCard({ file }: FileCardProps) {
     <>
       {section !== "trash" && (
         <>
+          {/* Open/Download group */}
           {file.type === "folder" && (
             <ContextMenuItem onClick={() => setCurrentFolderId(file.id)}>
               <FolderInput className="w-4 h-4" /> Open
@@ -263,6 +272,8 @@ export function FileCard({ file }: FileCardProps) {
               <Archive className="w-4 h-4" /> Download as ZIP
             </ContextMenuItem>
           )}
+          <ContextMenuSeparator />
+          {/* Edit group */}
           <ContextMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
             <Pencil className="w-4 h-4" /> Rename
           </ContextMenuItem>
@@ -276,6 +287,8 @@ export function FileCard({ file }: FileCardProps) {
           <ContextMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          {/* Share & Info group */}
           {file.type === "file" && (
             <ContextMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -285,6 +298,7 @@ export function FileCard({ file }: FileCardProps) {
             <Info className="w-4 h-4" /> Properties
           </ContextMenuItem>
           <ContextMenuSeparator />
+          {/* Destructive group */}
           <ContextMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4" /> Move to Trash
           </ContextMenuItem>
@@ -446,52 +460,69 @@ export function FileCard({ file }: FileCardProps) {
               </DropdownMenu>
             </div>
 
-            <CardContent className="flex flex-col items-center gap-2 sm:p-4 p-3 sm:pb-3 pb-2 relative z-[2]">
-              {/* Icon / Thumbnail */}
-              {isImage ? (
-                <div className="mt-1 w-full aspect-square sm:max-w-[80px] max-w-[60px] rounded-lg overflow-hidden bg-muted relative">
-                  <img
-                    src={`/api/files/download?id=${file.id}&mode=inline`}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="mt-1">
-                  <FileTypeIcon file={file} className="sm:w-14 sm:h-14 w-10 h-10" strokeWidth={1.2} />
-                </div>
-              )}
+            <CardContent className={cn(
+              "flex flex-col items-center gap-2 relative z-[2]",
+              compactMode ? "p-2 pb-1.5 min-h-[80px]" : "sm:p-4 p-3 sm:pb-3 pb-2 min-h-[120px]"
+            )}>
+              {/* Icon / Thumbnail - consistent height area */}
+              <div className={cn(
+                "flex items-center justify-center mt-1",
+                compactMode ? "h-8" : "sm:h-14 h-10"
+              )}>
+                {isImage ? (
+                  <div className={cn(
+                    "w-full aspect-square rounded-lg overflow-hidden bg-muted",
+                    compactMode ? "max-w-[40px]" : "sm:max-w-[80px] max-w-[60px]"
+                  )}>
+                    <img
+                      src={`/api/files/download?id=${file.id}&mode=inline`}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <FileTypeIcon file={file} className={compactMode ? "w-8 h-8" : "sm:w-14 sm:h-14 w-10 h-10"} strokeWidth={compactMode ? 1.5 : 1.2} />
+                )}
+              </div>
 
-              {/* File name */}
+              {/* File name - consistent height with truncation */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center justify-center gap-1.5 w-full sm:mt-1 mt-0">
-                    <p className="sm:text-sm text-xs font-medium text-center leading-tight line-clamp-2 min-w-0">
+                  <div className="flex items-center justify-center gap-1.5 w-full sm:mt-1 mt-0 h-8">
+                    <p className={cn(
+                      "font-medium text-center leading-tight line-clamp-2 min-w-0",
+                      compactMode ? "text-[11px]" : "sm:text-sm text-xs"
+                    )}>
                       {file.name}
                     </p>
-                    {ext && (
-                      <Badge variant="secondary" className="shrink-0 text-[9px] px-1 py-0 h-4 font-mono hidden sm:inline-flex">
+                    {ext && showExtensions && (
+                      <Badge variant="secondary" className={cn(
+                        "shrink-0 font-mono",
+                        compactMode ? "text-[8px] px-0.5 py-0 h-3.5" : "text-[9px] px-1 py-0 h-4",
+                        !compactMode && "hidden sm:inline-flex"
+                      )}>
                         .{ext}
                       </Badge>
                     )}
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  Modified {formatDate(file.updatedAt)}
+                <TooltipContent side="bottom" className="text-xs max-w-[250px] break-all">
+                  <p className="font-medium">{file.name}</p>
+                  <p className="text-muted-foreground mt-0.5">Modified {formatDate(file.updatedAt)}</p>
                 </TooltipContent>
               </Tooltip>
 
               {/* Meta info */}
-              <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground text-center">
-                {file.type === "folder"
-                  ? `${file.childrenCount ?? 0} items`
-                  : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}
-              </p>
-
-              {/* Description preview */}
-              {file.description && (
-                <p className="sm:text-[11px] text-[10px] text-muted-foreground/70 text-center w-full line-clamp-1 leading-tight">
-                  {file.description}
+              {!compactMode && (
+                <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground text-center mt-auto">
+                  {file.type === "folder"
+                    ? `${file.childrenCount ?? 0} items`
+                    : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}
+                </p>
+              )}
+              {compactMode && file.type === "file" && (
+                <p className="text-[10px] text-muted-foreground/70 text-center mt-auto">
+                  {formatFileSize(file.size)}
                 </p>
               )}
             </CardContent>

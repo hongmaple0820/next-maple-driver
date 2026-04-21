@@ -2,13 +2,13 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, Trash2, X, Archive } from "lucide-react";
+import { Star, Trash2, X, Archive, Pencil } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export function BatchActions() {
-  const { selectedFileIds, clearSelection, section } = useFileStore();
+  const { selectedFileIds, clearSelection, section, setBatchRenameOpen } = useFileStore();
   const queryClient = useQueryClient();
   const count = selectedFileIds.size;
 
@@ -87,6 +87,17 @@ export function BatchActions() {
           >
             <Archive className="w-4 h-4" />
             Download ZIP
+          </Button>
+        )}
+        {section !== "trash" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setBatchRenameOpen(true)}
+            className="text-background hover:bg-background/20 gap-1.5"
+          >
+            <Pencil className="w-4 h-4" />
+            Rename
           </Button>
         )}
         {section !== "trash" && (

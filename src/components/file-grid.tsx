@@ -3,12 +3,13 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Trash2, Clock, FolderPlus, Upload, Clipboard, ArrowDownAZ, ArrowUpDown, Clock4, HardDrive, FileType2 } from "lucide-react";
+import { FolderOpen, SearchX, Star, Trash2, Clock, FolderPlus, Upload, Clipboard, ArrowDownAZ, ArrowUpDown, Clock4, HardDrive, FileType2, Pencil } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import { FileCard } from "@/components/file-card";
 import { getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -25,7 +26,8 @@ export function FileGrid() {
   const {
     currentFolderId, section, searchQuery, sortBy, sortDirection, typeFilter,
     selectedFileIds, selectAll, clearSelection, setCurrentFolderId, setRenameFile, setPreviewFile,
-    setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard,
+    setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard, setSearchResultCount,
+    compactMode, showExtensions, setBatchRenameOpen,
   } = useFileStore();
   const queryClient = useQueryClient();
   const [allFileIds, setAllFileIds] = useState<string[]>([]);
@@ -94,6 +96,15 @@ export function FileGrid() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllFileIds(sortedFiles.map(f => f.id));
   }, [files, typeFilter, sortBy, sortDirection]);
+
+  // Update search result count
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setSearchResultCount(sortedFiles.length);
+    } else {
+      setSearchResultCount(0);
+    }
+  }, [searchQuery, sortedFiles.length, setSearchResultCount]);
 
   // Upload handler for context menu
   const handleUploadFromMenu = useCallback(() => {
@@ -235,6 +246,11 @@ export function FileGrid() {
               <Clipboard className="w-4 h-4" /> Paste
             </ContextMenuItem>
           )}
+          {selectedFileIds.size > 1 && section !== "trash" && (
+            <ContextMenuItem onClick={() => setBatchRenameOpen(true)}>
+              <Pencil className="w-4 h-4" /> Batch Rename
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
         </>
       )}
@@ -266,13 +282,18 @@ export function FileGrid() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
+      <div className={cn(
+        "grid gap-4 p-4",
+        compactMode
+          ? "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
+          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+      )}>
         {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} className="rounded-xl border bg-card overflow-hidden">
-            <div className="flex flex-col items-center gap-2 p-4 pb-3">
-              <Skeleton className="w-14 h-14 rounded-full" />
+          <div key={i} className={cn("rounded-xl border bg-card overflow-hidden", compactMode && "rounded-lg")}>
+            <div className={cn("flex flex-col items-center gap-2", compactMode ? "p-2 pb-1.5" : "p-4 pb-3")}>
+              <Skeleton className={compactMode ? "w-8 h-8 rounded-full" : "w-14 h-14 rounded-full"} />
               <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
+              {!compactMode && <Skeleton className="h-3 w-1/2" />}
             </div>
           </div>
         ))}
@@ -343,7 +364,12 @@ export function FileGrid() {
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4"
+          className={cn(
+            "grid gap-4 p-4",
+            compactMode
+              ? "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
+              : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+          )}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); }}
         >

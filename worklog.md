@@ -1036,3 +1036,272 @@ Stage Summary:
 - Add thumbnail generation for videos
 - Add batch rename functionality
 - Add file/folder size quota per user
+
+---
+Task ID: 10-user-preferences
+Agent: User Preferences Agent
+Task: Add User Preferences Dialog and Storage Usage Alert
+
+Work Log:
+- Feature 1: User Preferences Dialog
+  - Created `src/lib/user-preferences.ts` — Zustand-based preferences store with localStorage persistence
+    - Preferences: defaultViewMode, defaultSortField, defaultSortDirection, theme, compactMode, showExtensions, showHiddenFiles
+    - Auto-loads from localStorage on init, auto-saves on every change
+    - resetPreferences() restores all defaults
+  - Created `src/components/user-preferences-dialog.tsx` — tabbed dialog with 3 sections:
+    - General tab: Default View Mode (Grid/List with visual selection cards), Default Sort (field + direction dropdowns)
+    - Appearance tab: Theme (Light/Dark/System with visual selection cards), Compact Mode toggle, Show File Extensions toggle
+    - Advanced tab: Show Hidden Files toggle (future feature, stores pref), Reset to Defaults button
+  - Updated `src/store/file-store.ts` — added preferencesOpen, setPreferencesOpen, compactMode, setCompactMode, showExtensions, setShowExtensions
+  - Updated `src/components/file-sidebar.tsx` — added Settings (Gear) icon button next to dark mode toggle with Tooltip; added data-storage-section attribute for storage alert highlighting
+  - Updated `src/app/cloud-drive-app.tsx` — integrated UserPreferencesDialog; applies saved preferences on mount (viewMode, sortBy, sortDirection, compactMode, showExtensions); added Ctrl+, keyboard shortcut to open preferences
+  - Updated `src/components/file-card.tsx` — respects compactMode (smaller padding, icon, min-height, font size; hides meta info in compact mode, shows only file size); respects showExtensions (conditionally renders extension badge)
+  - Updated `src/components/file-grid.tsx` — respects compactMode (uses more grid columns in compact mode: 3/4/5/7 vs 2/3/4/5; smaller skeleton sizes); added cn import
+  - Updated `src/components/file-list.tsx` — respects compactMode (smaller icons, smaller font size); respects showExtensions (shows extension next to type label)
+
+- Feature 2: Storage Usage Alert
+  - Added storage usage check in `src/app/cloud-drive-app.tsx` using existing `/api/files/stats` endpoint
+  - Uses `useQuery` with 60-second refetchInterval for periodic checking
+  - When usage > 80%: shows warning toast "Storage almost full! X% used" with "Manage Storage" button
+  - When usage > 90%: shows error toast "Storage critically full!" with "Manage Storage" button
+  - "Manage Storage" button scrolls to and highlights the storage section in sidebar
+  - Uses refs to track if alert already shown (prevents duplicate toasts)
+  - Resets alert flags when usage drops below threshold
+  - Storage section in sidebar has `data-storage-section` attribute for scrolling/highlighting
+
+- 2 new files created (user-preferences.ts, user-preferences-dialog.tsx)
+- 6 files modified (file-store.ts, file-sidebar.tsx, cloud-drive-app.tsx, file-card.tsx, file-grid.tsx, file-list.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- User Preferences Dialog with tabbed interface (General, Appearance, Advanced)
+- 6 configurable preferences stored in localStorage via Zustand
+- Preferences auto-apply on app load and on change
+- Compact Mode reduces card sizes, spacing, and increases grid density
+- Show Extensions toggle controls extension badge visibility
+- Storage Usage Alert warns at 80% (warning) and 90% (error) with "Manage Storage" button
+- Ctrl+, keyboard shortcut opens preferences dialog
+- Lint clean, no errors
+
+---
+Task ID: 10-ui-polish
+Agent: UI Polish & Micro-interactions Agent
+Task: Polish CloudDrive UI with better micro-interactions, spacing consistency, and visual refinements
+
+Work Log:
+- Polish 1: Fix Card Spacing Consistency
+  - Added min-h-[120px] to CardContent in file-card.tsx for uniform card height
+  - Wrapped icon/thumbnail area in consistent-height container (sm:h-14 h-10) so icon area is always at same position regardless of content type (folder/file/image)
+  - Added h-8 fixed height for filename area to prevent height variation
+  - Used mt-auto on metadata line so it aligns at bottom consistently
+  - Removed description preview field for cleaner, more uniform cards
+
+- Polish 2: Better Sidebar User Profile/Avatar Area
+  - Added user profile area in file-sidebar.tsx between dark mode toggle and storage section
+  - Circular avatar (w-9 h-9) with emerald gradient background (from-emerald-500 to-emerald-700) showing "U" initial
+  - "My CloudDrive" as username with font-semibold
+  - Storage usage as subtle subtitle (text-[11px] text-muted-foreground)
+  - Hover effect with hover:bg-sidebar-accent/50 and transition-all duration-200
+  - Clean border-t divider above profile area
+
+- Polish 3: Improve Breadcrumb Navigation
+  - Wrapped breadcrumb items in framer-motion AnimatePresence with slide animation (y: -8 → 0 on enter, y: 0 → 8 on exit, duration: 150ms)
+  - Added hover:bg-accent/50 effect on BreadcrumbLink items with rounded-md padding and transition-colors
+  - Current folder name uses font-bold instead of font-medium
+  - Root section name also uses font-bold when at root level
+  - ChevronRight separator icons styled with text-muted-foreground/60 for subtle appearance
+
+- Polish 4: Better Toolbar Button Hover States
+  - All toolbar buttons now have transition-all duration-200
+  - Upload button: hover:scale-105, hover:border-emerald-500/40, hover:text-emerald-700/dark:text-emerald-400
+  - New Folder button: same hover:scale-105 and emerald color treatment
+  - Sort dropdown trigger: hover:bg-accent/50 with transition
+  - Sort direction button: hover:bg-accent/50 with transition
+  - Keyboard shortcuts button: hover:bg-accent/50 with transition
+  - View toggle: active item gets text-emerald-700/dark:text-emerald-400 and data-[state=on]:bg-emerald-500/10
+
+- Polish 5: File Card Filename Truncation
+  - Filename area has fixed h-8 height for consistency
+  - line-clamp-2 already present for truncation
+  - Tooltip now shows full filename (font-medium, max-w-[250px], break-all) plus "Modified" date on second line
+  - Replaced old single-line "Modified X ago" tooltip with two-line tooltip showing filename + modified date
+
+- Polish 6: Smooth Section Transitions
+  - Changed AnimatePresence transition from opacity+x slide to pure fade (opacity: 0 → 1)
+  - Duration: 150ms with easeInOut
+  - Removed x-axis slide (was initial x:8, exit x:-8) for cleaner, simpler fade
+  - Applies to both grid and list views via cloud-drive-app.tsx
+
+- Polish 7: Better Search Experience
+  - Search icon already present (added pointer-events-none to prevent click interference)
+  - Added clear button (X icon) when search input has text, positioned at right side
+  - Added focus glow: focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50
+  - Changed from defaultValue to controlled value (searchInputValue state) for clear button support
+  - Added search result count display below search input: "N results found" with framer-motion fade-in animation
+  - Added searchResultCount/setSearchResultCount to file-store.ts, populated from file-grid.tsx and file-list.tsx
+  - Mobile search bar also gets clear button, focus glow, and result count
+  - Mobile search bar now has AnimatePresence expand/collapse animation
+
+- Polish 8: Context Menu Polish
+  - Added separator lines between logical groups in both dropdown and context menus
+  - Groups: Open/Download → Edit (Rename/Star/Move/Copy) → Share & Info → Destructive (Trash)
+  - Applied to both file-card.tsx and file-list.tsx for all menu types (dropdown + context)
+  - All context menu items already have proper lucide-react icons
+
+- 7 files modified (file-card.tsx, file-sidebar.tsx, file-toolbar.tsx, file-grid.tsx, file-list.tsx, file-store.ts, cloud-drive-app.tsx)
+- All changes pass lint check
+
+Stage Summary:
+- Card spacing is now uniform with min-h-[120px] and consistent height containers
+- User profile area with emerald avatar, username, and storage subtitle added to sidebar
+- Breadcrumb items have slide animation, hover effects, and bold current folder
+- Toolbar buttons have smooth hover transitions, scale effects, and emerald accents
+- Filename tooltip shows full name + modified date with consistent height
+- Section transitions use pure 150ms fade (no slide, no bounce)
+- Search has clear button, emerald focus glow, and result count
+- Context menus have logical group separators
+- Lint clean
+
+---
+Task ID: 10-batch-rename
+Agent: Batch Rename Agent
+Task: Add Batch Rename functionality to CloudDrive
+
+Work Log:
+- Feature: Batch Rename Dialog
+  - Created `src/components/batch-rename-dialog.tsx` using shadcn Dialog
+  - Title shows "Batch Rename" with Badge showing count of selected files
+  - Pattern input field with helper text explaining placeholders:
+    - `{name}` = original filename without extension
+    - `{ext}` = file extension
+    - `{i}` = sequential number (starting from Start Number)
+    - `{i:0}` = zero-padded number (01, 02, etc. — pad width is configurable)
+    - `{date}` = file creation date (YYYY-MM-DD)
+  - Start Number input (default 1) and Step input (default 1)
+  - Live preview section showing OLD NAME → NEW NAME for each file
+    - Green color for changed names, gray/muted for unchanged
+    - Strikethrough on old names when changed
+    - Limited to first 10 files with "+N more" indicator
+    - Duplicate name detection warning
+  - Cancel and Rename buttons (Rename is emerald colored, disabled when no changes or duplicates)
+  - Fetches current view's files via useQuery to compute previews
+  - Resets pattern/start/step when dialog opens
+  - Shows success/error toasts via sonner
+
+- Backend API: `src/app/api/files/batch-rename/route.ts`
+  - POST endpoint accepting: fileIds, pattern, startIndex, step
+  - Pattern parsing supports: {name}, {ext}, {i}, {i:0}, {date}
+  - For each file: parses pattern, updates name in database
+  - For files with storagePath: also renames physical file in storage directory
+  - Validates no duplicate new names within the batch (returns 409)
+  - Validates no name collision with existing files in same folder (returns 409)
+  - Returns array of updated files
+
+- Integration:
+  - Updated `file-store.ts`: added batchRenameOpen and setBatchRenameOpen state
+  - Updated `batch-actions.tsx`: added Rename button (Pencil icon) in floating bar
+  - Updated `file-grid.tsx`: added "Batch Rename" option in empty area context menu (appears when >1 files selected, not in trash)
+  - Updated `file-list.tsx`: added "Batch Rename" option in empty area context menu (same conditions)
+  - Updated `file-actions.tsx`: added BatchRenameDialog to dialog collection
+  - All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Batch Rename feature fully implemented
+- 1 new API route (batch-rename), 1 new component (batch-rename-dialog.tsx)
+- 5 files modified (file-store.ts, batch-actions.tsx, file-grid.tsx, file-list.tsx, file-actions.tsx)
+- 20 total API endpoints
+- Lint clean, no errors
+
+---
+Task ID: 10-cron-review-round6
+Agent: Main Agent
+Task: QA testing, add user preferences, batch rename, UI polish
+
+Work Log:
+- QA Round 6: Comprehensive testing with agent-browser + VLM
+  - All Files view: ✅ Works correctly with improved card design
+  - Starred/Recent/Trash views: ✅ All working
+  - Dark/Light mode: ✅ Both working with good contrast
+  - List view: ✅ Columns aligned, sortable headers
+  - Search: ✅ Works with result count, clear button, focus glow
+  - Context menus: ✅ All options with separators between groups
+  - Keyboard shortcuts: ✅ Dialog opens with ? key
+  - Upload overlay: ✅ Drag-drop upload works
+  - VLM Quality Rating: Light mode 8.5/10, Dark mode 8/10
+
+- Feature 1: User Preferences Dialog (subagent)
+  - Created `src/lib/user-preferences.ts` — Zustand store with localStorage persistence
+  - Stores: defaultViewMode, defaultSortField, defaultSortDirection, theme, compactMode, showExtensions, showHiddenFiles
+  - Created `src/components/user-preferences-dialog.tsx` — Tabbed dialog (General, Appearance, Advanced)
+  - General: Default View Mode (Grid/List), Default Sort Order
+  - Appearance: Theme (Light/Dark/System), Compact Mode, Show Extensions
+  - Advanced: Show Hidden Files, Reset to Defaults
+  - Added Ctrl+, keyboard shortcut to open preferences
+  - Integrated into cloud-drive-app.tsx with auto-apply on mount
+  - file-card.tsx respects compactMode (smaller icons/padding) and showExtensions
+
+- Feature 2: Storage Usage Alert (subagent)
+  - Checks storage via /api/files/stats every 60 seconds
+  - >80%: Warning toast "Storage almost full! X% used" with "Manage Storage" button
+  - >90%: Error toast "Storage critically full!" with "Manage Storage" button
+  - "Manage Storage" scrolls to and highlights the storage section in sidebar
+  - Prevents duplicate toasts
+
+- Feature 3: Batch Rename (subagent)
+  - Created `src/app/api/files/batch-rename/route.ts` — POST endpoint
+  - Supports patterns: {name}, {ext}, {i}, {i:0}, {date}
+  - Validates no duplicate names, handles physical file renaming
+  - Created `src/components/batch-rename-dialog.tsx` — Pattern input, start/step inputs, live preview
+  - Preview shows OLD → NEW names (green for changed, gray for unchanged)
+  - Added "Rename" button (Pencil icon) in batch-actions.tsx
+  - Added "Batch Rename" option in context menus
+  - Added batchRenameOpen/setBatchRenameOpen to file-store.ts
+
+- Feature 4: UI Polish (subagent + direct fixes)
+  - Card spacing consistency: min-h-[120px], fixed-height icon container, h-8 filename area
+  - Sidebar profile area: emerald gradient avatar, "My CloudDrive" name, storage subtitle, Settings button
+  - Theme toggle moved into profile area for better visual connection
+  - Storage text made larger (text-sm) and more readable
+  - Breadcrumb animations: framer-motion slide on enter, ChevronRight separators
+  - Toolbar button hover states: scale-105 on Upload/New Folder, emerald hover on sort/keyboard
+  - Search improvements: clear button (X), emerald focus ring, result count with animation
+  - Context menu separators between logical groups (Open/Download → Edit → Share/Info → Destructive)
+  - Filename truncation with line-clamp-2 and tooltip showing full name
+  - Section transitions: pure opacity fade (150ms)
+  - Sort trigger made wider (w-[140px]) and taller (h-9) for better click target
+  - Toolbar secondary icons made larger (h-9 w-9) with emerald hover colors
+
+- 14+ files modified, 4 new files created
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- VLM rated Light mode 8.5/10 (up from 7/10), Dark mode 8/10
+- 3 major features added: User Preferences, Storage Alerts, Batch Rename
+- Significant UI polish: sidebar profile, storage readability, toolbar sizes, search UX
+- Total features now 50+, API endpoints 23+, frontend components 35+
+
+## Current Project State
+- Fully functional cloud storage application, VLM rated 8.5/10 (light), 8/10 (dark)
+- 50+ features: CRUD, upload/download, search, sort, filter, star, trash, share, preview, detail panel, keyboard shortcuts, drag-drop (grid+list), right-click context menu, clipboard operations, file copy/duplicate, batch actions, dark mode, responsive design, animations, loading skeletons, sidebar badges, storage visualization, upload progress, share page, bulk download ZIP, file descriptions, activity log, file properties, drag-drop in list view, user preferences, storage alerts, batch rename, compact mode, extension toggle
+- 23 API endpoints: files (CRUD + description), upload, download, download-zip, move, star, restore, search, stats, path, share, share/[token] GET/POST, trash, recent, copy, properties/[id], batch-rename
+- 35+ frontend components
+- Responsive design with mobile support
+- Both light and dark modes (ThemeProvider properly configured)
+- No hydration errors, no runtime errors
+- Lint clean
+
+## Known Issues / Risks
+- None critical
+- Minor: Secondary text in dark mode could have slightly better contrast ("0 items")
+- Minor: Dark mode toggle active state could be more distinct
+- Minor: Upload progress may not work perfectly for very small files
+
+## Recommended Next Steps
+- Add file versioning / history
+- Add PDF viewer and document preview
+- Add video thumbnail generation
+- Add file/folder size quota per user
+- Add notification system for share link accesses
+- Improve dark mode secondary text contrast
+- Add drag-and-drop file upload with progress overlay
+- Add more keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+N new folder)

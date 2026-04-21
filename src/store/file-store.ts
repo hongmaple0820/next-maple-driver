@@ -37,6 +37,8 @@ interface FileStore {
   // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  searchResultCount: number;
+  setSearchResultCount: (count: number) => void;
 
   // Sort
   sortBy: SortField;
@@ -74,6 +76,18 @@ interface FileStore {
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
 
+  // User preferences dialog
+  preferencesOpen: boolean;
+  setPreferencesOpen: (open: boolean) => void;
+
+  // Compact mode (from preferences)
+  compactMode: boolean;
+  setCompactMode: (compact: boolean) => void;
+
+  // Show file extensions (from preferences)
+  showExtensions: boolean;
+  setShowExtensions: (show: boolean) => void;
+
   // Activity log
   activities: ActivityItem[];
   addActivity: (activity: Omit<ActivityItem, "id" | "timestamp">) => void;
@@ -82,6 +96,10 @@ interface FileStore {
   // Detail panel
   detailFile: FileItem | null;
   setDetailFile: (file: FileItem | null) => void;
+
+  // Batch rename dialog
+  batchRenameOpen: boolean;
+  setBatchRenameOpen: (open: boolean) => void;
 
   // Dialogs
   createFolderOpen: boolean;
@@ -112,7 +130,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all", searchResultCount: 0 }),
 
   // View mode
   viewMode: "grid",
@@ -121,6 +139,8 @@ export const useFileStore = create<FileStore>((set) => ({
   // Search
   searchQuery: "",
   setSearchQuery: (query) => set({ searchQuery: query }),
+  searchResultCount: 0,
+  setSearchResultCount: (count) => set({ searchResultCount: count }),
 
   // Sort
   sortBy: "name",
@@ -175,6 +195,18 @@ export const useFileStore = create<FileStore>((set) => ({
   shortcutsOpen: false,
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
 
+  // User preferences dialog
+  preferencesOpen: false,
+  setPreferencesOpen: (open) => set({ preferencesOpen: open }),
+
+  // Compact mode
+  compactMode: false,
+  setCompactMode: (compact) => set({ compactMode: compact }),
+
+  // Show extensions
+  showExtensions: true,
+  setShowExtensions: (show) => set({ showExtensions: show }),
+
   // Activity log
   activities: [],
   addActivity: (activity) =>
@@ -189,6 +221,10 @@ export const useFileStore = create<FileStore>((set) => ({
   // Sidebar
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
+  // Batch rename dialog
+  batchRenameOpen: false,
+  setBatchRenameOpen: (open) => set({ batchRenameOpen: open }),
 
   // Detail panel
   detailFile: null,

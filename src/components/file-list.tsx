@@ -45,7 +45,7 @@ export function FileList() {
     clearSelection, setCurrentFolderId, setDetailFile, setRenameFile, setMoveFile,
     setShareFile, setPreviewFile, sortBy, sortDirection, toggleSort, typeFilter,
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard,
-    setPropertiesFile,
+    setPropertiesFile, setSearchResultCount, compactMode, showExtensions, setBatchRenameOpen,
   } = useFileStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +106,15 @@ export function FileList() {
   const handleSort = (key: SortField) => {
     toggleSort(key);
   };
+
+  // Update search result count
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setSearchResultCount(sortedFiles.length);
+    } else {
+      setSearchResultCount(0);
+    }
+  }, [searchQuery, sortedFiles.length, setSearchResultCount]);
 
   const allSelected = filteredFiles.length > 0 && filteredFiles.every((f) => selectedFileIds.has(f.id));
 
@@ -307,11 +316,14 @@ export function FileList() {
     if (section !== "trash") {
       return (
         <>
+          {/* Download group */}
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => handleDownload(file)}>
               <Download className="w-4 h-4" /> Download
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
+          {/* Edit group */}
           <DropdownMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
             <Pencil className="w-4 h-4" /> Rename
           </DropdownMenuItem>
@@ -325,6 +337,8 @@ export function FileList() {
           <DropdownMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* Share & Info group */}
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -334,6 +348,7 @@ export function FileList() {
             <Info className="w-4 h-4" /> Properties
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {/* Destructive group */}
           <DropdownMenuItem variant="destructive" onClick={() => handleDelete(file)}>
             <Trash2 className="w-4 h-4" /> Move to Trash
           </DropdownMenuItem>
@@ -357,6 +372,7 @@ export function FileList() {
     if (section !== "trash") {
       return (
         <>
+          {/* Open/Download group */}
           {file.type === "folder" && (
             <ContextMenuItem onClick={() => setCurrentFolderId(file.id)}>
               <FolderInput className="w-4 h-4" /> Open
@@ -367,6 +383,8 @@ export function FileList() {
               <Download className="w-4 h-4" /> Download
             </ContextMenuItem>
           )}
+          <ContextMenuSeparator />
+          {/* Edit group */}
           <ContextMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
             <Pencil className="w-4 h-4" /> Rename
           </ContextMenuItem>
@@ -380,6 +398,8 @@ export function FileList() {
           <ContextMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          {/* Share & Info group */}
           {file.type === "file" && (
             <ContextMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -389,6 +409,7 @@ export function FileList() {
             <Info className="w-4 h-4" /> Properties
           </ContextMenuItem>
           <ContextMenuSeparator />
+          {/* Destructive group */}
           <ContextMenuItem variant="destructive" onClick={() => handleDelete(file)}>
             <Trash2 className="w-4 h-4" /> Move to Trash
           </ContextMenuItem>
@@ -422,6 +443,11 @@ export function FileList() {
           {clipboard && (
             <ContextMenuItem onClick={handlePaste}>
               <Clipboard className="w-4 h-4" /> Paste
+            </ContextMenuItem>
+          )}
+          {selectedFileIds.size > 1 && section !== "trash" && (
+            <ContextMenuItem onClick={() => setBatchRenameOpen(true)}>
+              <Pencil className="w-4 h-4" /> Batch Rename
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -612,18 +638,24 @@ export function FileList() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 min-w-0">
-                            <FileTypeIcon file={file} className="w-5 h-5 shrink-0" />
-                            <span className="truncate font-medium text-sm">{file.name}</span>
+                            <FileTypeIcon file={file} className={cn("shrink-0", compactMode ? "w-4 h-4" : "w-5 h-5")} />
+                            <span className={cn("truncate font-medium", compactMode ? "text-xs" : "text-sm")}>{file.name}</span>
                             {file.starred && <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" />}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                        <TableCell className={cn("hidden md:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
                           {file.type === "folder" ? "—" : formatFileSize(file.size)}
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                          {getFileTypeLabel(file)}
+                        <TableCell className={cn("hidden sm:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
+                          <div className="flex items-center gap-1.5">
+                            {getFileTypeLabel(file)}
+                            {showExtensions && file.type === "file" && (() => {
+                              const ext = file.name.split(".").length > 1 ? `.${file.name.split(".").pop()}` : "";
+                              return ext ? <span className="text-[10px] text-muted-foreground/70 font-mono">{ext.toLowerCase()}</span> : null;
+                            })()}
+                          </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        <TableCell className={cn("hidden lg:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
                           {formatDate(file.updatedAt)}
                         </TableCell>
                         <TableCell>

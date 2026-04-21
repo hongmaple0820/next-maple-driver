@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ export function FileToolbar() {
     setViewMode,
     searchQuery,
     setSearchQuery,
+    searchResultCount,
     setCreateFolderOpen,
     sortBy,
     setSortBy,
@@ -56,6 +58,7 @@ export function FileToolbar() {
   const queryClient = useQueryClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [searchInputValue, setSearchInputValue] = useState("");
 
   // Fetch storage stats (for trash count)
   const { data: stats } = useQuery<StorageStats>({
@@ -82,6 +85,7 @@ export function FileToolbar() {
 
   const handleSearch = useCallback(
     (value: string) => {
+      setSearchInputValue(value);
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       searchTimeoutRef.current = setTimeout(() => {
         setSearchQuery(value);
@@ -89,6 +93,11 @@ export function FileToolbar() {
     },
     [setSearchQuery]
   );
+
+  const handleClearSearch = useCallback(() => {
+    setSearchInputValue("");
+    setSearchQuery("");
+  }, [setSearchQuery]);
 
   const handleUploadClick = () => {
     const input = document.createElement("input");
@@ -109,76 +118,107 @@ export function FileToolbar() {
     trash: "Trash",
   };
 
+  const isSearchActive = searchQuery.trim().length > 0;
+
   return (
     <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Top row: hamburger + breadcrumb + search */}
       <div className="flex items-center gap-2 px-4 py-3">
         <MobileMenuButton />
 
-        {/* Breadcrumb */}
+        {/* Breadcrumb with animations */}
         <div className="flex-1 min-w-0">
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
                 {currentFolderId === "root" ? (
-                  <BreadcrumbPage className="font-semibold text-foreground">
+                  <BreadcrumbPage className="font-bold text-foreground">
                     {sectionLabels[section]}
                   </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink
-                    className="cursor-pointer font-medium"
+                    className="cursor-pointer font-medium rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent/50"
                     onClick={() => setCurrentFolderId("root")}
                   >
                     {sectionLabels[section]}
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>
-              {breadcrumbs.map((crumb, idx) => {
-                const isLast = idx === breadcrumbs.length - 1;
-                return (
-                  <span key={crumb.id} className="flex items-center gap-1.5">
-                    <BreadcrumbSeparator>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </BreadcrumbSeparator>
-                    <BreadcrumbItem>
-                      {isLast ? (
-                        <BreadcrumbPage className="font-medium truncate max-w-[200px]">
-                          {crumb.name}
-                        </BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink
-                          className="cursor-pointer"
-                          onClick={() => setCurrentFolderId(crumb.id)}
-                        >
-                          <span className="truncate max-w-[150px] inline-block align-bottom">
+              <AnimatePresence mode="popLayout">
+                {breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <motion.span
+                      key={crumb.id}
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center gap-1.5"
+                    >
+                      <BreadcrumbSeparator>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                      </BreadcrumbSeparator>
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage className="font-bold truncate max-w-[200px]">
                             {crumb.name}
-                          </span>
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
-                  </span>
-                );
-              })}
+                          </BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink
+                            className="cursor-pointer rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent/50"
+                            onClick={() => setCurrentFolderId(crumb.id)}
+                          >
+                            <span className="truncate max-w-[150px] inline-block align-bottom">
+                              {crumb.name}
+                            </span>
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                    </motion.span>
+                  );
+                })}
+              </AnimatePresence>
             </BreadcrumbList>
           </Breadcrumb>
         </div>
 
         {/* Desktop Search */}
         <div className="relative hidden sm:block w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Search files..."
-            className="pl-9 h-9 transition-all duration-200 focus:w-80"
-            defaultValue={searchQuery}
+            value={searchInputValue}
+            className={cn(
+              "pl-9 h-9 transition-all duration-200 focus:w-80",
+              "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50"
+            )}
             onChange={(e) => handleSearch(e.target.value)}
           />
+          {searchInputValue && (
+            <button
+              onClick={handleClearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {isSearchActive && searchResultCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute -bottom-5 left-0 text-[11px] text-muted-foreground"
+            >
+              {searchResultCount} result{searchResultCount !== 1 ? "s" : ""} found
+            </motion.div>
+          )}
         </div>
 
         {/* Mobile Search Toggle */}
         <Button
           variant="ghost"
           size="icon"
-          className="sm:hidden h-9 w-9"
+          className="sm:hidden h-9 w-9 transition-all duration-200"
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
         >
           {mobileSearchOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
@@ -186,23 +226,46 @@ export function FileToolbar() {
       </div>
 
       {/* Mobile Search Bar (expandable) */}
-      {mobileSearchOpen && (
-        <div className="sm:hidden px-4 pb-2">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search files..."
-              className="pl-9 h-9 w-full"
-              defaultValue={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              autoFocus
-            />
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {mobileSearchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="sm:hidden overflow-hidden"
+          >
+            <div className="px-4 pb-2">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search files..."
+                  value={searchInputValue}
+                  className="pl-9 pr-9 h-9 w-full focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50"
+                  onChange={(e) => handleSearch(e.target.value)}
+                  autoFocus
+                />
+                {searchInputValue && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {isSearchActive && searchResultCount > 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {searchResultCount} result{searchResultCount !== 1 ? "s" : ""} found
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom row: actions + view toggle */}
-      <div className="flex items-center justify-between px-4 pb-3 gap-2">
+      <div className={cn("flex items-center justify-between px-4 pb-3 gap-2", isSearchActive && "pt-1")}>
         <div className="flex items-center gap-2">
           {section === "files" && (
             <>
@@ -210,7 +273,7 @@ export function FileToolbar() {
                 variant="outline"
                 size="sm"
                 onClick={handleUploadClick}
-                className="gap-1.5"
+                className="gap-1.5 transition-all duration-200 hover:scale-105 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400"
               >
                 <Upload className="w-4 h-4" />
                 <span className="hidden sm:inline">Upload</span>
@@ -219,7 +282,7 @@ export function FileToolbar() {
                 variant="outline"
                 size="sm"
                 onClick={() => setCreateFolderOpen(true)}
-                className="gap-1.5"
+                className="gap-1.5 transition-all duration-200 hover:scale-105 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400"
               >
                 <FolderPlus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Folder</span>
@@ -229,7 +292,7 @@ export function FileToolbar() {
           {section === "trash" && (stats?.trashedCount ?? 0) > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive">
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-200">
                   <Trash2 className="w-4 h-4" />
                   <span className="hidden sm:inline">Empty Trash</span>
                 </Button>
@@ -264,15 +327,15 @@ export function FileToolbar() {
         </div>
 
         {/* Sort controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Select
             value={sortBy}
             onValueChange={(val) => {
               setSortBy(val as SortField);
             }}
           >
-            <SelectTrigger className="h-8 w-[130px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center">
-              <ArrowUpDown className="w-3.5 h-3.5 mr-1.5 max-[400px]:mr-0" />
+            <SelectTrigger className="h-9 w-[140px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center transition-all duration-200 hover:bg-accent/50 hover:border-emerald-500/30">
+              <ArrowUpDown className="w-4 h-4 mr-1.5 max-[400px]:mr-0" />
               <SelectValue className="max-[400px]:hidden" />
             </SelectTrigger>
             <SelectContent>
@@ -285,7 +348,7 @@ export function FileToolbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 transition-all duration-200 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
             onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
           >
             <ArrowUpDown className={cn("w-4 h-4 transition-transform", sortDirection === "desc" && "rotate-180")} />
@@ -296,7 +359,7 @@ export function FileToolbar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 transition-all duration-200 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
           onClick={() => setShortcutsOpen(true)}
           title="Keyboard shortcuts (?)"
         >
@@ -306,7 +369,7 @@ export function FileToolbar() {
         {/* Activity panel */}
         <ActivityPanel />
 
-        {/* View toggle */}
+        {/* View toggle with emerald indicator */}
         <ToggleGroup
           type="single"
           value={viewMode}
@@ -315,10 +378,26 @@ export function FileToolbar() {
           }}
           className="border rounded-lg"
         >
-          <ToggleGroupItem value="grid" size="sm" aria-label="Grid view">
+          <ToggleGroupItem
+            value="grid"
+            size="sm"
+            aria-label="Grid view"
+            className={cn(
+              "transition-all duration-200",
+              viewMode === "grid" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
+            )}
+          >
             <LayoutGrid className="w-4 h-4" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" size="sm" aria-label="List view">
+          <ToggleGroupItem
+            value="list"
+            size="sm"
+            aria-label="List view"
+            className={cn(
+              "transition-all duration-200",
+              viewMode === "list" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
+            )}
+          >
             <List className="w-4 h-4" />
           </ToggleGroupItem>
         </ToggleGroup>
@@ -342,10 +421,10 @@ export function FileToolbar() {
                 key={tab.id}
                 onClick={() => setTypeFilter(tab.id as FileTypeFilter)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap",
                   typeFilter === tab.id
                     ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
-                    : "text-muted-foreground hover:bg-muted"
+                    : "text-muted-foreground hover:bg-accent/50"
                 )}
               >
                 {Icon && <Icon className="w-3.5 h-3.5" />}
