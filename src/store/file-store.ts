@@ -96,6 +96,9 @@ interface FileStore {
   shareFile: { id: string; name: string } | null;
   setShareFile: (file: { id: string; name: string } | null) => void;
 
+  propertiesFile: { id: string; name: string } | null;
+  setPropertiesFile: (file: { id: string; name: string } | null) => void;
+
   previewFile: { id: string; name: string; type: string; mimeType?: string; url?: string } | null;
   setPreviewFile: (file: { id: string; name: string; type: string; mimeType?: string; url?: string } | null) => void;
 }
@@ -203,6 +206,9 @@ export const useFileStore = create<FileStore>((set) => ({
 
   shareFile: null,
   setShareFile: (file) => set({ shareFile: file }),
+
+  propertiesFile: null,
+  setPropertiesFile: (file) => set({ propertiesFile: file }),
 
   previewFile: null,
   setPreviewFile: (file) => set({ previewFile: file }),

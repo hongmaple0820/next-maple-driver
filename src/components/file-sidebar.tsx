@@ -55,10 +55,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-600 text-white">
+        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-500/20 dark:shadow-emerald-500/10">
           <Cloud className="w-5 h-5" />
         </div>
-        <span className="text-lg font-bold tracking-tight">CloudDrive</span>
+        <div className="flex flex-col">
+          <span className="text-lg font-bold tracking-tight leading-tight bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-400 dark:to-emerald-600 bg-clip-text text-transparent">CloudDrive</span>
+          <span className="text-[10px] text-muted-foreground leading-tight">Personal Cloud Storage</span>
+        </div>
         {onNavigate && (
           <Button
             variant="ghost"

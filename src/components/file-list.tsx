@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2 } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -45,9 +45,14 @@ export function FileList() {
     clearSelection, setCurrentFolderId, setDetailFile, setRenameFile, setMoveFile,
     setShareFile, setPreviewFile, sortBy, sortDirection, toggleSort, typeFilter,
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard,
+    setPropertiesFile,
   } = useFileStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag-and-drop state
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const isSearch = searchQuery.trim().length > 0;
 
@@ -245,6 +250,59 @@ export function FileList() {
     setSortDirection("asc");
   }, [setSortBy, setSortDirection]);
 
+  // Drag-and-drop handlers
+  const handleRowDragStart = useCallback((e: React.DragEvent, file: FileItem) => {
+    e.dataTransfer.setData("text/plain", file.id);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingId(file.id);
+  }, []);
+
+  const handleRowDragEnd = useCallback(() => {
+    setDraggingId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleRowDragOver = useCallback((e: React.DragEvent, file: FileItem) => {
+    if (file.type === "folder") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      setDragOverId(file.id);
+    }
+  }, []);
+
+  const handleRowDragLeave = useCallback((e: React.DragEvent) => {
+    e.stopPropagation();
+    setDragOverId(null);
+  }, []);
+
+  const handleRowDrop = useCallback(async (e: React.DragEvent, file: FileItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverId(null);
+
+    const draggedFileId = e.dataTransfer.getData("text/plain");
+    if (!draggedFileId || draggedFileId === file.id) return;
+    if (file.type !== "folder") return;
+
+    try {
+      const res = await fetch("/api/files/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draggedFileId, targetParentId: file.id }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        toast.success(`Moved to ${file.name}`);
+      } else {
+        toast.error("Failed to move item");
+      }
+    } catch {
+      toast.error("Failed to move item");
+    }
+  }, [queryClient]);
+
   const getActionItems = (file: FileItem) => {
     if (section !== "trash") {
       return (
@@ -272,6 +330,9 @@ export function FileList() {
               <Share2 className="w-4 h-4" /> Share
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => setPropertiesFile({ id: file.id, name: file.name })}>
+            <Info className="w-4 h-4" /> Properties
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => handleDelete(file)}>
             <Trash2 className="w-4 h-4" /> Move to Trash
@@ -324,6 +385,9 @@ export function FileList() {
               <Share2 className="w-4 h-4" /> Share
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={() => setPropertiesFile({ id: file.id, name: file.name })}>
+            <Info className="w-4 h-4" /> Properties
+          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={() => handleDelete(file)}>
             <Trash2 className="w-4 h-4" /> Move to Trash
@@ -513,17 +577,28 @@ export function FileList() {
             <TableBody>
               {sortedFiles.map((file, index) => {
                 const isSelected = selectedFileIds.has(file.id);
+                const isDragging = draggingId === file.id;
+                const isDragOver = dragOverId === file.id && file.type === "folder";
 
                 return (
                   <ContextMenu key={file.id}>
                     <ContextMenuTrigger asChild>
                       <TableRow
+                        draggable
+                        onDragStart={(e) => handleRowDragStart(e, file)}
+                        onDragEnd={handleRowDragEnd}
+                        onDragOver={(e) => handleRowDragOver(e, file)}
+                        onDragLeave={handleRowDragLeave}
+                        onDrop={(e) => handleRowDrop(e, file)}
                         className={cn(
                           "cursor-pointer transition-colors duration-150",
-                          isSelected
+                          isDragging && "opacity-50",
+                          isDragOver
+                            ? "border-l-[3px] border-l-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/15"
+                            : isSelected
                             ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-[3px] border-l-emerald-500"
                             : "border-l-[3px] border-l-transparent hover:bg-muted/50",
-                          index % 2 === 1 && !isSelected && "bg-muted/20 hover:bg-muted/40"
+                          index % 2 === 1 && !isSelected && !isDragOver && "bg-muted/20 hover:bg-muted/40"
                         )}
                         onClick={() => handleRowClick(file)}
                         onDoubleClick={() => handleRowDoubleClick(file)}

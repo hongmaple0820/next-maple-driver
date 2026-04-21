@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +48,7 @@ export function FileCard({ file }: FileCardProps) {
     setMoveFile,
     setShareFile,
     setPreviewFile,
+    setPropertiesFile,
     addActivity,
   } = useFileStore();
 
@@ -220,6 +221,9 @@ export function FileCard({ file }: FileCardProps) {
               <Share2 className="w-4 h-4" /> Share
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => setPropertiesFile({ id: file.id, name: file.name })}>
+            <Info className="w-4 h-4" /> Properties
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4" /> Move to Trash
@@ -277,6 +281,9 @@ export function FileCard({ file }: FileCardProps) {
               <Share2 className="w-4 h-4" /> Share
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={() => setPropertiesFile({ id: file.id, name: file.name })}>
+            <Info className="w-4 h-4" /> Properties
+          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4" /> Move to Trash
@@ -370,12 +377,12 @@ export function FileCard({ file }: FileCardProps) {
         >
           <Card
             className={cn(
-              "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden",
+              "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden shadow-sm",
               isSelected
-                ? "border-emerald-500 shadow-emerald-500/20 shadow-lg bg-emerald-500/5 border-b-2 border-b-emerald-500/30"
+                ? "border-emerald-500 shadow-emerald-500/25 shadow-lg bg-emerald-500/5 border-b-2 border-b-emerald-500/30"
                 : isDragOver && file.type === "folder"
-                ? "border-emerald-500 shadow-emerald-500/20 shadow-lg bg-emerald-500/5 scale-[1.02]"
-                : "border-transparent hover:border-border hover:shadow-md hover:border-b-2 hover:border-b-emerald-500/30"
+                ? "border-emerald-500 shadow-emerald-500/25 shadow-lg bg-emerald-500/5 scale-[1.02]"
+                : "border-transparent hover:border-border/80 hover:shadow-lg hover:border-b-2 hover:border-b-emerald-500/30 hover:bg-accent/30"
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
@@ -475,7 +482,7 @@ export function FileCard({ file }: FileCardProps) {
               </Tooltip>
 
               {/* Meta info */}
-              <p className="sm:text-xs text-[11px] text-muted-foreground text-center">
+              <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground text-center">
                 {file.type === "folder"
                   ? `${file.childrenCount ?? 0} items`
                   : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}

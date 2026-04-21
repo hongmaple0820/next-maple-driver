@@ -6,6 +6,7 @@ import { MoveDialog } from "@/components/move-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { FilePreview } from "@/components/file-preview";
 import { FileDetailPanel } from "@/components/file-detail-panel";
+import { FilePropertiesDialog } from "@/components/file-properties-dialog";
 
 export function FileActions() {
   return (
@@ -16,6 +17,7 @@ export function FileActions() {
       <ShareDialog />
       <FilePreview />
       <FileDetailPanel />
+      <FilePropertiesDialog />
     </>
   );
 }
