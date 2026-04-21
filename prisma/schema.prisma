@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model FileItem {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   @default("file") // "file" or "folder"
+  size        Int      @default(0) // in bytes
+  mimeType    String   @default("")
+  parentId    String?  // null means top level (root)
+  storagePath String?  @default("") // local file system path (only for files)
+  isStarred   Boolean  @default(false)
+  isTrashed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relation to children
+  children    FileItem[]   @relation("FileHierarchy")
+  parent      FileItem?    @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  shares      ShareLink[]
+
+  @@index([parentId])
+  @@index([isTrashed])
+  @@index([isStarred])
+  @@index([name])
 }
 
-model Post {
+model ShareLink {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  fileId    String
+  token     String   @unique
+  password  String?  @default("")
+  expiresAt DateTime?
+  downloadCount Int  @default(0)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  file      FileItem  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([fileId])
 }
