@@ -59,8 +59,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-500/20 dark:shadow-emerald-500/10">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border/60">
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-500/25 dark:shadow-emerald-500/10">
           <Cloud className="w-5 h-5" />
         </div>
         <div className="flex flex-col">
@@ -80,8 +80,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-1">
+      <ScrollArea className="flex-1 px-3 py-3">
+        <div className="px-2 mb-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Navigation</span>
+        </div>
+        <nav className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = section === item.id;
@@ -131,9 +134,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </ScrollArea>
 
       {/* User Profile Area */}
-      <div className="border-t border-sidebar-border px-4 py-3">
+      <div className="border-t border-sidebar-border/60 px-3 py-3">
         <div
-          className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-sidebar-accent/50 transition-all duration-200 cursor-pointer"
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-sidebar-accent/50 transition-all duration-200 cursor-pointer"
           onClick={() => setPreferencesOpen(true)}
         >
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10 shrink-0">
@@ -141,7 +144,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold truncate leading-tight">My CloudDrive</span>
-            <span className="text-xs text-muted-foreground leading-tight">
+            <span className="text-[11px] text-muted-foreground leading-tight">
               {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
             </span>
           </div>
@@ -162,10 +165,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </Tooltip>
         </div>
         {/* Theme toggle row */}
-        <div className="flex items-center justify-between gap-2 mt-2 px-2">
+        <div className="flex items-center justify-between gap-2 mt-1.5 px-3">
           <div className="flex items-center gap-2">
             {theme === "dark" ? <Moon className="w-3.5 h-3.5 text-muted-foreground" /> : <Sun className="w-3.5 h-3.5 text-muted-foreground" />}
-            <span className="text-xs text-muted-foreground">{theme === "dark" ? "Dark" : "Light"} Mode</span>
+            <span className="text-[11px] text-muted-foreground">{theme === "dark" ? "Dark" : "Light"} Mode</span>
           </div>
           <Switch
             checked={theme === "dark"}
@@ -176,19 +179,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Storage Stats */}
-      <div className="border-t border-sidebar-border" data-storage-section>
+      <div className="border-t border-sidebar-border/60" data-storage-section>
         <button 
-          className="w-full px-4 py-4 hover:bg-sidebar-accent/50 transition-colors text-left"
+          className="w-full px-4 py-3 hover:bg-sidebar-accent/50 transition-colors text-left"
           onClick={() => setShowStorageDetail(!showStorageDetail)}
         >
           <div className="flex items-center gap-2 mb-2">
             <HardDrive className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Storage</span>
+            <span className="text-xs font-semibold">Storage</span>
             <ChevronIcon className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
           </div>
-          <Progress value={usagePercent} className={cn("h-2 mb-2", usagePercent > 80 && "animate-pulse")} />
+          <Progress value={usagePercent} className={cn("h-1.5 mb-2", usagePercent > 80 && "animate-pulse")} />
           {stats?.byType && Object.keys(stats.byType).length > 0 && (
-            <div className="flex h-1.5 rounded-full overflow-hidden bg-muted/50">
+            <div className="flex h-1 rounded-full overflow-hidden bg-muted/50">
               {Object.entries(stats.byType)
                 .sort(([, a], [, b]) => (b as number) - (a as number))
                 .map(([type, size]) => {
@@ -213,10 +216,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )}
           <div className="flex items-center justify-between mt-1.5">
-            <p className="text-sm text-muted-foreground">
-              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
+            <p className="text-[11px] text-muted-foreground">
+              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)}
             </p>
-            <p className="text-sm font-semibold">
+            <p className="text-[11px] font-semibold">
               {usagePercent.toFixed(usagePercent < 1 ? 2 : 0)}%
             </p>
           </div>
@@ -282,7 +285,7 @@ export function FileSidebar() {
   }
 
   return (
-    <aside className="hidden md:flex w-[280px] shrink-0 border-r border-border dark:border-border/50">
+    <aside className="hidden md:flex w-[260px] shrink-0 border-r border-border/60 dark:border-border/40">
       <SidebarContent />
     </aside>
   );

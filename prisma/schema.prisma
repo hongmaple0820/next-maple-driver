@@ -25,6 +25,7 @@ model FileItem {
   children    FileItem[]   @relation("FileHierarchy")
   parent      FileItem?    @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   shares      ShareLink[]
+  versions    FileVersion[]
 
   @@index([parentId])
   @@index([isTrashed])
@@ -45,4 +46,20 @@ model ShareLink {
 
   @@index([token])
   @@index([fileId])
+}
+
+model FileVersion {
+  id          String   @id @default(cuid())
+  fileId      String
+  name        String
+  size        Int      @default(0)
+  mimeType    String   @default("")
+  storagePath String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  file        FileItem  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([fileId, version])
 }

@@ -121,9 +121,9 @@ export function FileToolbar() {
   const isSearchActive = searchQuery.trim().length > 0;
 
   return (
-    <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Top row: hamburger + breadcrumb + search */}
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex items-center gap-2 px-4 py-2.5">
         <MobileMenuButton />
 
         {/* Breadcrumb with animations */}
@@ -265,26 +265,26 @@ export function FileToolbar() {
       </AnimatePresence>
 
       {/* Bottom row: actions + view toggle */}
-      <div className={cn("flex items-center justify-between px-4 pb-3 gap-2", isSearchActive && "pt-1")}>
-        <div className="flex items-center gap-2">
+      <div className={cn("flex items-center justify-between px-4 pb-2.5 gap-2", isSearchActive && "pt-1")}>
+        <div className="flex items-center gap-1.5">
           {section === "files" && (
             <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleUploadClick}
-                className="gap-1.5 transition-all duration-200 hover:scale-105 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400"
+                className="gap-1.5 h-8 text-xs transition-all duration-200 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Upload</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCreateFolderOpen(true)}
-                className="gap-1.5 transition-all duration-200 hover:scale-105 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400"
+                className="gap-1.5 h-8 text-xs transition-all duration-200 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
               >
-                <FolderPlus className="w-4 h-4" />
+                <FolderPlus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
             </>

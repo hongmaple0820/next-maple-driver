@@ -34,7 +34,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, type FileItem } from "@/lib/file-utils";
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -639,7 +639,14 @@ export function FileList() {
                         <TableCell>
                           <div className="flex items-center gap-2 min-w-0">
                             <FileTypeIcon file={file} className={cn("shrink-0", compactMode ? "w-4 h-4" : "w-5 h-5")} />
-                            <span className={cn("truncate font-medium", compactMode ? "text-xs" : "text-sm")}>{file.name}</span>
+                            <span className={cn("truncate font-medium", compactMode ? "text-xs" : "text-sm")}>
+                              {showExtensions && file.type === "file" && getFileExtension(file.name) ? getFileNameWithoutExtension(file.name) : file.name}
+                            </span>
+                            {showExtensions && file.type === "file" && getFileExtension(file.name) && (
+                              <span className={cn("shrink-0 font-mono text-muted-foreground/60", compactMode ? "text-[10px]" : "text-[11px]")}>
+                                .{getFileExtension(file.name)}
+                              </span>
+                            )}
                             {file.starred && <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" />}
                           </div>
                         </TableCell>

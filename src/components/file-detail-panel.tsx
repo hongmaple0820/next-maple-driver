@@ -9,11 +9,12 @@ import {
   Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin, StickyNote, Check, X as XIcon,
 } from "lucide-react";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension } from "@/lib/file-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { BreadcrumbItem } from "@/lib/file-utils";
+import { FileVersionPanel } from "@/components/file-version-panel";
 
 function InfoRow({ icon, label, value, delay = 0 }: { icon: React.ReactNode; label: string; value: string; delay?: number }) {
   return (
@@ -149,7 +150,9 @@ export function FileDetailPanel() {
               <SheetTitle className="flex items-center gap-3 text-base">
                 <FileTypeIcon file={detailFile} className="w-8 h-8" strokeWidth={1.5} />
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="truncate max-w-[140px] sm:max-w-[180px]">{detailFile.name}</span>
+                  <span className="truncate max-w-[140px] sm:max-w-[180px]">
+                    {ext && !isFolder ? getFileNameWithoutExtension(detailFile.name) : detailFile.name}
+                  </span>
                   {ext && !isFolder && (
                     <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-5 font-mono">
                       .{ext}
@@ -262,11 +265,23 @@ export function FileDetailPanel() {
               </div>
             </div>
 
+            {/* Version History (files only) */}
+            {!isFolder && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: 0.2 }}
+                className="p-4 border-b border-border/50"
+              >
+                <FileVersionPanel fileId={detailFile.id} />
+              </motion.div>
+            )}
+
             {/* Description / Notes */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: 0.2 }}
+              transition={{ duration: 0.2, delay: 0.25 }}
               className="p-4 space-y-3"
             >
               <div className="flex items-center justify-between">

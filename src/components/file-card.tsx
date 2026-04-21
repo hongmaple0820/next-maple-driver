@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -391,12 +391,12 @@ export function FileCard({ file }: FileCardProps) {
         >
           <Card
             className={cn(
-              "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden shadow-sm",
+              "group relative cursor-pointer transition-all duration-200 border overflow-hidden",
               isSelected
-                ? "border-emerald-500 shadow-emerald-500/25 shadow-lg bg-emerald-500/5 border-b-2 border-b-emerald-500/30"
+                ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 dark:bg-emerald-500/10"
                 : isDragOver && file.type === "folder"
-                ? "border-emerald-500 shadow-emerald-500/25 shadow-lg bg-emerald-500/5 scale-[1.02]"
-                : "border-transparent hover:border-border/80 hover:shadow-lg hover:border-b-2 hover:border-b-emerald-500/30 hover:bg-accent/30"
+                ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02]"
+                : "border-border/50 bg-card hover:border-border hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:bg-accent/20"
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
@@ -493,7 +493,7 @@ export function FileCard({ file }: FileCardProps) {
                       "font-medium text-center leading-tight line-clamp-2 min-w-0",
                       compactMode ? "text-[11px]" : "sm:text-sm text-xs"
                     )}>
-                      {file.name}
+                      {ext && showExtensions ? getFileNameWithoutExtension(file.name) : file.name}
                     </p>
                     {ext && showExtensions && (
                       <Badge variant="secondary" className={cn(

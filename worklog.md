@@ -1305,3 +1305,163 @@ Stage Summary:
 - Improve dark mode secondary text contrast
 - Add drag-and-drop file upload with progress overlay
 - Add more keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+N new folder)
+
+---
+Task ID: 8-file-version
+Agent: File Version Agent
+Task: Create File Version History API and UI
+
+Work Log:
+- Feature 1: Created API route at src/app/api/files/versions/[id]/route.ts
+  - GET: List all versions of a file (by fileId from URL param), ordered by version DESC
+    - Returns versions array with: id, name, size, mimeType, version, createdAt
+    - Also returns currentVersion number (max existing version + 1)
+  - POST: Create a new version snapshot of a file
+    - Reads current FileItem by id
+    - Gets max version number from existing FileVersion records
+    - Copies the physical file in storage to a versioned path (e.g., {originalPath}.v{versionNumber})
+    - Creates a new FileVersion record with fileId, name, size, mimeType, storagePath, version
+    - Uses crypto.randomUUID() for ID generation
+    - Returns the new version record with 201 status
+  - PATCH: Restore a specific version (body: { versionId: string })
+    - Finds the FileVersion by versionId
+    - If version has storagePath, copies the versioned file back to the current storagePath
+    - Updates the FileItem's name, size, mimeType to match the version
+    - Returns the updated file in normalized format
+
+- Feature 2: Created component src/components/file-version-panel.tsx
+  - Uses useQuery to fetch versions from /api/files/versions/{fileId}
+  - "Save Version" button at top to create a new snapshot (calls POST)
+  - Timeline-like list of versions, each with:
+    - Version number badge (e.g., "v3") using shadcn Badge
+    - File name with "Current" badge for the latest version
+    - File size and relative date (using formatFileSize, formatDate from file-utils)
+    - "Restore" button (only for non-current versions, appears on hover)
+  - Empty state when no versions saved (History icon + instructional text)
+  - Loading skeletons (3 animated pulse placeholders)
+  - Version count summary at bottom
+  - Uses framer-motion for staggered animation on version items (AnimatePresence + motion.div with delay)
+  - Uses shadcn/ui components: Button, Badge, ScrollArea
+  - Toast notifications for save/restore success/error
+  - Invalidates file-versions and files queries on mutation
+
+- Feature 3: Integrated FileVersionPanel into file-detail-panel.tsx
+  - Added import for FileVersionPanel
+  - Added FileVersionPanel below the Details section, above the Description section
+  - Only shows for files (not folders) - wrapped in !isFolder conditional
+  - Has border-b separator, motion animation (opacity 0→1, y 10→0)
+  - Adjusted Description section delay to 0.25 to avoid animation overlap
+
+- 3 files created/modified (1 new API route, 1 new component, 1 modified component)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- File version history fully implemented with API and UI
+- Users can save version snapshots of files and restore previous versions
+- Physical files are copied to versioned paths in storage for data integrity
+- Version panel integrates seamlessly into the existing file detail panel
+- 20 API endpoints total (19 previous + 1 new: versions)
+- 30+ frontend components
+
+---
+Task ID: 8-cron-review-round7
+Agent: Main Agent
+Task: QA testing, fix double extension bug, add file versioning, UI polish
+
+Work Log:
+- QA Round 7: Comprehensive testing with agent-browser + VLM
+  - All Files view: ✅ Works with improved card design
+  - Dark mode: ✅ Improved contrast, rated 8/10 by VLM (up from lower)
+  - List view: ✅ Columns aligned, extension display fixed
+  - File detail panel: ✅ Shows version history, extension badge, description editing
+  - Search: ✅ Works with result count, clear button, focus glow
+  - Context menus: ✅ All options with separators between groups
+  - Keyboard shortcuts: ✅ Dialog opens with ? key
+  - Upload: ✅ Drag-drop upload with progress toast
+  - Version History: ✅ New feature - Save Version button, version list, restore
+  - VLM Quality Rating: Light mode 8/10 (up from 7/10), Dark mode 8/10
+
+- Bug Fix: Double extension display (.txt.txt)
+  - Root cause: file-card.tsx showed file.name (which includes extension) PLUS a .{ext} Badge
+  - Added getFileNameWithoutExtension() utility to file-utils.ts
+  - Updated file-card.tsx: shows name without extension when Badge is displayed
+  - Updated file-list.tsx: same fix, extension shown separately in mono font
+  - Updated file-detail-panel.tsx: title shows name without extension + Badge
+
+- Feature: File Version History
+  - Created Prisma FileVersion model (id, fileId, name, size, mimeType, storagePath, version, createdAt)
+  - Created API route: /api/files/versions/[id] with GET/POST/PATCH
+    - GET: List all versions ordered by version DESC
+    - POST: Create new version snapshot (copies physical file + creates DB record)
+    - PATCH: Restore a specific version (copies versioned file back + updates metadata)
+  - Created file-version-panel.tsx component with timeline UI
+    - Version badges (v1, v2, etc.), "Save Version" button
+    - Restore button (hover-revealed), empty state, loading skeletons
+    - Staggered framer-motion animations
+  - Integrated into file-detail-panel.tsx (below Details, above Description)
+
+- UI Polish: Dark Mode Contrast Improvement
+  - Lowered background lightness (0.13 → 0.11) for deeper dark
+  - Lowered card/secondary/muted lightness (0.18 → 0.16, 0.24 → 0.22)
+  - Lowered muted-foreground (0.7 → 0.65) for more contrast
+  - Reduced border opacity (12% → 10%) for subtler borders
+  - Reduced sidebar background (0.16 → 0.14) for more depth
+  - Reduced sidebar-border opacity (12% → 8%) for subtler sidebar edges
+
+- UI Polish: Sidebar Design Refinement
+  - Larger logo icon (w-9 → w-10) with stronger shadow
+  - Added "NAVIGATION" section label (uppercase, tracking-widest)
+  - Tighter navigation item spacing (space-y-1 → space-y-0.5)
+  - Smaller sidebar width (w-280 → w-260)
+  - Smoother border transparency (border-sidebar-border → border-sidebar-border/60)
+  - Refined profile area (rounded-xl, smaller text sizes)
+  - Smaller storage section labels and progress bar
+  - Better visual hierarchy with font-size and spacing adjustments
+
+- UI Polish: File Card Design
+  - Changed from border-2 to border for subtler look
+  - Improved selection state: emerald-500/60 border, shadow-md with 15% opacity
+  - Improved hover state: shadow-lg with context-aware color (black/5 light, black/20 dark)
+  - Added bg-accent/20 on hover for subtle background change
+  - Removed "border-b-2 border-b-emerald-500/30" which was visually noisy
+
+- UI Polish: Toolbar Refinement
+  - Tighter top row padding (py-3 → py-2.5)
+  - Smaller action buttons (h-8, text-xs, w-3.5 h-3.5 icons)
+  - Removed hover:scale-105 on buttons (too bouncy)
+  - Added hover:bg-emerald-500/5 for subtle hover feedback
+  - Tighter bottom row spacing (gap-2 → gap-1.5, pb-3 → pb-2.5)
+
+Stage Summary:
+- Double extension bug fixed across all views (grid, list, detail panel)
+- File version history feature fully implemented (API + UI)
+- Dark mode contrast significantly improved (8/10 VLM rating)
+- Sidebar design refined with better hierarchy and spacing
+- File card design cleaner with subtler borders and shadows
+- Toolbar more compact and professional
+- VLM rating improved from 7/10 to 8/10 (light mode)
+- Lint clean, 24 API endpoints, 38+ frontend components
+
+## Current Project State
+- Fully functional cloud storage application, VLM rated 8/10
+- 55+ features: CRUD, upload/download, search, sort, filter, star, trash, share, preview, detail panel, keyboard shortcuts, drag-drop, right-click context menu, clipboard operations, file copy/duplicate, batch actions, dark mode, responsive design, animations, loading skeletons, sidebar badges, storage visualization, upload progress, share page, bulk download ZIP, file descriptions, activity log, file properties, user preferences, storage alerts, batch rename, compact mode, extension toggle, file versioning
+- 24 API endpoints: files (CRUD + description), upload, download, download-zip, move, star, restore, search, stats, path, share, share/[token] GET/POST, trash, recent, copy, properties/[id], batch-rename, versions/[id] GET/POST/PATCH
+- 38+ frontend components including file-version-panel, keyboard-shortcuts-dialog, user-preferences-dialog
+- Responsive design with mobile support
+- Both light and dark modes (improved contrast in dark mode)
+- No lint errors
+
+## Known Issues / Risks
+- Minor: Server process may need fresh restart to pick up new Prisma schema (FileVersion model)
+- Minor: PrismaClient global singleton may cache old schema in dev mode until server restart
+- Minor: Server may experience memory pressure with many PrismaClient instances
+
+## Recommended Next Steps
+- Add PDF viewer with pdf.js for in-browser PDF preview
+- Add file/folder drag-and-drop in list view
+- Add undo/redo operations with Ctrl+Z/Ctrl+Shift+Z
+- Add notification system for share link accesses
+- Add file/folder color labels/tags
+- Add file size upload limit indicator
+- Add video thumbnail generation
+- Improve mobile responsive layout further

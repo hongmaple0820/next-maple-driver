@@ -94,6 +94,12 @@ export function getFileExtension(name: string): string {
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
 }
 
+// Get filename without extension
+export function getFileNameWithoutExtension(name: string): string {
+  const parts = name.split(".");
+  return parts.length > 1 ? parts.slice(0, -1).join(".") : name;
+}
+
 // Map MIME type / extension to lucide icon
 export function getFileIcon(item: FileItem): LucideIcon {
   if (item.type === "folder") return Folder;
