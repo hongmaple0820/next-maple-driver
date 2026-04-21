@@ -24,6 +24,7 @@ export interface FileItem {
   createdAt: string;
   updatedAt: string;
   url?: string;
+  childrenCount?: number;
 }
 
 export interface BreadcrumbItem {
@@ -36,6 +37,8 @@ export interface StorageStats {
   totalFolders: number;
   usedBytes: number;
   totalBytes: number;
+  starredCount: number;
+  trashedCount: number;
   byType: Record<string, number>;
 }
 

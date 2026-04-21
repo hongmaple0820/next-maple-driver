@@ -4,6 +4,7 @@ import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock } from "lucide-r
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatFileSize, type StorageStats } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
 
 const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
   { id: "files", label: "All Files", icon: Folder },
@@ -21,9 +23,18 @@ const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
 
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { section, setSection, sidebarOpen, setSidebarOpen } = useFileStore();
   const { theme, setTheme } = useTheme();
+  const [showStorageDetail, setShowStorageDetail] = useState(false);
 
   const { data: stats } = useQuery<StorageStats>({
     queryKey: ["storage-stats"],
@@ -86,6 +97,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   )}
                 />
                 {item.label}
+                {item.id === "starred" && (stats?.starredCount ?? 0) > 0 && (
+                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                    {stats.starredCount}
+                  </Badge>
+                )}
+                {item.id === "trash" && (stats?.trashedCount ?? 0) > 0 && (
+                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                    {stats.trashedCount}
+                  </Badge>
+                )}
               </button>
             );
           })}
@@ -105,23 +126,57 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Storage Stats */}
-      <div className="border-t border-sidebar-border px-4 py-4">
-        <div className="flex items-center gap-2 mb-2">
-          <HardDrive className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">Storage</span>
-        </div>
-        <Progress value={usagePercent} className="h-2 mb-2" />
-        {stats?.byType && Object.keys(stats.byType).length > 0 && (
-          <div className="mb-2 flex h-2 rounded-full overflow-hidden bg-muted">
+      <div className="border-t border-sidebar-border">
+        <button 
+          className="w-full px-4 py-4 hover:bg-sidebar-accent/50 transition-colors text-left"
+          onClick={() => setShowStorageDetail(!showStorageDetail)}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <HardDrive className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">Storage</span>
+            <ChevronIcon className={cn("w-3 h-3 ml-auto text-muted-foreground transition-transform", showStorageDetail && "rotate-180")} />
+          </div>
+          <Progress value={usagePercent} className="h-2 mb-2" />
+          {stats?.byType && Object.keys(stats.byType).length > 0 && (
+            <div className="flex h-1.5 rounded-full overflow-hidden bg-muted/50">
+              {Object.entries(stats.byType)
+                .sort(([, a], [, b]) => (b as number) - (a as number))
+                .map(([type, size]) => {
+                  const percent = totalBytes > 0 ? ((size as number) / totalBytes) * 100 : 0;
+                  return (
+                    <div
+                      key={type}
+                      className={cn(
+                        "h-full transition-all",
+                        type === "image" && "bg-emerald-500",
+                        type === "video" && "bg-rose-500",
+                        type === "audio" && "bg-purple-500",
+                        type === "document" && "bg-sky-500",
+                        type === "code" && "bg-amber-500",
+                        type === "archive" && "bg-orange-500",
+                        type === "other" && "bg-gray-500",
+                      )}
+                      style={{ width: `${percent}%` }}
+                    />
+                  );
+                })}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
+          </p>
+        </button>
+        
+        {/* Storage detail panel - expandable */}
+        {showStorageDetail && stats?.byType && (
+          <div className="px-4 pb-3 space-y-1.5 border-t border-sidebar-border/50 pt-2">
             {Object.entries(stats.byType)
               .sort(([, a], [, b]) => (b as number) - (a as number))
-              .map(([type, size]) => {
-                const percent = usedBytes > 0 ? ((size as number) / totalBytes) * 100 : 0;
-                return (
-                  <div
-                    key={type}
-                    className={cn(
-                      "h-full transition-all",
+              .map(([type, size]) => (
+                <div key={type} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "w-2.5 h-2.5 rounded-full",
                       type === "image" && "bg-emerald-500",
                       type === "video" && "bg-rose-500",
                       type === "audio" && "bg-purple-500",
@@ -129,17 +184,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                       type === "code" && "bg-amber-500",
                       type === "archive" && "bg-orange-500",
                       type === "other" && "bg-gray-500",
-                    )}
-                    style={{ width: `${percent}%` }}
-                    title={`${type}: ${formatFileSize(size as number)}`}
-                  />
-                );
-              })}
+                    )} />
+                    <span className="capitalize">{type}</span>
+                  </div>
+                  <span className="text-muted-foreground">{formatFileSize(size as number)}</span>
+                </div>
+              ))}
+            <div className="border-t border-sidebar-border/50 pt-1.5 mt-1.5 flex items-center justify-between text-xs font-medium">
+              <span>Free</span>
+              <span className="text-muted-foreground">{formatFileSize(totalBytes - usedBytes)}</span>
+            </div>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
-        </p>
       </div>
     </div>
   );

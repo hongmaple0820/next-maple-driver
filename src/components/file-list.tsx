@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -131,6 +131,20 @@ export function FileList() {
     } catch { /* silent */ }
   }, [queryClient]);
 
+  const handleCopy = useCallback(async (file: FileItem) => {
+    try {
+      const res = await fetch("/api/files/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+      }
+    } catch { /* silent */ }
+  }, [queryClient]);
+
   const handleDownload = useCallback((file: FileItem) => {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
   }, []);
@@ -169,6 +183,9 @@ export function FileList() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCopy(file)}>
+            <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
@@ -219,6 +236,9 @@ export function FileList() {
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </ContextMenuItem>
+          <ContextMenuItem onClick={() => handleCopy(file)}>
+            <Copy className="w-4 h-4" /> Copy
+          </ContextMenuItem>
           {file.type === "file" && (
             <ContextMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -257,24 +277,47 @@ export function FileList() {
   if (sortedFiles.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col items-center justify-center py-20 text-muted-foreground"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex flex-col items-center justify-center py-24 text-muted-foreground"
       >
-        <FolderOpen className="w-16 h-16 mb-4 opacity-30" />
-        <p className="text-lg font-medium">No items here</p>
-        <p className="text-sm mt-1">
-          {typeFilter !== "all"
+        <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6">
+          {isSearch ? (
+            <SearchX className="w-10 h-10 opacity-40" />
+          ) : section === "trash" ? (
+            <Trash2 className="w-10 h-10 opacity-40" />
+          ) : section === "starred" ? (
+            <Star className="w-10 h-10 opacity-40" />
+          ) : section === "recent" ? (
+            <Clock className="w-10 h-10 opacity-40" />
+          ) : typeFilter !== "all" ? (
+            <FolderOpen className="w-10 h-10 opacity-40" />
+          ) : (
+            <FolderOpen className="w-10 h-10 opacity-40" />
+          )}
+        </div>
+        <p className="text-lg font-medium mb-1">
+          {isSearch
+            ? "No results found"
+            : typeFilter !== "all"
             ? "No files match this filter"
-            : isSearch
-            ? "No files match your search"
             : section === "trash"
             ? "Trash is empty"
             : section === "starred"
             ? "No starred items"
             : section === "recent"
             ? "No recent files"
-            : "Upload files or create a folder to get started"}
+            : "This folder is empty"}
+        </p>
+        <p className="text-sm max-w-xs text-center">
+          {isSearch
+            ? "Try a different search term"
+            : typeFilter !== "all"
+            ? "Try selecting a different file type or 'All'"
+            : section === "files"
+            ? "Upload files or create a folder to get started"
+            : `Items you ${section === "starred" ? "star" : section === "trash" ? "delete" : "modify"} will appear here`}
         </p>
       </motion.div>
     );

@@ -170,7 +170,7 @@ export function FileToolbar() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search files..."
-            className="pl-9 h-9"
+            className="pl-9 h-9 transition-all duration-200 focus:w-80"
             defaultValue={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
           />
@@ -299,7 +299,7 @@ export function FileToolbar() {
 
       {/* Type filter tabs - only in All Files section at root level without search */}
       {section === "files" && currentFolderId === "root" && !searchQuery && (
-        <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
+        <div className="flex items-center gap-1 px-4 pb-2 pt-1 border-t border-border/50 overflow-x-auto">
           {[
             { id: "all", label: "All", icon: null },
             { id: "images", label: "Images", icon: Image },

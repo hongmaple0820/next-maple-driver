@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,6 +125,22 @@ export function FileCard({ file }: FileCardProps) {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
   }, [file]);
 
+  const handleCopy = useCallback(async () => {
+    try {
+      const res = await fetch("/api/files/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+      }
+    } catch {
+      // Error handled silently
+    }
+  }, [file, queryClient]);
+
   const actionItems = (
     <>
       {section !== "trash" && (
@@ -148,6 +164,9 @@ export function FileCard({ file }: FileCardProps) {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleCopy}>
+            <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
@@ -198,6 +217,9 @@ export function FileCard({ file }: FileCardProps) {
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </ContextMenuItem>
+          <ContextMenuItem onClick={handleCopy}>
+            <Copy className="w-4 h-4" /> Copy
+          </ContextMenuItem>
           {file.type === "file" && (
             <ContextMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
               <Share2 className="w-4 h-4" /> Share
@@ -244,9 +266,20 @@ export function FileCard({ file }: FileCardProps) {
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           >
+            {/* Selection indicator */}
+            {isSelected && (
+              <div className="absolute top-2 left-2 z-10">
+                <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
             {/* Star badge */}
-            {file.starred && (
-              <div className="absolute top-2 right-2 z-10">
+            {file.starred && !isSelected && (
+              <div className="absolute top-2 left-2 z-10">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
               </div>
             )}
@@ -278,7 +311,7 @@ export function FileCard({ file }: FileCardProps) {
             <CardContent className="flex flex-col items-center gap-2 p-4 pb-3">
               {/* Icon / Thumbnail */}
               {isImage ? (
-                <div className="mt-2 w-12 h-12 rounded-lg overflow-hidden bg-muted">
+                <div className="mt-1 w-full aspect-square max-w-[80px] rounded-lg overflow-hidden bg-muted relative">
                   <img
                     src={`/api/files/download?id=${file.id}&mode=inline`}
                     alt={file.name}
@@ -286,20 +319,20 @@ export function FileCard({ file }: FileCardProps) {
                   />
                 </div>
               ) : (
-                <div className="mt-2">
-                  <FileTypeIcon file={file} className="w-12 h-12" strokeWidth={1.5} />
+                <div className="mt-1">
+                  <FileTypeIcon file={file} className="w-14 h-14" strokeWidth={1.2} />
                 </div>
               )}
 
               {/* File name */}
-              <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full">
+              <p className="text-sm font-medium text-center leading-tight line-clamp-2 w-full mt-1">
                 {file.name}
               </p>
 
               {/* Meta info */}
               <p className="text-xs text-muted-foreground text-center">
                 {file.type === "folder"
-                  ? "Folder"
+                  ? `${file.childrenCount ?? 0} items`
                   : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}
               </p>
             </CardContent>
