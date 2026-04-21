@@ -36,6 +36,7 @@ export function FileCard({ file }: FileCardProps) {
     section,
     selectedFileIds,
     toggleSelect,
+    setDetailFile,
     setRenameFile,
     setMoveFile,
     setShareFile,
@@ -55,9 +56,9 @@ export function FileCard({ file }: FileCardProps) {
     if (file.type === "folder") {
       setCurrentFolderId(file.id);
     } else {
-      toggleSelect(file.id);
+      setDetailFile(file);
     }
-  }, [file, setCurrentFolderId, toggleSelect]);
+  }, [file, setCurrentFolderId, setDetailFile]);
 
   const handleDoubleClick = useCallback(() => {
     if (file.type === "folder") {
@@ -235,10 +236,10 @@ export function FileCard({ file }: FileCardProps) {
         >
           <Card
             className={cn(
-              "group relative cursor-pointer transition-all duration-200 border-2 hover:shadow-md",
+              "group relative cursor-pointer transition-all duration-200 border-2 overflow-hidden",
               isSelected
-                ? "border-emerald-500 shadow-emerald-500/10 shadow-lg"
-                : "border-transparent hover:border-border"
+                ? "border-emerald-500 shadow-emerald-500/10 shadow-lg bg-emerald-500/5"
+                : "border-transparent hover:border-border hover:shadow-md"
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}

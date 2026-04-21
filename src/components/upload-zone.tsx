@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useState, useRef } from "react";
-import { Upload, X } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFileStore } from "@/store/file-store";
-import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function UploadZone({ children }: { children: React.ReactNode }) {
-  const { currentFolderId, uploadProgress, addUploadProgress, updateUploadProgress, removeUploadProgress } = useFileStore();
+  const { currentFolderId } = useFileStore();
   const queryClient = useQueryClient();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -19,12 +18,11 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
     async (files: FileList | File[]) => {
       const fileArray = Array.from(files);
       for (const file of fileArray) {
-        const uploadId = `${Date.now()}-${file.name}`;
-        addUploadProgress({
-          id: uploadId,
-          fileName: file.name,
-          progress: 0,
-          status: "uploading",
+        const toastId = `upload-${Date.now()}-${file.name}`;
+
+        toast.loading(`Uploading ${file.name}...`, {
+          id: toastId,
+          description: "0%",
         });
 
         const formData = new FormData();
@@ -32,36 +30,24 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
         formData.append("parentId", currentFolderId);
 
         try {
-          // Simulate progress for visual feedback
-          let progress = 0;
-          const interval = setInterval(() => {
-            progress = Math.min(progress + Math.random() * 20, 90);
-            updateUploadProgress(uploadId, progress);
-          }, 200);
-
           const res = await fetch("/api/files/upload", {
             method: "POST",
             body: formData,
           });
 
-          clearInterval(interval);
-
           if (res.ok) {
-            updateUploadProgress(uploadId, 100, "done");
+            toast.success(`${file.name} uploaded`, { id: toastId });
             queryClient.invalidateQueries({ queryKey: ["files"] });
             queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
-            setTimeout(() => removeUploadProgress(uploadId), 2000);
           } else {
-            updateUploadProgress(uploadId, 0, "error");
-            setTimeout(() => removeUploadProgress(uploadId), 3000);
+            toast.error(`Failed to upload ${file.name}`, { id: toastId });
           }
         } catch {
-          updateUploadProgress(uploadId, 0, "error");
-          setTimeout(() => removeUploadProgress(uploadId), 3000);
+          toast.error(`Failed to upload ${file.name}`, { id: toastId });
         }
       }
     },
-    [currentFolderId, addUploadProgress, updateUploadProgress, removeUploadProgress, queryClient]
+    [currentFolderId, queryClient]
   );
 
   const handleDragEnter = useCallback(
@@ -133,56 +119,6 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
                 Files will be uploaded to the current folder
               </p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Upload progress toast */}
-      <AnimatePresence>
-        {uploadProgress.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 z-50 w-80 space-y-2"
-          >
-            {uploadProgress.map((upload) => (
-              <motion.div
-                key={upload.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="bg-background border rounded-lg shadow-lg p-3"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium truncate max-w-[200px]">
-                    {upload.fileName}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {upload.status === "done" && (
-                      <span className="text-xs text-emerald-600 font-medium">Done</span>
-                    )}
-                    {upload.status === "error" && (
-                      <span className="text-xs text-destructive font-medium">Error</span>
-                    )}
-                    <button
-                      onClick={() => removeUploadProgress(upload.id)}
-                      className="p-0.5 rounded hover:bg-muted"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <Progress
-                  value={upload.progress}
-                  className={cn(
-                    "h-1.5",
-                    upload.status === "done" && "[&>div]:bg-emerald-500",
-                    upload.status === "error" && "[&>div]:bg-destructive"
-                  )}
-                />
-              </motion.div>
-            ))}
           </motion.div>
         )}
       </AnimatePresence>

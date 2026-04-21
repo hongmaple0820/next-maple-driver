@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { FolderOpen, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown } from "lucide-react";
-import { useFileStore } from "@/store/file-store";
+import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
   TableBody,
@@ -30,18 +30,12 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 
-type SortKey = "name" | "size" | "type" | "updatedAt";
-type SortDir = "asc" | "desc";
-
 export function FileList() {
-  const { currentFolderId, section, searchQuery, selectedFileIds, toggleSelect, selectAll, clearSelection, setCurrentFolderId, setRenameFile, setMoveFile, setShareFile, setPreviewFile } = useFileStore();
+  const { currentFolderId, section, searchQuery, selectedFileIds, toggleSelect, selectAll, clearSelection, setCurrentFolderId, setDetailFile, setRenameFile, setMoveFile, setShareFile, setPreviewFile, sortBy, sortDirection, toggleSort, typeFilter } = useFileStore();
   const queryClient = useQueryClient();
-
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const isSearch = searchQuery.trim().length > 0;
 
@@ -74,29 +68,29 @@ export function FileList() {
     },
   });
 
-  const sortedFiles = [...files].sort((a, b) => {
+  // Apply type filter first, then sort
+  const filteredFiles = typeFilter === "all"
+    ? files
+    : files.filter((file) => matchesTypeFilter(file, typeFilter));
+
+  const sortedFiles = [...filteredFiles].sort((a, b) => {
     // Folders first
     if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
 
     let cmp = 0;
-    if (sortKey === "name") cmp = a.name.localeCompare(b.name);
-    else if (sortKey === "size") cmp = (a.size ?? 0) - (b.size ?? 0);
-    else if (sortKey === "type") cmp = getFileTypeLabel(a).localeCompare(getFileTypeLabel(b));
-    else if (sortKey === "updatedAt") cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+    if (sortBy === "name") cmp = a.name.localeCompare(b.name);
+    else if (sortBy === "size") cmp = (a.size ?? 0) - (b.size ?? 0);
+    else if (sortBy === "type") cmp = getFileTypeLabel(a).localeCompare(getFileTypeLabel(b));
+    else if (sortBy === "updatedAt") cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
 
-    return sortDir === "asc" ? cmp : -cmp;
+    return sortDirection === "asc" ? cmp : -cmp;
   });
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+  const handleSort = (key: SortField) => {
+    toggleSort(key);
   };
 
-  const allSelected = files.length > 0 && files.every((f) => selectedFileIds.has(f.id));
+  const allSelected = filteredFiles.length > 0 && filteredFiles.every((f) => selectedFileIds.has(f.id));
 
   const handleStar = useCallback(async (file: FileItem) => {
     try {
@@ -145,9 +139,9 @@ export function FileList() {
     if (file.type === "folder") {
       setCurrentFolderId(file.id);
     } else {
-      toggleSelect(file.id);
+      setDetailFile(file);
     }
-  }, [setCurrentFolderId, toggleSelect]);
+  }, [setCurrentFolderId, setDetailFile]);
 
   const handleRowDoubleClick = useCallback((file: FileItem) => {
     if (file.type === "folder") {
@@ -260,7 +254,7 @@ export function FileList() {
     );
   }
 
-  if (files.length === 0) {
+  if (sortedFiles.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -269,6 +263,19 @@ export function FileList() {
       >
         <FolderOpen className="w-16 h-16 mb-4 opacity-30" />
         <p className="text-lg font-medium">No items here</p>
+        <p className="text-sm mt-1">
+          {typeFilter !== "all"
+            ? "No files match this filter"
+            : isSearch
+            ? "No files match your search"
+            : section === "trash"
+            ? "Trash is empty"
+            : section === "starred"
+            ? "No starred items"
+            : section === "recent"
+            ? "No recent files"
+            : "Upload files or create a folder to get started"}
+        </p>
       </motion.div>
     );
   }
@@ -282,29 +289,29 @@ export function FileList() {
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={(checked) => {
-                  if (checked) selectAll(files.map((f) => f.id));
+                  if (checked) selectAll(filteredFiles.map((f) => f.id));
                   else clearSelection();
                 }}
               />
             </TableHead>
             <TableHead>
               <Button variant="ghost" size="sm" className="h-8 -ml-3 gap-1" onClick={() => handleSort("name")}>
-                Name <ArrowUpDown className="w-3 h-3" />
+                Name {sortBy === "name" && <ArrowUpDown className={cn("w-3 h-3 transition-transform", sortDirection === "desc" && "rotate-180")} />}
               </Button>
             </TableHead>
             <TableHead className="hidden md:table-cell">
               <Button variant="ghost" size="sm" className="h-8 -ml-3 gap-1" onClick={() => handleSort("size")}>
-                Size <ArrowUpDown className="w-3 h-3" />
+                Size {sortBy === "size" && <ArrowUpDown className={cn("w-3 h-3 transition-transform", sortDirection === "desc" && "rotate-180")} />}
               </Button>
             </TableHead>
             <TableHead className="hidden sm:table-cell">
               <Button variant="ghost" size="sm" className="h-8 -ml-3 gap-1" onClick={() => handleSort("type")}>
-                Type <ArrowUpDown className="w-3 h-3" />
+                Type {sortBy === "type" && <ArrowUpDown className={cn("w-3 h-3 transition-transform", sortDirection === "desc" && "rotate-180")} />}
               </Button>
             </TableHead>
             <TableHead className="hidden lg:table-cell">
               <Button variant="ghost" size="sm" className="h-8 -ml-3 gap-1" onClick={() => handleSort("updatedAt")}>
-                Modified <ArrowUpDown className="w-3 h-3" />
+                Modified {sortBy === "updatedAt" && <ArrowUpDown className={cn("w-3 h-3 transition-transform", sortDirection === "desc" && "rotate-180")} />}
               </Button>
             </TableHead>
             <TableHead className="w-12" />

@@ -2,11 +2,13 @@
 
 import { useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2 } from "lucide-react";
-import { useFileStore } from "@/store/file-store";
+import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive } from "lucide-react";
+import { useFileStore, type SortField, type FileTypeFilter } from "@/store/file-store";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileMenuButton } from "@/components/file-sidebar";
 import {
   Breadcrumb,
@@ -39,6 +41,12 @@ export function FileToolbar() {
     searchQuery,
     setSearchQuery,
     setCreateFolderOpen,
+    sortBy,
+    setSortBy,
+    sortDirection,
+    setSortDirection,
+    typeFilter,
+    setTypeFilter,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -242,6 +250,35 @@ export function FileToolbar() {
           )}
         </div>
 
+        {/* Sort controls */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={sortBy}
+            onValueChange={(val) => {
+              setSortBy(val as SortField);
+            }}
+          >
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <ArrowUpDown className="w-3.5 h-3.5 mr-1.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Name</SelectItem>
+              <SelectItem value="updatedAt">Modified</SelectItem>
+              <SelectItem value="size">Size</SelectItem>
+              <SelectItem value="type">Type</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+          >
+            <ArrowUpDown className={cn("w-4 h-4 transition-transform", sortDirection === "desc" && "rotate-180")} />
+          </Button>
+        </div>
+
         {/* View toggle */}
         <ToggleGroup
           type="single"
@@ -259,6 +296,38 @@ export function FileToolbar() {
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      {/* Type filter tabs - only in All Files section at root level without search */}
+      {section === "files" && currentFolderId === "root" && !searchQuery && (
+        <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
+          {[
+            { id: "all", label: "All", icon: null },
+            { id: "images", label: "Images", icon: Image },
+            { id: "videos", label: "Videos", icon: Film },
+            { id: "audio", label: "Audio", icon: Music },
+            { id: "documents", label: "Docs", icon: FileText },
+            { id: "code", label: "Code", icon: FileCode },
+            { id: "archives", label: "Archives", icon: Archive },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setTypeFilter(tab.id as FileTypeFilter)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                  typeFilter === tab.id
+                    ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" />}
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

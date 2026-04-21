@@ -111,6 +111,32 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <span className="text-xs font-medium text-muted-foreground">Storage</span>
         </div>
         <Progress value={usagePercent} className="h-2 mb-2" />
+        {stats?.byType && Object.keys(stats.byType).length > 0 && (
+          <div className="mb-2 flex h-2 rounded-full overflow-hidden bg-muted">
+            {Object.entries(stats.byType)
+              .sort(([, a], [, b]) => (b as number) - (a as number))
+              .map(([type, size]) => {
+                const percent = usedBytes > 0 ? ((size as number) / totalBytes) * 100 : 0;
+                return (
+                  <div
+                    key={type}
+                    className={cn(
+                      "h-full transition-all",
+                      type === "image" && "bg-emerald-500",
+                      type === "video" && "bg-rose-500",
+                      type === "audio" && "bg-purple-500",
+                      type === "document" && "bg-sky-500",
+                      type === "code" && "bg-amber-500",
+                      type === "archive" && "bg-orange-500",
+                      type === "other" && "bg-gray-500",
+                    )}
+                    style={{ width: `${percent}%` }}
+                    title={`${type}: ${formatFileSize(size as number)}`}
+                  />
+                );
+              })}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
           {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
         </p>

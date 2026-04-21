@@ -209,6 +209,38 @@ export function getFileTypeLabel(item: FileItem): string {
   return ext ? ext.toUpperCase() : "File";
 }
 
+// Check if a file matches a given type filter
+export function matchesTypeFilter(file: FileItem, filter: string): boolean {
+  if (file.type === "folder") return true;
+
+  const mime = file.mimeType?.toLowerCase() || "";
+  const ext = getFileExtension(file.name);
+
+  switch (filter) {
+    case "images":
+      return mime.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"].includes(ext);
+    case "videos":
+      return mime.startsWith("video/") || ["mp4", "webm", "avi", "mov", "mkv", "flv"].includes(ext);
+    case "audio":
+      return mime.startsWith("audio/") || ["mp3", "wav", "ogg", "flac", "aac", "m4a"].includes(ext);
+    case "documents":
+      return mime.includes("document") || mime.includes("word") || mime.includes("pdf") || mime.includes("text/plain") ||
+        mime.includes("spreadsheet") || mime.includes("excel") ||
+        ["doc", "docx", "pdf", "txt", "rtf", "xls", "xlsx", "csv", "odt", "ods"].includes(ext);
+    case "code":
+      return mime.includes("json") || mime.includes("javascript") || mime.includes("typescript") ||
+        mime.includes("xml") || mime.includes("html") || mime.includes("css") ||
+        ["js", "ts", "tsx", "jsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "cs", "php",
+          "swift", "kt", "sh", "bash", "yaml", "yml", "toml", "json", "xml", "html", "css",
+          "scss", "less", "sql", "md", "vue", "svelte"].includes(ext);
+    case "archives":
+      return mime.includes("zip") || mime.includes("rar") || mime.includes("tar") || mime.includes("gzip") || mime.includes("7z") ||
+        ["zip", "rar", "tar", "gz", "bz2", "7z", "xz", "tgz"].includes(ext);
+    default:
+      return true;
+  }
+}
+
 // Check if file is previewable
 export function isPreviewable(item: FileItem): boolean {
   if (item.type === "folder") return false;

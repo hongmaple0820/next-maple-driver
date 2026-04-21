@@ -1,7 +1,11 @@
 import { create } from "zustand";
+import type { FileItem } from "@/lib/file-utils";
 
 export type ViewMode = "grid" | "list";
 export type Section = "files" | "starred" | "trash" | "recent";
+export type SortField = "name" | "updatedAt" | "size" | "type";
+export type SortDirection = "asc" | "desc";
+export type FileTypeFilter = "all" | "images" | "videos" | "audio" | "documents" | "code" | "archives";
 
 export interface UploadProgress {
   id: string;
@@ -27,6 +31,17 @@ interface FileStore {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
 
+  // Sort
+  sortBy: SortField;
+  sortDirection: SortDirection;
+  setSortBy: (field: SortField) => void;
+  setSortDirection: (dir: SortDirection) => void;
+  toggleSort: (field: SortField) => void;
+
+  // Type filter
+  typeFilter: FileTypeFilter;
+  setTypeFilter: (filter: FileTypeFilter) => void;
+
   // Selection
   selectedFileIds: Set<string>;
   toggleSelect: (id: string) => void;
@@ -43,6 +58,10 @@ interface FileStore {
   // Sidebar
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+
+  // Detail panel
+  detailFile: FileItem | null;
+  setDetailFile: (file: FileItem | null) => void;
 
   // Dialogs
   createFolderOpen: boolean;
@@ -70,7 +89,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "" }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" }),
 
   // View mode
   viewMode: "grid",
@@ -79,6 +98,20 @@ export const useFileStore = create<FileStore>((set) => ({
   // Search
   searchQuery: "",
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  // Sort
+  sortBy: "name",
+  sortDirection: "asc",
+  setSortBy: (field) => set({ sortBy: field }),
+  setSortDirection: (dir) => set({ sortDirection: dir }),
+  toggleSort: (field) => set((state) => ({
+    sortBy: field,
+    sortDirection: state.sortBy === field ? (state.sortDirection === "asc" ? "desc" : "asc") : "asc",
+  })),
+
+  // Type filter
+  typeFilter: "all",
+  setTypeFilter: (filter) => set({ typeFilter: filter }),
 
   // Selection
   selectedFileIds: new Set<string>(),
@@ -114,6 +147,10 @@ export const useFileStore = create<FileStore>((set) => ({
   // Sidebar
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
+  // Detail panel
+  detailFile: null,
+  setDetailFile: (file) => set({ detailFile: file }),
 
   // Dialogs
   createFolderOpen: false,
