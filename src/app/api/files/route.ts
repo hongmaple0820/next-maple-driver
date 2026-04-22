@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // GET /api/files - List files
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { searchParams } = request.nextUrl;
     const parentIdParam = searchParams.get('parentId') || 'root';
     const trashed = searchParams.get('trashed') === 'true';
@@ -15,6 +23,10 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {
       isTrashed: trashed,
     };
+
+    if (!isAdmin) {
+      where.userId = userId;
+    }
 
     if (starred) {
       where.isStarred = true;
@@ -62,6 +74,12 @@ export async function GET(request: NextRequest) {
 // POST /api/files - Create folder
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+
     const body = await request.json();
     const { name, parentId: parentIdParam = 'root' } = body;
 
@@ -81,6 +99,7 @@ export async function POST(request: NextRequest) {
         parentId,
         name: trimmedName,
         isTrashed: false,
+        userId,
       },
     });
 
@@ -96,6 +115,7 @@ export async function POST(request: NextRequest) {
         name: trimmedName,
         type: 'folder',
         parentId,
+        userId,
       },
     });
 
@@ -123,6 +143,13 @@ export async function POST(request: NextRequest) {
 // PUT /api/files - Rename file/folder
 export async function PUT(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { id, name } = body;
 
@@ -137,6 +164,11 @@ export async function PUT(request: NextRequest) {
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -186,6 +218,13 @@ export async function PUT(request: NextRequest) {
 // PATCH /api/files - Update file/folder metadata (description, etc.)
 export async function PATCH(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { id, description, colorLabel } = body;
 
@@ -198,6 +237,11 @@ export async function PATCH(request: NextRequest) {
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -247,6 +291,13 @@ export async function PATCH(request: NextRequest) {
 // DELETE /api/files - Delete file/folder (move to trash or permanent delete)
 export async function DELETE(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { id, permanent = false } = body;
 
@@ -259,6 +310,11 @@ export async function DELETE(request: NextRequest) {
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 

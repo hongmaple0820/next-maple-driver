@@ -1,16 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
 // DELETE /api/files/trash - Empty trash (permanently delete all trashed items)
 export async function DELETE() {
   try {
-    // Get all trashed items
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
+    // Get all trashed items for this user (admins get all)
+    const userFilter = isAdmin ? {} : { userId };
+
     const trashedItems = await db.fileItem.findMany({
-      where: { isTrashed: true },
+      where: { isTrashed: true, ...userFilter },
       select: { id: true },
     });
 

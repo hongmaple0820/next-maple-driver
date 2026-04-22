@@ -5,7 +5,8 @@ import { useState } from "react";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import CloudDriveApp from "@/app/cloud-drive-app";
+import { AuthProvider } from "@/components/auth-provider";
+import { SessionWrapper } from "@/components/session-wrapper";
 
 export default function Home() {
   const [queryClient] = useState(
@@ -23,10 +24,12 @@ export default function Home() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <TooltipProvider>
-          <CloudDriveApp />
-          <Toaster />
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <SessionWrapper />
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

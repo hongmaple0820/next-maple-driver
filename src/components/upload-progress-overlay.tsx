@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, ChevronUp, ChevronDown, X, CheckCircle2, AlertCircle, FileIcon } from "lucide-react";
 import { useFileStore, type UploadProgress } from "@/store/file-store";
@@ -20,18 +20,7 @@ export function UploadProgressOverlay() {
   const hasActiveUploads = activeUploads.length > 0;
   const hasItems = totalCount > 0;
   // Show panel when there are active or recently completed/error uploads
-  const [shouldShow, setShouldShow] = useState(false);
-
-  useEffect(() => {
-    if (hasActiveUploads) {
-      setShouldShow(true);
-    } else if (totalCount > 0 && (completedUploads.length > 0 || errorUploads.length > 0)) {
-      // Keep showing for completed/error items so user can see results
-      setShouldShow(true);
-    } else {
-      setShouldShow(false);
-    }
-  }, [hasActiveUploads, totalCount, completedUploads.length, errorUploads.length]);
+  const shouldShow = hasActiveUploads || (totalCount > 0 && (completedUploads.length > 0 || errorUploads.length > 0));
 
   // Don't render if nothing to show
   if (!hasItems || !shouldShow) return null;

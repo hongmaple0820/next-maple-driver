@@ -1,17 +1,28 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // GET /api/files/stats - Storage statistics
 export async function GET() {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
+    // Build user filter - admins see all files, regular users see only their own
+    const userFilter = isAdmin ? {} : { userId };
+
     const [totalFiles, totalFolders, starredCount, trashedCount, allFiles] =
       await Promise.all([
-        db.fileItem.count({ where: { type: 'file', isTrashed: false } }),
-        db.fileItem.count({ where: { type: 'folder', isTrashed: false } }),
-        db.fileItem.count({ where: { isStarred: true, isTrashed: false } }),
-        db.fileItem.count({ where: { isTrashed: true } }),
+        db.fileItem.count({ where: { type: 'file', isTrashed: false, ...userFilter } }),
+        db.fileItem.count({ where: { type: 'folder', isTrashed: false, ...userFilter } }),
+        db.fileItem.count({ where: { isStarred: true, isTrashed: false, ...userFilter } }),
+        db.fileItem.count({ where: { isTrashed: true, ...userFilter } }),
         db.fileItem.findMany({
-          where: { type: 'file', isTrashed: false },
+          where: { type: 'file', isTrashed: false, ...userFilter },
           select: { size: true, mimeType: true },
         }),
       ]);

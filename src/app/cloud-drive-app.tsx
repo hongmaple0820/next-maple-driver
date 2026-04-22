@@ -12,6 +12,7 @@ import { BatchActions } from "@/components/batch-actions";
 import { FileStatusBar } from "@/components/file-status-bar";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
+import { AdminPanel } from "@/components/admin-panel";
 import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
 import { useFileStore } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
@@ -269,6 +270,9 @@ export default function CloudDriveApp() {
 
       {/* Upload progress floating panel */}
       <UploadProgressOverlay />
+
+      {/* Admin Panel */}
+      <AdminPanel />
     </motion.div>
   );
 }

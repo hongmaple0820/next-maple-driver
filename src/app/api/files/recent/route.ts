@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // GET /api/files/recent - Get recently modified files
 export async function GET() {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
+    const userFilter = isAdmin ? {} : { userId };
+
     const files = await db.fileItem.findMany({
       where: {
         isTrashed: false,
         type: 'file',
+        ...userFilter,
       },
       orderBy: { updatedAt: 'desc' },
       take: 10,

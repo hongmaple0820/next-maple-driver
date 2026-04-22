@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // POST /api/files/move - Move file to another folder
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { id, targetParentId } = body;
 
@@ -16,6 +24,11 @@ export async function POST(request: NextRequest) {
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -36,6 +49,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: 'Target must be a folder' },
           { status: 400 }
+        );
+      }
+      // Verify target folder ownership (unless admin)
+      if (!isAdmin && targetFolder.userId !== userId) {
+        return NextResponse.json(
+          { error: 'Target folder not found' },
+          { status: 404 }
         );
       }
       // Prevent moving a folder into its own descendant

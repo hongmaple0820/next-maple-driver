@@ -1860,3 +1860,285 @@ Stage Summary:
 - Add drag-and-drop file upload with progress overlay
 - Add more file type previews (e.g., office docs)
 - Add file description/notes search
+
+---
+Task ID: 2
+Agent: Auth Backend Agent
+Task: Add Auth System - Backend + Schema
+
+Work Log:
+- Step 1: Updated Prisma schema with User model (id, email, name, passwordHash, role, avatarUrl, storageLimit, createdAt, updatedAt) and added userId fields to FileItem (onDelete: Cascade) and ShareLink (onDelete: SetNull) models
+- Step 1b: Changed storageLimit from Int to BigInt to support 10GB value (10737418240 exceeds 32-bit int max of 2147483647)
+- Step 2: Ran `bun run db:push` (with --accept-data-loss flag for Int→BigInt migration) to apply schema changes
+- Step 3: Installed bcryptjs (v3.0.3 with native binaries) and @types/bcryptjs (v3.0.0)
+- Step 4: Created `/src/lib/auth.ts` with NextAuth.js v4 configuration using CredentialsProvider, JWT strategy, custom callbacks for id/role in token/session
+- Step 5: Created `/src/app/api/auth/[...nextauth]/route.ts` with NextAuth handler (GET, POST)
+- Step 6: Created `/src/lib/auth-helpers.ts` with getAuthUser(), requireAuth(), unauthorizedResponse() helpers
+- Step 7: Created `/src/app/api/auth/register/route.ts` with POST endpoint for user registration (validation, duplicate check, bcrypt hashing)
+- Step 8: Created `/prisma/seed.ts` and ran it — created admin user (admin@clouddrive.com / admin123, role: admin) and demo user (demo@clouddrive.com / demo123, role: user)
+- Step 9: Updated `.env` with NEXTAUTH_URL=http://localhost:3000 and NEXTAUTH_SECRET=clouddrive-dev-secret-key-2024
+- Step 10: Created `/src/components/auth-provider.tsx` client component wrapping SessionProvider from next-auth/react
+- Step 11: Updated `/src/app/layout.tsx` to include AuthProvider wrapper inside ThemeProvider
+- Verified: Register API creates users, rejects duplicates, validates input
+- Verified: NextAuth sign-in works for both admin and demo users with correct session data (id, name, email, role)
+- Pre-existing lint error in upload-progress-overlay.tsx (not related to this task)
+- Dev server running without auth-related errors
+
+Stage Summary:
+- Complete auth system backend implemented with NextAuth.js v4
+- User model in database with email/password authentication
+- 2 API routes: NextAuth handler ([...nextauth]) and register endpoint
+- Seed data: admin (admin@clouddrive.com / admin123) and demo (demo@clouddrive.com / demo123) users
+- AuthProvider wraps app in layout.tsx for client-side session access
+- Auth helper utilities ready for use in API route protection
+- 6 new files created, 3 files modified
+
+---
+Task ID: 3
+Agent: Auth UI Agent
+Task: Create Login and Register UI Pages
+
+Work Log:
+- Created SessionWrapper component (src/components/session-wrapper.tsx):
+  - Client component using useSession() from next-auth/react
+  - Loading state: Shows CloudDrive logo with spinner and "Loading CloudDrive..." text
+  - Unauthenticated: Renders LoginRegisterPage component
+  - Authenticated: Renders CloudDriveApp component
+- Created LoginRegisterPage component (src/components/login-register-page.tsx):
+  - Split layout: Left panel (55% width) with emerald gradient branding, right panel with form card
+  - Left panel (desktop only): CloudDrive logo, tagline, 3 feature highlights (Secure Storage, Lightning Fast, Access Anywhere) with icons
+  - Left panel has decorative elements: SVG grid pattern, gradient circles, framer-motion animations
+  - Right panel: Card with Tabs for Sign In / Create Account
+  - Login form: Email + password fields with show/hide toggle, "Forgot password?" link, Sign In button
+  - Register form: Name + email + password + confirm password fields, password strength indicator, password match indicator, Create Account button
+  - Uses signIn from next-auth/react for login with redirect: false
+  - Uses fetch POST to /api/auth/register for registration with auto sign-in after
+  - Error states with animated red alert boxes
+  - Loading states on all buttons with spinner
+  - Mobile responsive: Shows only the form with compact branding header
+  - Demo credentials hint at bottom
+  - Terms of Service / Privacy Policy footer links
+  - Emerald color scheme matching app theme
+  - Framer-motion fade-in and stagger animations
+- Updated page.tsx (src/app/page.tsx):
+  - Added AuthProvider wrapper from next-auth/react SessionProvider
+  - Replaced CloudDriveApp with SessionWrapper component
+  - Maintained QueryClientProvider, ThemeProvider, TooltipProvider, Toaster wrappers
+- Updated file-sidebar.tsx (src/components/file-sidebar.tsx):
+  - Added useSession and signOut imports from next-auth/react
+  - Added Avatar, AvatarFallback from shadcn/ui
+  - Replaced hardcoded "U" avatar with session user's name initial
+  - Shows user's name and email from session in profile area
+  - Added Sign Out button with LogOut icon and destructive hover color
+  - Falls back to storage info display when no session email available
+- Fixed lint error in upload-progress-overlay.tsx:
+  - Replaced useState + useEffect pattern for shouldShow with derived boolean expression
+  - Removed unused useEffect import
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Login/Register authentication flow fully implemented
+- Professional, modern login page with emerald theme, split layout, animations
+- Session-aware sidebar with user avatar, name, email, and sign-out
+- Page.tsx wrapped with AuthProvider for next-auth session management
+- 4 files created/modified (session-wrapper.tsx, login-register-page.tsx, page.tsx, file-sidebar.tsx)
+- 1 existing file fixed (upload-progress-overlay.tsx lint error)
+- Lint clean, no errors
+
+---
+Task ID: 4+5
+Agent: Auth Protection Agent
+Task: Protect ALL API routes with authentication and associate files with users
+
+Work Log:
+- Audited all 18 API route files to determine which had auth protection and which were missing it
+- Found 14 routes already had full auth protection via `getAuthUser()` and `unauthorizedResponse()`:
+  - /api/files (GET, POST, PUT, PATCH, DELETE) ✅
+  - /api/files/upload (POST) ✅
+  - /api/files/download (GET) ✅ (also supports shareToken bypass for public shares)
+  - /api/files/move (POST) ✅
+  - /api/files/star (POST) ✅
+  - /api/files/restore (POST) ✅
+  - /api/files/search (GET) ✅
+  - /api/files/stats (GET) ✅
+  - /api/files/path (GET) ✅
+  - /api/files/share (GET, POST) ✅
+  - /api/files/trash (DELETE) ✅
+  - /api/files/recent (GET) ✅
+  - /api/files/copy (POST) ✅
+  - /api/files/download-zip (POST) ✅
+- Found 3 routes MISSING auth protection, now fixed:
+  - /api/files/versions/[id] (GET, POST, PATCH) — Added auth + ownership verification
+  - /api/files/properties/[id] (GET) — Added auth + ownership verification
+  - /api/files/batch-rename (POST) — Added auth + userId filter for non-admin users
+- Confirmed /api/share/[token] (GET, POST) remains PUBLIC as intended (no auth required for share link access)
+- All protected routes implement consistent auth pattern:
+  - `getAuthUser()` check → `unauthorizedResponse()` if not authenticated
+  - `userId` extracted from session for ownership filtering
+  - `isAdmin` check: admin users bypass userId filter, regular users only see/modify their own files
+  - File creation routes set `userId` from session on new records
+  - File modification/deletion routes verify `file.userId !== userId` (unless admin)
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- 3 API route files updated with auth protection (versions, properties, batch-rename)
+- All 17 protected API routes now enforce authentication and user-based access control
+- 1 public route (/api/share/[token]) correctly left without auth
+- Admin users can access all files; regular users restricted to their own files
+- Consistent auth pattern across all routes using getAuthUser/unauthorizedResponse helpers
+
+---
+Task ID: 6
+Agent: Storage Driver Agent
+Task: Add Storage Driver Abstraction Layer
+
+Work Log:
+- Step 1: Created storage driver type definitions at `src/lib/storage-drivers/types.ts`
+  - StorageDriverConfig interface (id, name, type, config, isDefault, isEnabled, createdAt, updatedAt)
+  - StorageDriver interface (file/dir operations, health check, storage info, optional getPublicUrl)
+  - StorageDriverFactory interface (type, displayName, description, configFields, create method)
+  - StorageDriverConfigField interface (key, label, type, required, placeholder, defaultValue, helpText)
+- Step 2: Created local storage driver at `src/lib/storage-drivers/local-driver.ts`
+  - LocalStorageDriver class implementing StorageDriver interface
+  - File operations: writeFile, readFile, deleteFile, fileExists, getFileSize
+  - Directory operations: createDir, deleteDir, dirExists, listDir
+  - Health check with auto-create base path
+  - Storage info via statfs (filesystem statistics)
+  - localDriverFactory export with config fields for path
+- Step 3: Created storage driver manager at `src/lib/storage-drivers/manager.ts`
+  - Driver factory registry (Map<string, StorageDriverFactory>)
+  - Driver instance cache (Map<string, StorageDriver>)
+  - registerDriverFactory, getDriverFactory, getAllDriverFactories functions
+  - getDriver (create or return cached), getDefaultDriver, setDefaultDriverId, getDefaultDriverId
+  - invalidateDriver, invalidateAllDrivers for config changes
+  - Auto-registers localDriverFactory on import
+- Step 4: Created barrel export at `src/lib/storage-drivers/index.ts`
+- Step 5: Updated Prisma schema - renamed StorageDriver model to StorageDriverConfig
+  - Fields: id, name, type (default "local"), config (JSON string), isDefault, isEnabled, priority, createdAt, updatedAt
+  - Indexes on type and isDefault
+  - Ran `bun run db:push` successfully
+- Step 6: Created admin API routes for storage driver management
+  - GET/POST /api/admin/drivers - list all drivers + available factory info; create new driver
+  - GET/PUT/DELETE /api/admin/drivers/[id] - get/update/delete individual driver; POST for health check
+  - POST /api/admin/drivers/[id]/test - dedicated health check endpoint with storage info
+  - All routes require admin role authentication via getServerSession + authOptions
+  - Default driver protection: cannot delete the only default driver
+  - Driver instance invalidation on update/delete
+- Step 7: Updated prisma/seed.ts to create default StorageDriverConfig entry
+  - Creates "Default Local Storage" with type "local", config {path: "./storage"}, isDefault: true
+  - Only created if no existing default driver
+- Lint clean, API endpoint verified working (returns "Admin access required" for unauthenticated requests)
+
+Stage Summary:
+- Storage driver abstraction layer fully implemented
+- 4 new source files: types.ts, local-driver.ts, manager.ts, index.ts
+- 3 new API routes: /api/admin/drivers, /api/admin/drivers/[id], /api/admin/drivers/[id]/test
+- 1 Prisma model updated: StorageDriver → StorageDriverConfig
+- 1 seed file updated with default driver
+- All routes admin-protected with session-based auth
+- Foundation layer ready for future WebDAV/S3/mount driver implementations
+- Existing API routes unchanged (continue using local filesystem directly)
+
+---
+Task ID: 7
+Agent: Admin Panel Agent
+Task: Build Admin Panel for CloudDrive
+
+Work Log:
+- Added StorageDriver model to Prisma schema with fields: id, name, type, status, priority, isDefault, config, basePath, timestamps
+- Ran db:push to sync schema with SQLite database
+- Added adminPanelOpen and setAdminPanelOpen state to file-store.ts
+- Created 5 admin API routes:
+  - GET /api/admin/users (list all users with search, pagination, storage stats)
+  - POST /api/admin/users (create new user with role, storage limit)
+  - GET /api/admin/users/[id] (get user details with file/share counts)
+  - PUT /api/admin/users/[id] (update user role, storage limit, name, email)
+  - DELETE /api/admin/users/[id] (delete user with self-delete protection)
+  - GET /api/admin/stats (system statistics: users, files, folders, shares, storage by type, storage by user, recent activity)
+  - GET /api/admin/drivers (list storage drivers with health status)
+  - POST /api/admin/drivers (create new storage driver)
+  - PUT /api/admin/drivers/[id] (update driver settings)
+  - DELETE /api/admin/drivers/[id] (delete driver with default protection)
+- All admin API routes require admin role check via getServerSession + role === 'admin'
+- Created 3 admin tab components:
+  - AdminUsersTab: user table with search, add user dialog, role toggle, storage limit change, delete with confirmation
+  - AdminSystemTab: stat cards (users, files, folders, shares), storage overview with by-type breakdown, system health indicators, storage by user chart, recent activity log
+  - AdminDriversTab: driver cards with status/health badges, add driver dialog, test/enable/disable/set default actions, WebDAV/S3 "Coming Soon" cards
+- Created AdminPanel component: Dialog with Tabs (System, Users, Storage)
+- Updated file-sidebar.tsx: Added "Admin Panel" button with Shield icon, visible only to admin users
+- Integrated AdminPanel into cloud-drive-app.tsx
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Full admin panel built as a Dialog within the main app (no separate route)
+- 5 API endpoints created under /api/admin/ with admin role protection
+- 3 tab components: System (stats + health), Users (CRUD + search), Storage (drivers management)
+- Admin Panel button in sidebar, only visible when user role === 'admin'
+- Professional emerald-themed design matching app style
+- Responsive, accessible, loading states, error handling with toast notifications
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Auth System + Storage Drivers + Admin Panel Implementation
+
+Work Log:
+- Fixed missing upload API route at /src/app/api/files/upload/route.ts (was completely absent, uploads were broken)
+- Auth Backend: Added User model to Prisma schema with email, passwordHash, role, storageLimit fields
+- Auth Backend: Added userId to FileItem and ShareLink models for file ownership
+- Auth Backend: Created NextAuth.js v4 config at /src/lib/auth.ts with CredentialsProvider
+- Auth Backend: Created NextAuth API route at /src/app/api/auth/[...nextauth]/route.ts
+- Auth Backend: Created auth helpers at /src/lib/auth-helpers.ts (getAuthUser, requireAuth, unauthorizedResponse)
+- Auth Backend: Created register API at /src/app/api/auth/register/route.ts
+- Auth Backend: Seeded admin (admin@clouddrive.com / admin123) and demo (demo@clouddrive.com / demo123) users
+- Auth Frontend: Created SessionWrapper component that shows login or app based on auth state
+- Auth Frontend: Created beautiful login/register page with split layout, emerald theme, password strength indicator
+- Auth Frontend: Updated page.tsx to use SessionWrapper + AuthProvider
+- Auth Frontend: Added user menu to sidebar with sign-out button
+- API Protection: All 17+ API routes now require authentication
+- API Protection: Admin users can access all files; regular users only see their own
+- API Protection: Public share route /api/share/[token] remains accessible without auth
+- Storage Drivers: Created abstraction layer at /src/lib/storage-drivers/ (types, local-driver, manager)
+- Storage Drivers: Added StorageDriverConfig model to Prisma schema
+- Storage Drivers: Created admin API routes for driver CRUD at /api/admin/drivers/
+- Admin Panel: Created AdminPanel dialog with 3 tabs (System, Users, Storage)
+- Admin Panel: Created AdminUsersTab with user management (search, create, role toggle, delete)
+- Admin Panel: Created AdminSystemTab with stats cards, storage breakdown, health indicators
+- Admin Panel: Created AdminDriversTab with driver cards, add driver, test, enable/disable
+- Admin Panel: Added admin API routes for users and stats management
+- Admin Panel: Added "Admin Panel" button to sidebar (visible only to admin users)
+- Set up 15-minute cron review task for ongoing QA and development
+
+Stage Summary:
+- User's #1 complaint FIXED: Files now require authentication to access
+- User's #2 complaint FIXED: Storage driver abstraction layer implemented with local driver
+- User's #3 complaint FIXED: Admin panel with user management, system stats, driver management
+- All API routes protected with auth (except public share links)
+- Login/register pages with professional UI
+- Files associated with users (userId on FileItem)
+- Admin role can access all files and manage the system
+- Lint clean, dev server running
+
+## Current Project State
+- Fully functional cloud storage with authentication system
+- 40+ features including auth, CRUD, upload/download, search, sort, filter, star, trash, share, preview, detail panel, keyboard shortcuts, drag-and-drop, clipboard, file copy, batch actions, dark mode, storage drivers, admin panel
+- 25+ API endpoints with auth protection
+- 30+ frontend components
+- Admin and regular user roles
+- Storage driver abstraction ready for WebDAV/S3 expansion
+
+## Known Issues / Risks
+- Existing files in the database don't have userId set (need migration script or admin reassignment)
+- WebDAV and S3 drivers not yet implemented (Coming Soon in admin panel)
+- File operations still use direct filesystem calls instead of the storage driver abstraction (needs integration)
+
+## Recommended Next Steps
+- Integrate storage driver manager with existing file operations (replace direct fs calls)
+- Implement WebDAV storage driver
+- Implement S3 storage driver
+- Add file migration between storage drivers
+- Add user registration approval workflow for admin
+- Add password reset functionality
+- Add email notifications
+- Add file encryption at rest
+- Add two-factor authentication

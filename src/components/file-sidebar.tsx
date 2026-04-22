@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useTheme } from "next-themes";
+import { useSession, signOut } from "next-auth/react";
 import { Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatFileSize, type StorageStats } from "@/lib/file-utils";
@@ -21,6 +22,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
   { id: "files", label: "All Files", icon: Folder },
@@ -38,8 +40,10 @@ function ChevronIcon({ className }: { className?: string }) {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen } = useFileStore();
+  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen } = useFileStore();
   const { theme, setTheme } = useTheme();
+  const { data: sessionData } = useSession();
+  const isAdmin = (sessionData?.user as Record<string, unknown>)?.role === "admin";
   const [showStorageDetail, setShowStorageDetail] = useState(false);
 
   const { data: stats } = useQuery<StorageStats>({
@@ -134,6 +138,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               );
             })}
           </nav>
+          {/* Admin Panel Button */}
+          {isAdmin && (
+            <div className="mt-3 px-2">
+              <button
+                onClick={() => {
+                  setAdminPanelOpen(true);
+                  onNavigate?.();
+                }}
+                className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
+              >
+                <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                Admin Panel
+              </button>
+            </div>
+          )}
           {/* Quick Stats */}
           <div className="px-5 py-2 border-t border-border/40">
             <p className="text-[11px] text-muted-foreground/70">
@@ -152,16 +171,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onClick={() => setPreferencesOpen(true)}
         >
           <div className="relative shrink-0">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10">
-              U
-            </div>
+            <Avatar className="w-9 h-9">
+              <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10">
+                {sessionData?.user?.name?.charAt(0)?.toUpperCase() || "U"}
+              </AvatarFallback>
+            </Avatar>
             {/* Ring effect */}
             <div className="absolute -inset-1 rounded-full ring-2 ring-emerald-500/20 dark:ring-emerald-400/20" />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-semibold truncate leading-tight">My CloudDrive</span>
-            <span className="text-[11px] text-muted-foreground leading-tight">
-              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)} used
+            <span className="text-sm font-semibold truncate leading-tight">{sessionData?.user?.name || "My CloudDrive"}</span>
+            <span className="text-[11px] text-muted-foreground leading-tight truncate">
+              {sessionData?.user?.email || `${formatFileSize(usedBytes)} of ${formatFileSize(totalBytes)} used`}
             </span>
           </div>
           <Tooltip>
@@ -180,17 +201,31 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </TooltipContent>
           </Tooltip>
         </div>
-        {/* Theme toggle row */}
+        {/* Theme toggle & Sign out row */}
         <div className="flex items-center justify-between gap-2 mt-1.5 px-3">
           <div className="flex items-center gap-2">
             {theme === "dark" ? <Moon className="w-3.5 h-3.5 text-muted-foreground" /> : <Sun className="w-3.5 h-3.5 text-muted-foreground" />}
             <span className="text-[11px] text-muted-foreground">{theme === "dark" ? "Dark" : "Light"} Mode</span>
           </div>
-          <Switch
-            checked={theme === "dark"}
-            onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-            className="scale-90"
-          />
+          <div className="flex items-center gap-1.5">
+            <Switch
+              checked={theme === "dark"}
+              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+              className="scale-90"
+            />
+          </div>
+        </div>
+        {/* Sign out button */}
+        <div className="mt-2 px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive h-8 px-2 text-xs"
+            onClick={() => signOut({ redirect: false })}
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
+          </Button>
         </div>
       </div>
 

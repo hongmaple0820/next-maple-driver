@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          String    @default("user") // "admin" or "user"
+  avatarUrl     String?
+  storageLimit  BigInt    @default(10737418240) // 10GB in bytes
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  files         FileItem[]
+  shares        ShareLink[]
+
+  @@index([email])
+}
+
 model FileItem {
   id          String   @id @default(cuid())
   name        String
@@ -19,12 +36,14 @@ model FileItem {
   isTrashed   Boolean  @default(false)
   description String?
   colorLabel  String   @default("") // "red", "orange", "yellow", "green", "blue", "purple", "pink", "gray", or "" (none)
+  userId      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relation to children
   children    FileItem[]   @relation("FileHierarchy")
   parent      FileItem?    @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   shares      ShareLink[]
   versions    FileVersion[]
 
@@ -32,21 +51,25 @@ model FileItem {
   @@index([isTrashed])
   @@index([isStarred])
   @@index([name])
+  @@index([userId])
 }
 
 model ShareLink {
-  id        String   @id @default(cuid())
-  fileId    String
-  token     String   @unique
-  password  String?  @default("")
-  expiresAt DateTime?
-  downloadCount Int  @default(0)
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  fileId        String
+  token         String   @unique
+  password      String?  @default("")
+  expiresAt     DateTime?
+  downloadCount Int      @default(0)
+  userId        String?
+  createdAt     DateTime @default(now())
 
   file      FileItem  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([token])
   @@index([fileId])
+  @@index([userId])
 }
 
 model FileVersion {
@@ -63,4 +86,19 @@ model FileVersion {
 
   @@index([fileId])
   @@index([fileId, version])
+}
+
+model StorageDriverConfig {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("local") // "local", "webdav", "s3", "mount"
+  config    String   @default("{}") // JSON string of driver-specific config
+  isDefault Boolean  @default(false)
+  isEnabled Boolean  @default(true)
+  priority  Int      @default(0) // Higher priority drivers are tried first
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([isDefault])
 }

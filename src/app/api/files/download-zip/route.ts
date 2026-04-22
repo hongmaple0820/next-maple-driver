@@ -4,15 +4,19 @@ import archiver from 'archiver';
 import { stat } from 'fs/promises';
 import { join } from 'path';
 import { Readable } from 'stream';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
 async function collectFiles(
   parentId: string | null,
-  basePath: string
+  basePath: string,
+  userId: string,
+  isAdmin: boolean
 ): Promise<{ path: string; storagePath: string }[]> {
+  const userFilter = isAdmin ? {} : { userId };
   const items = await db.fileItem.findMany({
-    where: { parentId, isTrashed: false },
+    where: { parentId, isTrashed: false, ...userFilter },
     select: { id: true, name: true, type: true, storagePath: true, parentId: true },
   });
 
@@ -20,7 +24,7 @@ async function collectFiles(
 
   for (const item of items) {
     if (item.type === 'folder') {
-      const children = await collectFiles(item.id, join(basePath, item.name));
+      const children = await collectFiles(item.id, join(basePath, item.name), userId, isAdmin);
       result.push(...children);
     } else if (item.storagePath) {
       result.push({
@@ -36,6 +40,13 @@ async function collectFiles(
 // POST /api/files/download-zip - Download multiple files/folders as ZIP
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { fileIds } = body as { fileIds: string[] };
 
@@ -52,13 +63,16 @@ export async function POST(request: NextRequest) {
     for (const fileId of fileIds) {
       const item = await db.fileItem.findUnique({
         where: { id: fileId },
-        select: { id: true, name: true, type: true, storagePath: true, parentId: true, isTrashed: true },
+        select: { id: true, name: true, type: true, storagePath: true, parentId: true, isTrashed: true, userId: true },
       });
 
       if (!item || item.isTrashed) continue;
 
+      // Verify ownership (unless admin)
+      if (!isAdmin && item.userId !== userId) continue;
+
       if (item.type === 'folder') {
-        const folderFiles = await collectFiles(item.id, item.name);
+        const folderFiles = await collectFiles(item.id, item.name, userId, isAdmin);
         allFiles.push(...folderFiles);
       } else if (item.storagePath) {
         allFiles.push({

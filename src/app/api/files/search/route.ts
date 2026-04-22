@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // GET /api/files/search - Search files
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { searchParams } = request.nextUrl;
     const query = searchParams.get('q');
 
@@ -16,13 +24,19 @@ export async function GET(request: NextRequest) {
 
     const trimmedQuery = query.trim();
 
-    const files = await db.fileItem.findMany({
-      where: {
-        name: {
-          contains: trimmedQuery,
-        },
-        isTrashed: false,
+    const where: Record<string, unknown> = {
+      name: {
+        contains: trimmedQuery,
       },
+      isTrashed: false,
+    };
+
+    if (!isAdmin) {
+      where.userId = userId;
+    }
+
+    const files = await db.fileItem.findMany({
+      where,
       include: {
         _count: {
           select: { children: true },

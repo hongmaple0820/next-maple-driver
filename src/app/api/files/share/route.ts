@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createId } from '@paralleldrive/cuid2';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // POST /api/files/share - Create share link
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { fileId, password, expiresAt } = body;
 
@@ -20,6 +28,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
     const token = createId();
 
     const shareLink = await db.shareLink.create({
@@ -28,6 +41,7 @@ export async function POST(request: NextRequest) {
         token,
         password: password || null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        userId,
       },
     });
 
@@ -53,6 +67,11 @@ export async function POST(request: NextRequest) {
 // GET /api/files/share - Get share info
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+
     const { searchParams } = request.nextUrl;
     const token = searchParams.get('token');
 

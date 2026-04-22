@@ -112,6 +112,10 @@ interface FileStore {
   batchRenameOpen: boolean;
   setBatchRenameOpen: (open: boolean) => void;
 
+  // Admin panel
+  adminPanelOpen: boolean;
+  setAdminPanelOpen: (open: boolean) => void;
+
   // Dialogs
   createFolderOpen: boolean;
   setCreateFolderOpen: (open: boolean) => void;
@@ -283,6 +287,10 @@ export const useFileStore = create<FileStore>((set) => ({
   // Batch rename dialog
   batchRenameOpen: false,
   setBatchRenameOpen: (open) => set({ batchRenameOpen: open }),
+
+  // Admin panel
+  adminPanelOpen: false,
+  setAdminPanelOpen: (open) => set({ adminPanelOpen: open }),
 
   // Detail panel
   detailFile: null,

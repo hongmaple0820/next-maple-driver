@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { rename, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
@@ -47,6 +48,13 @@ function parsePattern(
 // POST /api/files/batch-rename - Batch rename files with a pattern
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { fileIds, pattern, startIndex = 1, step = 1 } = body;
 
@@ -67,11 +75,16 @@ export async function POST(request: NextRequest) {
     const trimmedPattern = pattern.trim();
 
     // Fetch all files to rename
+    const whereClause: Record<string, unknown> = {
+      id: { in: fileIds },
+      isTrashed: false,
+    };
+    if (!isAdmin) {
+      whereClause.userId = userId;
+    }
+
     const files = await db.fileItem.findMany({
-      where: {
-        id: { in: fileIds },
-        isTrashed: false,
-      },
+      where: whereClause,
       orderBy: [{ type: 'desc' }, { name: 'asc' }],
     });
 

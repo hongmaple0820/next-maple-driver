@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { copyFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import crypto from 'crypto';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
@@ -12,10 +13,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { id } = await params;
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -56,10 +69,22 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { id } = await params;
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
@@ -137,6 +162,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { id } = await params;
     const body = await request.json();
     const { versionId } = body;
@@ -150,6 +182,11 @@ export async function PATCH(
 
     const file = await db.fileItem.findUnique({ where: { id } });
     if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
+    // Verify ownership (unless admin)
+    if (!isAdmin && file.userId !== userId) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 

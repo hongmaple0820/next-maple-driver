@@ -3,12 +3,20 @@ import { db } from '@/lib/db';
 import { copyFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { createId } from '@paralleldrive/cuid2';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
 // POST /api/files/copy - Copy/duplicate a file or folder
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const body = await request.json();
     const { id, targetParentId } = body;
 
@@ -21,6 +29,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
+    // Verify ownership (unless admin)
+    if (!isAdmin && sourceFile.userId !== userId) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    }
+
     const parentId = targetParentId === 'root' ? null : (targetParentId || sourceFile.parentId);
 
     // If target is not root, verify it exists and is a folder
@@ -29,10 +42,14 @@ export async function POST(request: NextRequest) {
       if (!targetFolder || targetFolder.type !== 'folder') {
         return NextResponse.json({ error: 'Target must be a folder' }, { status: 400 });
       }
+      // Verify target folder ownership (unless admin)
+      if (!isAdmin && targetFolder.userId !== userId) {
+        return NextResponse.json({ error: 'Target folder not found' }, { status: 404 });
+      }
     }
 
     // Copy the file/folder recursively
-    const copied = await copyItemRecursively(sourceFile, parentId);
+    const copied = await copyItemRecursively(sourceFile, parentId, userId);
 
     return NextResponse.json(copied, { status: 201 });
   } catch (error) {
@@ -41,14 +58,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function copyItemRecursively(source: { id: string; name: string; type: string; size: number; mimeType: string | null; storagePath: string | null }, parentId: string | null) {
+async function copyItemRecursively(source: { id: string; name: string; type: string; size: number; mimeType: string | null; storagePath: string | null }, parentId: string | null, userId: string) {
   const newId = createId();
 
   // Generate a name that doesn't conflict
   let newName = source.name;
   if (source.type === 'file') {
     const existingCount = await db.fileItem.count({
-      where: { parentId, name: { startsWith: source.name.replace(/(\.[^.]+)$/, '') }, isTrashed: false },
+      where: { parentId, name: { startsWith: source.name.replace(/(\.[^.]+)$/, '') }, isTrashed: false, userId },
     });
     if (existingCount > 0) {
       const ext = source.name.includes('.') ? '.' + source.name.split('.').pop() : '';
@@ -57,7 +74,7 @@ async function copyItemRecursively(source: { id: string; name: string; type: str
     }
   } else {
     const existingCount = await db.fileItem.count({
-      where: { parentId, name: { startsWith: source.name }, isTrashed: false },
+      where: { parentId, name: { startsWith: source.name }, isTrashed: false, userId },
     });
     if (existingCount > 0) {
       newName = `${source.name} (copy${existingCount > 1 ? ` ${existingCount}` : ''})`;
@@ -86,6 +103,7 @@ async function copyItemRecursively(source: { id: string; name: string; type: str
         mimeType: source.mimeType ?? undefined,
         parentId,
         storagePath: newStorageName,
+        userId,
       },
     });
 
@@ -109,6 +127,7 @@ async function copyItemRecursively(source: { id: string; name: string; type: str
         name: newName,
         type: 'folder',
         parentId,
+        userId,
       },
     });
 
@@ -118,7 +137,7 @@ async function copyItemRecursively(source: { id: string; name: string; type: str
     });
 
     for (const child of children) {
-      await copyItemRecursively(child, newId);
+      await copyItemRecursively(child, newId, userId);
     }
 
     return {

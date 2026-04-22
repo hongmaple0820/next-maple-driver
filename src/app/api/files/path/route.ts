@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 // GET /api/files/path - Get path breadcrumb
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = (user as Record<string, unknown>).id as string;
+    const isAdmin = (user as Record<string, unknown>).role === 'admin';
+
     const { searchParams } = request.nextUrl;
     const id = searchParams.get('id');
 
@@ -21,10 +29,15 @@ export async function GET(request: NextRequest) {
     while (currentId) {
       const file = await db.fileItem.findUnique({
         where: { id: currentId },
-        select: { id: true, name: true, parentId: true },
+        select: { id: true, name: true, parentId: true, userId: true },
       });
 
       if (!file) {
+        break;
+      }
+
+      // Verify ownership of each item in the path (unless admin)
+      if (!isAdmin && file.userId !== userId) {
         break;
       }
 
