@@ -15,10 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderPlus } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function CreateFolderDialog() {
   const { createFolderOpen, setCreateFolderOpen, currentFolderId, addActivity } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -87,7 +89,7 @@ export function CreateFolderDialog() {
             disabled={!name.trim() || loading}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            {loading ? "Creating..." : "Create"}
+            {loading ? t.app.creating : t.app.create}
           </Button>
         </DialogFooter>
       </DialogContent>

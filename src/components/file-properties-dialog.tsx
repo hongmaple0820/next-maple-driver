@@ -32,6 +32,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { BreadcrumbItem } from "@/lib/file-utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 
 interface FileProperties {
   id: string;
@@ -113,6 +114,7 @@ function PropertyRow({
 
 export function FilePropertiesDialog() {
   const { propertiesFile, setPropertiesFile, setDetailFile } = useFileStore();
+  const { t } = useI18n();
   const [showShareHistory, setShowShareHistory] = useState(false);
 
   const { data: properties, isLoading } = useQuery<FileProperties>({
@@ -172,8 +174,8 @@ export function FilePropertiesDialog() {
   // Build location path
   const locationPath = properties
     ? properties.parentId === "root"
-      ? "All Files"
-      : [...breadcrumbs.map((b) => b.name)].join(" / ") || "All Files"
+      ? t.app.allFiles
+      : [...breadcrumbs.map((b) => b.name)].join(" / ") || t.app.allFiles
     : "";
 
   return (
@@ -226,13 +228,13 @@ export function FilePropertiesDialog() {
                 <div className="space-y-0.5">
                   <PropertyRow
                     icon={<FileIcon className="w-4 h-4" />}
-                    label="Type"
-                    value={isFolder ? "Folder" : getFileTypeLabel({ type: properties.type, name: properties.name, mimeType: properties.mimeType ?? undefined })}
+                    label={t.app.type}
+                    value={isFolder ? t.app.allFiles : getFileTypeLabel({ type: properties.type, name: properties.name, mimeType: properties.mimeType ?? undefined })}
                   />
                   {properties.mimeType && (
                     <PropertyRow
                       icon={<FileIcon className="w-4 h-4" />}
-                      label="MIME Type"
+                      label={t.app.mimeType}
                       value={properties.mimeType}
                       mono
                     />
@@ -240,7 +242,7 @@ export function FilePropertiesDialog() {
                   {!isFolder && (
                     <PropertyRow
                       icon={<HardDrive className="w-4 h-4" />}
-                      label="Size"
+                      label={t.app.size}
                       value={
                         <span>
                           {formatFileSize(properties.size)}
@@ -254,7 +256,7 @@ export function FilePropertiesDialog() {
                   {ext && !isFolder && (
                     <PropertyRow
                       icon={<FileIcon className="w-4 h-4" />}
-                      label="Extension"
+                      label={t.app.extension}
                       value={
                         <Badge variant="outline" className="font-mono text-xs">
                           .{ext}
@@ -277,7 +279,7 @@ export function FilePropertiesDialog() {
                     <div className="space-y-0.5">
                       <PropertyRow
                         icon={<HardDrive className="w-4 h-4" />}
-                        label="Total Size"
+                        label={t.app.totalSize}
                         value={
                           <span>
                             {formatFileSize(properties.folderStats.totalSize)}
@@ -289,12 +291,12 @@ export function FilePropertiesDialog() {
                       />
                       <PropertyRow
                         icon={<FileIcon className="w-4 h-4" />}
-                        label="Files"
+                        label={t.app.files}
                         value={`${properties.folderStats.fileCount} file${properties.folderStats.fileCount !== 1 ? "s" : ""}`}
                       />
                       <PropertyRow
                         icon={<Folder className="w-4 h-4" />}
-                        label="Subfolders"
+                        label={t.app.subfolders}
                         value={`${properties.folderStats.folderCount} folder${properties.folderStats.folderCount !== 1 ? "s" : ""}`}
                       />
                     </div>
@@ -311,13 +313,13 @@ export function FilePropertiesDialog() {
                 <div className="space-y-0.5">
                   <PropertyRow
                     icon={<MapPin className="w-4 h-4" />}
-                    label="Path"
+                    label={t.app.path}
                     value={
                       <span className="flex items-center gap-1 text-sm">
                         <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                         <span>
-                          {locationPath === "All Files" ? (
-                            "All Files (root)"
+                          {locationPath === t.app.allFiles ? (
+                            "{t.app.allFiles}"
                           ) : (
                             <>
                               All Files{" "}
@@ -346,7 +348,7 @@ export function FilePropertiesDialog() {
                 <div className="space-y-0.5">
                   <PropertyRow
                     icon={<Calendar className="w-4 h-4" />}
-                    label="Created"
+                    label={t.app.created}
                     value={
                       <span>
                         {formatExactDate(properties.createdAt)}
@@ -358,7 +360,7 @@ export function FilePropertiesDialog() {
                   />
                   <PropertyRow
                     icon={<Clock className="w-4 h-4" />}
-                    label="Modified"
+                    label={t.app.modified}
                     value={
                       <span>
                         {formatExactDate(properties.updatedAt)}
@@ -381,18 +383,18 @@ export function FilePropertiesDialog() {
                 <div className="space-y-0.5">
                   <PropertyRow
                     icon={<Star className={`w-4 h-4 ${properties.starred ? "fill-yellow-400 text-yellow-400" : ""}`} />}
-                    label="Starred"
+                    label={t.app.starredLabel}
                     value={properties.starred ? "Yes" : "No"}
                   />
                   <PropertyRow
                     icon={<Trash2 className={`w-4 h-4 ${properties.trashed ? "text-destructive" : ""}`} />}
-                    label="Trashed"
+                    label={t.app.trashed}
                     value={properties.trashed ? "Yes" : "No"}
                   />
                   {properties.description && (
                     <PropertyRow
                       icon={<StickyNote className="w-4 h-4" />}
-                      label="Description"
+                      label={t.app.description}
                       value={
                         <span className="flex items-center gap-2">
                           <span className="line-clamp-2">{properties.description}</span>
@@ -411,7 +413,7 @@ export function FilePropertiesDialog() {
                   {!properties.description && (
                     <PropertyRow
                       icon={<StickyNote className="w-4 h-4" />}
-                      label="Description"
+                      label={t.app.description}
                       value={
                         <Button
                           variant="link"
@@ -438,7 +440,7 @@ export function FilePropertiesDialog() {
                     <div className="space-y-0.5">
                       <PropertyRow
                         icon={<Hash className="w-4 h-4" />}
-                        label="MD5"
+                        label={t.app.md5}
                         value={
                           <span className="flex items-center gap-2">
                             <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">
@@ -499,11 +501,11 @@ export function FilePropertiesDialog() {
                                 </code>
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                                <span>{share.downloadCount} download{share.downloadCount !== 1 ? "s" : ""}</span>
+                                <span>{share.downloadCount} {t.app.downloads}</span>
                                 <span>{formatExactDate(share.createdAt)}</span>
                                 {share.expiresAt && (
                                   <span className={new Date(share.expiresAt) < new Date() ? "text-destructive" : ""}>
-                                    {new Date(share.expiresAt) < new Date() ? "Expired" : `Expires ${formatTimeAgo(share.expiresAt)}`}
+                                    {new Date(share.expiresAt) < new Date() ? t.app.expired : `Expires ${formatTimeAgo(share.expiresAt)}`}
                                   </span>
                                 )}
                               </div>

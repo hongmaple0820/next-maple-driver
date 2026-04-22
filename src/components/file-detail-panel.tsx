@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import type { BreadcrumbItem, FileItem } from "@/lib/file-utils";
 import { FileVersionPanel } from "@/components/file-version-panel";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 function InfoRow({ icon, label, value, delay = 0 }: { icon: React.ReactNode; label: string; value: string; delay?: number }) {
   return (
@@ -135,6 +136,7 @@ function ColorLabelPicker({ file, queryClient }: { file: FileItem; queryClient: 
 export function FileDetailPanel() {
   const { detailFile, setDetailFile, setRenameFile, setShareFile, setPreviewFile, section } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [imageZoomed, setImageZoomed] = useState(false);
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState("");
@@ -187,7 +189,7 @@ export function FileDetailPanel() {
     setIsEditingDesc(false);
   };
 
-  // Fetch folder path for the "Location" info
+  // Fetch folder path for the t.app.location info
   const { data: breadcrumbs = [] } = useQuery<BreadcrumbItem[]>({
     queryKey: ["breadcrumb", detailFile?.parentId],
     queryFn: async () => {
@@ -208,8 +210,8 @@ export function FileDetailPanel() {
 
   // Build location path string
   const locationPath = detailFile.parentId === "root"
-    ? "All Files"
-    : [...breadcrumbs.map(b => b.name), detailFile.parentId === "root" ? "All Files" : ""].filter(Boolean).join(" / ");
+    ? t.app.allFiles
+    : [...breadcrumbs.map(b => b.name), detailFile.parentId === "root" ? t.app.allFiles : ""].filter(Boolean).join(" / ");
 
   const handleDownload = () => {
     window.open(`/api/files/download?id=${detailFile.id}`, "_blank");
@@ -350,18 +352,18 @@ export function FileDetailPanel() {
 
             {/* File Info */}
             <div className="p-4 space-y-4 border-b border-border/50">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Details</h4>
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t.app.details}</h4>
 
               <div className="space-y-3">
-                <InfoRow icon={<FileIcon className="w-4 h-4" />} label="Type" value={getFileTypeLabel(detailFile)} delay={0} />
+                <InfoRow icon={<FileIcon className="w-4 h-4" />} label={t.app.type} value={getFileTypeLabel(detailFile)} delay={0} />
                 {!isFolder && (
-                  <InfoRow icon={<HardDrive className="w-4 h-4" />} label="Size" value={formatFileSize(detailFile.size)} delay={0.03} />
+                  <InfoRow icon={<HardDrive className="w-4 h-4" />} label={t.app.size} value={formatFileSize(detailFile.size)} delay={0.03} />
                 )}
-                <InfoRow icon={<MapPin className="w-4 h-4" />} label="Location" value={locationPath || "All Files"} delay={0.06} />
-                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Modified" value={formatRelativeTime(detailFile.updatedAt)} delay={0.09} />
-                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Created" value={formatRelativeTime(detailFile.createdAt)} delay={0.12} />
+                <InfoRow icon={<MapPin className="w-4 h-4" />} label={t.app.location} value={locationPath || t.app.allFiles} delay={0.06} />
+                <InfoRow icon={<Calendar className="w-4 h-4" />} label={t.app.modified} value={formatRelativeTime(detailFile.updatedAt)} delay={0.09} />
+                <InfoRow icon={<Calendar className="w-4 h-4" />} label={t.app.created} value={formatRelativeTime(detailFile.createdAt)} delay={0.12} />
                 {detailFile.mimeType && (
-                  <InfoRow icon={<FileIcon className="w-4 h-4" />} label="MIME Type" value={detailFile.mimeType} delay={0.15} />
+                  <InfoRow icon={<FileIcon className="w-4 h-4" />} label={t.app.mimeType} value={detailFile.mimeType} delay={0.15} />
                 )}
                 {detailFile.starred && (
                   <motion.div

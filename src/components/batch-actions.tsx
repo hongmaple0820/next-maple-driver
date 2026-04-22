@@ -7,10 +7,12 @@ import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 export function BatchActions() {
   const { selectedFileIds, clearSelection, section, setBatchRenameOpen } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const count = selectedFileIds.size;
 
   if (count === 0) return null;
@@ -85,7 +87,7 @@ export function BatchActions() {
         body: JSON.stringify({ fileIds }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Download failed" }));
+        const data = await res.json().catch(() => ({ error: t.app.download + " failed" }));
         toast.error(data.error || "Failed to download ZIP");
         return;
       }
@@ -113,7 +115,7 @@ export function BatchActions() {
         exit={{ opacity: 0, y: 20 }}
         className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-foreground text-background px-5 py-3 rounded-full shadow-lg"
       >
-        <span className="text-sm font-medium">{count} selected</span>
+        <span className="text-sm font-medium">{count} {t.app.selected}</span>
         <div className="w-px h-5 bg-background/20" />
         {section !== "trash" && (
           <Button
@@ -123,7 +125,7 @@ export function BatchActions() {
             className="text-background hover:bg-background/20 gap-1.5"
           >
             <Archive className="w-4 h-4" />
-            Download ZIP
+            {t.app.downloadZip}
           </Button>
         )}
         {section !== "trash" && (
@@ -134,7 +136,7 @@ export function BatchActions() {
             className="text-background hover:bg-background/20 gap-1.5"
           >
             <Pencil className="w-4 h-4" />
-            Rename
+            {t.app.rename}
           </Button>
         )}
         {section !== "trash" && (
@@ -145,7 +147,7 @@ export function BatchActions() {
             className="text-background hover:bg-background/20 gap-1.5"
           >
             <Star className="w-4 h-4" />
-            Star
+            {t.app.star}
           </Button>
         )}
         <Button
@@ -155,7 +157,7 @@ export function BatchActions() {
           className="text-background hover:bg-background/20 gap-1.5"
         >
           <Trash2 className="w-4 h-4" />
-          {section === "trash" ? "Delete" : "Trash"}
+          {section === "trash" ? t.app.delete : t.app.trashAction}
         </Button>
         <Button
           variant="ghost"

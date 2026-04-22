@@ -23,13 +23,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
-  { id: "files", label: "All Files", icon: Folder },
-  { id: "recent", label: "Recent", icon: Clock },
-  { id: "starred", label: "Starred", icon: Star },
-  { id: "trash", label: "Trash", icon: Trash2 },
-];
+import { useI18n } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 function ChevronIcon({ className }: { className?: string }) {
   return (
@@ -45,6 +40,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { data: sessionData } = useSession();
   const isAdmin = (sessionData?.user as Record<string, unknown>)?.role === "admin";
   const [showStorageDetail, setShowStorageDetail] = useState(false);
+  const { t } = useI18n();
+
+  const navItems: { id: Section; label: string; icon: typeof Folder }[] = [
+    { id: "files", label: t.app.allFiles, icon: Folder },
+    { id: "recent", label: t.app.recent, icon: Clock },
+    { id: "starred", label: t.app.starred, icon: Star },
+    { id: "trash", label: t.app.trash, icon: Trash2 },
+  ];
 
   const { data: stats } = useQuery<StorageStats>({
     queryKey: ["storage-stats"],
@@ -71,7 +74,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
         <div className="flex flex-col">
           <span className="text-lg font-bold tracking-tight leading-tight bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-400 dark:to-emerald-600 bg-clip-text text-transparent">CloudDrive</span>
-          <span className="text-[10px] text-muted-foreground leading-tight">Personal Cloud Storage</span>
+          <span className="text-[10px] text-muted-foreground leading-tight">{t.app.personalCloudStorage}</span>
         </div>
         {onNavigate && (
           <Button
@@ -89,7 +92,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="relative flex-1 min-h-0">
         <ScrollArea className="h-full px-3 py-3">
           <div className="px-2 mb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Navigation</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{t.app.navigation}</span>
           </div>
           <nav className="space-y-0.5">
             {navItems.map((item) => {
@@ -149,14 +152,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
               >
                 <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                Admin Panel
+                {t.app.adminPanel}
               </button>
             </div>
           )}
           {/* Quick Stats */}
           <div className="px-5 py-2 border-t border-border/40">
             <p className="text-[11px] text-muted-foreground/70">
-              {stats?.totalFiles ?? 0} files · {stats?.totalFolders ?? 0} folders
+              {stats?.totalFiles ?? 0} {t.app.files} · {stats?.totalFolders ?? 0} {t.app.folders}
             </p>
           </div>
         </ScrollArea>
@@ -182,7 +185,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold truncate leading-tight">{sessionData?.user?.name || "My CloudDrive"}</span>
             <span className="text-[11px] text-muted-foreground leading-tight truncate">
-              {sessionData?.user?.email || `${formatFileSize(usedBytes)} of ${formatFileSize(totalBytes)} used`}
+              {sessionData?.user?.email || `${formatFileSize(usedBytes)} ${t.app.of} ${formatFileSize(totalBytes)} ${t.app.used}`}
             </span>
           </div>
           <Tooltip>
@@ -197,15 +200,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" className="text-xs">
-              Preferences
+              {t.app.preferences}
             </TooltipContent>
           </Tooltip>
         </div>
-        {/* Theme toggle & Sign out row */}
+        {/* Theme toggle row */}
         <div className="flex items-center justify-between gap-2 mt-1.5 px-3">
           <div className="flex items-center gap-2">
             {theme === "dark" ? <Moon className="w-3.5 h-3.5 text-muted-foreground" /> : <Sun className="w-3.5 h-3.5 text-muted-foreground" />}
-            <span className="text-[11px] text-muted-foreground">{theme === "dark" ? "Dark" : "Light"} Mode</span>
+            <span className="text-[11px] text-muted-foreground">{theme === "dark" ? t.app.darkMode : t.app.lightMode}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Switch
@@ -214,6 +217,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               className="scale-90"
             />
           </div>
+        </div>
+        {/* Language switcher row */}
+        <div className="flex items-center justify-between gap-2 mt-1.5 px-3">
+          <LanguageSwitcher variant="ghost" />
         </div>
         {/* Sign out button */}
         <div className="mt-2 px-3">
@@ -224,7 +231,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={() => signOut({ redirect: false })}
           >
             <LogOut className="w-3.5 h-3.5" />
-            Sign Out
+            {t.app.signOut}
           </Button>
         </div>
       </div>
@@ -237,7 +244,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         >
           <div className="flex items-center gap-2 mb-2.5">
             <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-xs font-bold uppercase tracking-wider">Storage</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{t.app.storage}</span>
             <ChevronIcon className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
           </div>
           <Progress value={usagePercent} className={cn("h-1.5 mb-2", usagePercent > 80 && "animate-pulse")} />
@@ -268,7 +275,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
           <div className="flex items-center justify-between mt-1.5">
             <p className="text-[11px] text-muted-foreground">
-              {formatFileSize(usedBytes)} of {formatFileSize(totalBytes)}
+              {formatFileSize(usedBytes)} {t.app.of} {formatFileSize(totalBytes)}
             </p>
             <p className="text-[11px] font-semibold">
               {usagePercent.toFixed(usagePercent < 1 ? 2 : 0)}%
@@ -308,7 +315,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     </div>
                   ))}
                 <div className="border-t border-border/40 pt-1.5 mt-1.5 flex items-center justify-between text-xs font-medium">
-                  <span>Free</span>
+                  <span>{t.app.free}</span>
                   <span className="text-muted-foreground">{formatFileSize(totalBytes - usedBytes)}</span>
                 </div>
               </div>
@@ -323,12 +330,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 export function FileSidebar() {
   const isMobile = useIsMobile();
   const { sidebarOpen, setSidebarOpen } = useFileStore();
+  const { t } = useI18n();
 
   if (isMobile) {
     return (
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-72 p-0 backdrop-blur-sm">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SheetTitle className="sr-only">{t.app.navigation}</SheetTitle>
           <SidebarContent onNavigate={() => setSidebarOpen(false)} />
         </SheetContent>
       </Sheet>

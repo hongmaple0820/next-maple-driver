@@ -7,10 +7,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useFileStore } from "@/store/file-store";
 import { uploadFilesWithProgress, MAX_FILE_SIZE, MAX_TOTAL_STORAGE } from "@/lib/upload-utils";
 import { formatFileSize, type StorageStats } from "@/lib/file-utils";
+import { useI18n } from "@/lib/i18n";
 
 export function UploadZone({ children }: { children: React.ReactNode }) {
   const { currentFolderId } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);

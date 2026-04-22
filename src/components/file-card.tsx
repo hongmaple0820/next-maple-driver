@@ -38,6 +38,7 @@ import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFi
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 interface FileCardProps {
   file: FileItem;
@@ -193,6 +194,7 @@ export function FileCard({ file }: FileCardProps) {
   } = useFileStore();
 
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [isHovered, setIsHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -309,7 +311,7 @@ export function FileCard({ file }: FileCardProps) {
   const handleDownload = useCallback(() => {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
     addActivity({ action: "download", fileName: file.name });
-  }, [file, addActivity]);
+  }, [file, addActivity, t]);
 
   const handleDownloadZip = useCallback(async () => {
     try {
@@ -319,7 +321,7 @@ export function FileCard({ file }: FileCardProps) {
         body: JSON.stringify({ fileIds: [file.id] }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Download failed" }));
+        const data = await res.json().catch(() => ({ error: t.app.download + " failed" }));
         toast.error(data.error || "Failed to download ZIP");
         return;
       }
@@ -336,7 +338,7 @@ export function FileCard({ file }: FileCardProps) {
     } catch {
       toast.error("Failed to download ZIP");
     }
-  }, [file]);
+  }, [file, t]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -382,7 +384,7 @@ export function FileCard({ file }: FileCardProps) {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleStar}>
             <Star className={cn("w-4 h-4", file.starred && "fill-yellow-400 text-yellow-400")} />
-            {file.starred ? "Unstar" : "Star"}
+            {file.starred ? t.app.unstar : "Star"}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
@@ -462,7 +464,7 @@ export function FileCard({ file }: FileCardProps) {
           </ContextMenuItem>
           <ContextMenuItem onClick={handleStar}>
             <Star className={cn("w-4 h-4", file.starred && "fill-yellow-400 text-yellow-400")} />
-            {file.starred ? "Unstar" : "Star"}
+            {file.starred ? t.app.unstar : "Star"}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...

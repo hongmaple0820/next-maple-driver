@@ -2142,3 +2142,68 @@ Stage Summary:
 - Add email notifications
 - Add file encryption at rest
 - Add two-factor authentication
+
+---
+Task ID: 1+2+3
+Agent: Main Agent
+Task: Create i18n System + Standalone Login/Register Pages
+
+Work Log:
+- Created i18n infrastructure with 3 files:
+  - src/lib/i18n/translations.ts: Full zh/en translations for auth pages and main app (100+ keys)
+  - src/lib/i18n/context.tsx: React context-based I18nProvider with localStorage persistence and browser language detection
+  - src/lib/i18n/index.ts: Barrel export for I18nProvider, useI18n, Locale type
+- Created LanguageSwitcher component (src/components/language-switcher.tsx):
+  - 3 variants: default, compact, ghost
+  - Uses DropdownMenu with flag icons (CN/US) and language labels
+  - Persists language choice via I18nProvider (localStorage)
+- Created standalone Login page:
+  - src/app/login/page.tsx: Server component wrapper with I18nProvider + AuthProvider
+  - src/app/login/login-client.tsx: Full login form with i18n, left branding panel, mobile responsive
+  - Language switcher in top-right corner
+  - Redirects to / if already authenticated
+  - Demo credentials hint
+  - Link to /register page
+- Created standalone Register page:
+  - src/app/register/page.tsx: Server component wrapper with I18nProvider + AuthProvider
+  - src/app/register/register-client.tsx: Full register form with name, email, password, confirm password
+  - Password strength indicator (4-bar colored indicator)
+  - Passwords match checkmark
+  - Link to /login page
+  - Auto sign-in after successful registration
+- Updated SessionWrapper (src/components/session-wrapper.tsx):
+  - Changed from showing inline LoginRegisterPage to redirecting to /login via router.replace
+  - Uses useEffect for redirect on unauthenticated status
+  - Returns null during redirect (no flash of content)
+- Updated page.tsx (src/app/page.tsx):
+  - Wrapped with I18nProvider at the outermost level
+  - Preserves existing QueryClient, ThemeProvider, AuthProvider, TooltipProvider structure
+- All changes pass lint check (0 errors, 0 warnings)
+- Dev server running, /login and /register pages return 200
+
+Stage Summary:
+- Complete i18n system with React context, localStorage persistence, and browser language detection
+- Standalone /login and /register pages with full i18n support (Chinese default, English available)
+- Language switcher component with 3 visual variants
+- SessionWrapper redirects unauthenticated users to /login instead of inline login
+- Main app page wrapped with I18nProvider for future i18n integration
+- 7 new files created, 2 files modified
+- Lint clean, no errors
+
+## Current Project State
+- CloudDrive with i18n support (zh/en)
+- Standalone login/register pages at /login and /register
+- All existing 35+ features preserved and working
+- 19 API endpoints, 30+ frontend components
+- Lint clean, no errors
+
+## Known Issues / Risks
+- None critical
+- Minor: Main app UI not yet using i18n translations (infrastructure ready)
+- Minor: Old LoginRegisterPage component still exists (can be removed later)
+
+## Recommended Next Steps
+- Integrate i18n into main app UI components (sidebar, toolbar, dialogs)
+- Remove old LoginRegisterPage component
+- Add i18n to share page
+- Add more languages (e.g., Japanese, Korean)

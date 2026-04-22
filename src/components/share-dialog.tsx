@@ -19,10 +19,12 @@ import { Switch } from "@/components/ui/switch";
 import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound } from "lucide-react";
 import type { ShareInfo } from "@/lib/file-utils";
 import { showActionToast } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 export function ShareDialog() {
   const { shareFile, setShareFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [usePassword, setUsePassword] = useState(false);
@@ -63,8 +65,8 @@ export function ShareDialog() {
         // Show share link created toast with Copy Link action
         const link = `${window.location.origin}/share/${data.token}`;
         showActionToast(
-          "Share link created",
-          "Copy Link",
+          t.app.shareLinkCreated,
+          t.app.copyLink,
           async () => {
             try {
               await navigator.clipboard.writeText(link);
@@ -110,7 +112,7 @@ export function ShareDialog() {
             Share File
           </DialogTitle>
           <DialogDescription>
-            Create a share link for &quot;{shareFile?.name}&quot;.
+            {t.app.shareDesc} &quot;{shareFile?.name}&quot;
           </DialogDescription>
         </DialogHeader>
 
@@ -246,7 +248,7 @@ export function ShareDialog() {
                 disabled={loading}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                {loading ? "Creating..." : "Create Link"}
+                {loading ? t.app.creatingLink : t.app.createLink}
               </Button>
             </>
           ) : (

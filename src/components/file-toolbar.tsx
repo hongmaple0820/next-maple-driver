@@ -21,6 +21,7 @@ import { uploadFilesWithProgress } from "@/lib/upload-utils";
 import { COLOR_LABELS } from "@/lib/file-utils";
 import type { StorageStats } from "@/lib/file-utils";
 import { ActivityPanel } from "@/components/activity-panel";
+import { useI18n } from "@/lib/i18n";
 import {
   Tooltip,
   TooltipContent,
@@ -72,6 +73,8 @@ export function FileToolbar() {
     historyIndex,
     navigationHistory,
   } = useFileStore();
+
+  const { t } = useI18n();
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < navigationHistory.length - 1;
@@ -149,10 +152,10 @@ export function FileToolbar() {
   };
 
   const sectionLabels: Record<string, string> = {
-    files: "All Files",
-    recent: "Recent",
-    starred: "Starred",
-    trash: "Trash",
+    files: t.app.allFiles,
+    recent: t.app.recent,
+    starred: t.app.starred,
+    trash: t.app.trash,
   };
 
   const isSearchActive = searchQuery.trim().length > 0;
@@ -178,7 +181,7 @@ export function FileToolbar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              Back <span className="text-muted-foreground ml-1">Alt+←</span>
+              {t.app.back} <span className="text-muted-foreground ml-1">Alt+←</span>
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -194,7 +197,7 @@ export function FileToolbar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              Forward <span className="text-muted-foreground ml-1">Alt+→</span>
+              {t.app.forward} <span className="text-muted-foreground ml-1">Alt+→</span>
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -210,7 +213,7 @@ export function FileToolbar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              All Files <span className="text-muted-foreground ml-1">Alt+Home</span>
+              {t.app.allFilesNav} <span className="text-muted-foreground ml-1">Alt+Home</span>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -280,7 +283,7 @@ export function FileToolbar() {
           )} />
           <Input
             ref={searchInputRef}
-            placeholder="Search files..."
+            placeholder={t.app.search}
             value={searchInputValue}
             className={cn(
               "pl-9 h-9 transition-all duration-200 focus:w-80",
@@ -311,7 +314,7 @@ export function FileToolbar() {
               animate={{ opacity: 1, y: 0 }}
               className="absolute -bottom-5 left-0 text-[11px] text-muted-foreground"
             >
-              {searchResultCount} result{searchResultCount !== 1 ? "s" : ""} found
+              {searchResultCount} {t.app.resultsFound}
             </motion.div>
           )}
         </div>
@@ -341,7 +344,7 @@ export function FileToolbar() {
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  placeholder="Search files..."
+                  placeholder={t.app.search}
                   value={searchInputValue}
                   className="pl-9 pr-9 h-9 w-full focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50"
                   onChange={(e) => handleSearch(e.target.value)}
@@ -358,7 +361,7 @@ export function FileToolbar() {
               </div>
               {isSearchActive && searchResultCount > 0 && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {searchResultCount} result{searchResultCount !== 1 ? "s" : ""} found
+                  {searchResultCount} {t.app.resultsFound}
                 </p>
               )}
             </div>
@@ -377,7 +380,7 @@ export function FileToolbar() {
                 className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
               >
                 <CloudUpload className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Upload</span>
+                <span className="hidden sm:inline">{t.app.upload}</span>
               </Button>
               <Button
                 variant="outline"
@@ -386,7 +389,7 @@ export function FileToolbar() {
                 className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">New Folder</span>
+                <span className="hidden sm:inline">{t.app.newFolder}</span>
               </Button>
             </>
           )}
@@ -395,18 +398,18 @@ export function FileToolbar() {
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-150 active:scale-95">
                   <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Empty Trash</span>
+                  <span className="hidden sm:inline">{t.app.emptyTrash}</span>
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Empty Trash?</AlertDialogTitle>
+                  <AlertDialogTitle>{t.app.emptyTrash}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete all items in the trash. This action cannot be undone.
+                    {t.app.emptyTrashConfirm}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>{t.app.cancel}</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={async () => {
                       try {
@@ -419,7 +422,7 @@ export function FileToolbar() {
                     }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    Delete All
+                    {t.app.delete} {t.app.selectAll.split(" ")[0]}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -446,7 +449,7 @@ export function FileToolbar() {
                 {colorLabelFilter ? (
                   <span className={cn("w-2.5 h-2.5 rounded-full", COLOR_LABELS[colorLabelFilter]?.dot)} />
                 ) : (
-                  <span className="hidden sm:inline">Color</span>
+                  <span className="hidden sm:inline">{t.app.colorLabelFilter}</span>
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -455,7 +458,7 @@ export function FileToolbar() {
                 onClick={() => setColorLabelFilter("" as ColorLabelFilter)}
                 className={cn(!colorLabelFilter && "font-semibold")}
               >
-                All Colors
+                {t.app.allColors}
               </DropdownMenuItem>
               {Object.entries(COLOR_LABELS).map(([key, style]) => (
                 <DropdownMenuItem
@@ -481,10 +484,10 @@ export function FileToolbar() {
               <SelectValue className="max-[400px]:hidden" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="name">Name</SelectItem>
-              <SelectItem value="updatedAt">Modified</SelectItem>
-              <SelectItem value="size">Size</SelectItem>
-              <SelectItem value="type">Type</SelectItem>
+              <SelectItem value="name">{t.app.name}</SelectItem>
+              <SelectItem value="updatedAt">{t.app.modified}</SelectItem>
+              <SelectItem value="size">{t.app.size}</SelectItem>
+              <SelectItem value="type">{t.app.type}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -503,7 +506,7 @@ export function FileToolbar() {
           size="icon"
           className="h-9 w-9 transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
           onClick={() => setShortcutsOpen(true)}
-          title="Keyboard shortcuts (?)"
+          title={`${t.app.shortcuts} (?)`}
         >
           <Keyboard className="w-4 h-4" />
         </Button>
@@ -523,7 +526,7 @@ export function FileToolbar() {
           <ToggleGroupItem
             value="grid"
             size="sm"
-            aria-label="Grid view"
+            aria-label={t.app.gridView}
             className={cn(
               "transition-all duration-200 data-[state=on]:shadow-sm data-[state=on]:shadow-emerald-500/10",
               viewMode === "grid" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
@@ -534,7 +537,7 @@ export function FileToolbar() {
           <ToggleGroupItem
             value="list"
             size="sm"
-            aria-label="List view"
+            aria-label={t.app.listView}
             className={cn(
               "transition-all duration-200 data-[state=on]:shadow-sm data-[state=on]:shadow-emerald-500/10",
               viewMode === "list" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
@@ -549,13 +552,13 @@ export function FileToolbar() {
       {section === "files" && currentFolderId === "root" && !searchQuery && (
         <div className="flex items-center gap-1 px-4 pb-2 pt-1 border-t border-border/50 overflow-x-auto bg-muted/20">
           {[
-            { id: "all", label: "All", icon: null },
-            { id: "images", label: "Images", icon: Image },
-            { id: "videos", label: "Videos", icon: Film },
-            { id: "audio", label: "Audio", icon: Music },
-            { id: "documents", label: "Docs", icon: FileText },
-            { id: "code", label: "Code", icon: FileCode },
-            { id: "archives", label: "Archives", icon: Archive },
+            { id: "all", label: t.app.filterAll, icon: null },
+            { id: "images", label: t.app.filterImages, icon: Image },
+            { id: "videos", label: t.app.filterVideos, icon: Film },
+            { id: "audio", label: t.app.filterAudio, icon: Music },
+            { id: "documents", label: t.app.filterDocs, icon: FileText },
+            { id: "code", label: t.app.filterCode, icon: FileCode },
+            { id: "archives", label: t.app.filterArchives, icon: Archive },
           ].map((tab) => {
             const Icon = tab.icon;
             return (

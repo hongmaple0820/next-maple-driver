@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDate, formatFileSize } from "@/lib/file-utils";
 import { History, Plus, RotateCcw, Clock, HardDrive } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 
 interface VersionItem {
   id: string;
@@ -29,6 +30,7 @@ interface FileVersionPanelProps {
 
 export function FileVersionPanel({ fileId }: FileVersionPanelProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const { data, isLoading } = useQuery<VersionsResponse>({
     queryKey: ["file-versions", fileId],

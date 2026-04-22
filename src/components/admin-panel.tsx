@@ -9,9 +9,11 @@ import { AdminUsersTab } from "@/components/admin/admin-users-tab";
 import { AdminSystemTab } from "@/components/admin/admin-system-tab";
 import { AdminDriversTab } from "@/components/admin/admin-drivers-tab";
 import { Shield, Users, Activity, HardDrive } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function AdminPanel() {
   const { adminPanelOpen, setAdminPanelOpen } = useFileStore();
+  const { t } = useI18n();
 
   return (
     <Dialog open={adminPanelOpen} onOpenChange={setAdminPanelOpen}>

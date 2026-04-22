@@ -17,6 +17,7 @@ import { FolderInput, Folder, ChevronRight, ChevronDown } from "lucide-react";
 import type { FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 function FolderTreeItem({
   folder,
@@ -94,6 +95,7 @@ function FolderTreeItem({
 export function MoveDialog() {
   const { moveFile, setMoveFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -158,7 +160,7 @@ export function MoveDialog() {
             Move Item
           </DialogTitle>
           <DialogDescription>
-            Select a destination folder for &quot;{moveFile?.name}&quot;.
+            {t.app.moveDesc} &quot;{moveFile?.name}&quot;
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-72 border rounded-lg p-2">
@@ -194,7 +196,7 @@ export function MoveDialog() {
             disabled={!selectedId || loading}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            {loading ? "Moving..." : "Move Here"}
+            {loading ? t.app.moving : t.app.moveHere}
           </Button>
         </DialogFooter>
       </DialogContent>

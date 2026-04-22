@@ -21,6 +21,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 
 export function FileGrid() {
   const {
@@ -30,6 +31,7 @@ export function FileGrid() {
     compactMode, showExtensions, setBatchRenameOpen, colorLabelFilter,
   } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [allFileIds, setAllFileIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,8 +166,8 @@ export function FileGrid() {
       setClipboard(null);
     }
 
-    toast.success(`Pasted ${clipboard.fileIds.length} item${clipboard.fileIds.length > 1 ? "s" : ""}`);
-  }, [clipboard, currentFolderId, queryClient, setClipboard]);
+    toast.success(`${t.app.pasted} ${clipboard.fileIds.length} ${t.app.items}`);
+  }, [clipboard, currentFolderId, queryClient, setClipboard, t]);
 
   // Keyboard shortcut handlers
   useEffect(() => {
@@ -240,44 +242,44 @@ export function FileGrid() {
       {section === "files" && (
         <>
           <ContextMenuItem onClick={() => setCreateFolderOpen(true)}>
-            <FolderPlus className="w-4 h-4" /> New Folder
+            <FolderPlus className="w-4 h-4" /> {t.app.newFolder}
           </ContextMenuItem>
           <ContextMenuItem onClick={handleUploadFromMenu}>
-            <Upload className="w-4 h-4" /> Upload Files
+            <Upload className="w-4 h-4" /> {t.app.uploadFiles}
           </ContextMenuItem>
           {clipboard && (
             <ContextMenuItem onClick={handlePaste}>
-              <Clipboard className="w-4 h-4" /> Paste
+              <Clipboard className="w-4 h-4" /> {t.app.paste}
             </ContextMenuItem>
           )}
           {selectedFileIds.size > 1 && section !== "trash" && (
             <ContextMenuItem onClick={() => setBatchRenameOpen(true)}>
-              <Pencil className="w-4 h-4" /> Batch Rename
+              <Pencil className="w-4 h-4" /> {t.app.batchRename}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
         </>
       )}
       <ContextMenuItem onClick={() => selectAll(allFileIds)}>
-        <ArrowDownAZ className="w-4 h-4" /> Select All
+        <ArrowDownAZ className="w-4 h-4" /> {t.app.selectAll}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuSub>
         <ContextMenuSubTrigger>
-          <ArrowUpDown className="w-4 h-4" /> Sort by
+          <ArrowUpDown className="w-4 h-4" /> {t.app.sortBy}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className="w-40">
           <ContextMenuItem onClick={() => handleSortBy("name")}>
-            <ArrowDownAZ className="w-4 h-4" /> Name
+            <ArrowDownAZ className="w-4 h-4" /> {t.app.name}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleSortBy("updatedAt")}>
-            <Clock4 className="w-4 h-4" /> Modified
+            <Clock4 className="w-4 h-4" /> {t.app.modified}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleSortBy("size")}>
-            <HardDrive className="w-4 h-4" /> Size
+            <HardDrive className="w-4 h-4" /> {t.app.size}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleSortBy("type")}>
-            <FileType2 className="w-4 h-4" /> Type
+            <FileType2 className="w-4 h-4" /> {t.app.type}
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
@@ -341,27 +343,29 @@ export function FileGrid() {
             </motion.div>
             <p className="text-lg font-medium mb-1">
               {isSearch
-                ? "No results found"
+                ? t.app.noResultsFound
                 : typeFilter !== "all" || colorLabelFilter
-                ? "No files match this filter"
+                ? t.app.noFilesMatchFilter
                 : section === "trash"
-                ? "Trash is empty"
+                ? t.app.trashIsEmpty
                 : section === "starred"
-                ? "No starred items"
+                ? t.app.noStarredItems
                 : section === "recent"
-                ? "No recent files"
-                : "This folder is empty"}
+                ? t.app.noRecentFiles
+                : t.app.folderIsEmpty}
             </p>
             <p className="text-sm max-w-xs text-center">
               {isSearch
-                ? "Try a different search term"
+                ? t.app.tryDifferentSearch
                 : typeFilter !== "all" || colorLabelFilter
-                ? "Try selecting a different file type or color label"
+                ? t.app.tryDifferentFilter
                 : section === "trash"
-                ? "Deleted items will appear here"
+                ? t.app.deletedItemsAppearHere
                 : section === "files"
-                ? "Upload files or create a folder to get started"
-                : `Items you ${section === "starred" ? "star" : "modify"} will appear here`}
+                ? t.app.uploadOrCreate
+                : section === "starred"
+                ? t.app.starredItemsAppearHere
+                : t.app.modifiedItemsAppearHere}
             </p>
           </motion.div>
         </ContextMenuTrigger>

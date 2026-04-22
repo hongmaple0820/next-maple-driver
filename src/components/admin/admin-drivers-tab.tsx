@@ -22,6 +22,7 @@ import {
   Cloud, Globe, Server, TestTube,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 interface DriverInfo {
   id: string;
@@ -44,8 +45,8 @@ const driverTypeIcons: Record<string, typeof Server> = {
 };
 
 const driverTypeLabels: Record<string, string> = {
-  local: "Local Storage",
-  webdav: "WebDAV",
+  local: t.admin.localStorage,
+  webdav: t.admin.webdav,
   s3: "Amazon S3",
 };
 
@@ -53,6 +54,7 @@ const comingSoonTypes = ["webdav", "s3"];
 
 export function AdminDriversTab() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [addDriverOpen, setAddDriverOpen] = useState(false);
   const [newDriver, setNewDriver] = useState({
     name: "",
@@ -247,7 +249,7 @@ export function AdminDriversTab() {
                 onClick={() => createDriver.mutate(newDriver)}
                 disabled={createDriver.isPending || !newDriver.name}
               >
-                {createDriver.isPending ? "Creating..." : "Create Driver"}
+                {createDriver.isPending ? t.app.creating : t.admin.addDriver}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -300,7 +302,7 @@ export function AdminDriversTab() {
                           "text-[10px]",
                           isActive && "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20",
                         )}>
-                          {isActive ? "Active" : "Inactive"}
+                          {isActive ? t.admin.activeStatus : t.admin.inactive}
                         </Badge>
                         {driver.healthy !== undefined && (
                           <Badge variant="outline" className={cn(
@@ -313,8 +315,8 @@ export function AdminDriversTab() {
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-0.5">
-                        <div>Type: {driverTypeLabels[driver.type] || driver.type} · Priority: {driver.priority}</div>
-                        {driver.basePath && <div>Path: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{driver.basePath}</code></div>}
+                        <div>{t.admin.type}: {driverTypeLabels[driver.type] || driver.type} · {t.admin.priority}: {driver.priority}</div>
+                        {driver.basePath && <div>{t.admin.basePath}: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{driver.basePath}</code></div>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -336,7 +338,7 @@ export function AdminDriversTab() {
                           updateDriver.mutate({ id: driver.id, status: newStatus });
                         }}
                       >
-                        {isActive ? "Disable" : "Enable"}
+                        {isActive ? t.admin.disable : t.admin.enable}
                       </Button>
                       {!driver.isDefault && (
                         <Button

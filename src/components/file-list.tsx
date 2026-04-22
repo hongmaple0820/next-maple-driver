@@ -42,6 +42,7 @@ import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 // Color label dropdown submenu items
 function ColorLabelDropdownItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
@@ -183,6 +184,7 @@ export function FileList() {
     colorLabelFilter,
   } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-and-drop state
@@ -499,7 +501,7 @@ export function FileList() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleStar(file)}>
             <Star className={cn("w-4 h-4", file.starred && "fill-yellow-400 text-yellow-400")} />
-            {file.starred ? "Unstar" : "Star"}
+            {file.starred ? t.app.unstar : "Star"}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
@@ -575,7 +577,7 @@ export function FileList() {
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleStar(file)}>
             <Star className={cn("w-4 h-4", file.starred && "fill-yellow-400 text-yellow-400")} />
-            {file.starred ? "Unstar" : "Star"}
+            {file.starred ? t.app.unstar : "Star"}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
@@ -737,22 +739,22 @@ export function FileList() {
             </div>
             <p className="text-lg font-medium mb-1">
               {isSearch
-                ? "No results found"
+                ? t.app.noResultsFound
                 : typeFilter !== "all" || colorLabelFilter
-                ? "No files match this filter"
+                ? t.app.noFilesMatchFilter
                 : section === "trash"
-                ? "Trash is empty"
+                ? t.app.trashIsEmpty
                 : section === "starred"
-                ? "No starred items"
+                ? t.app.noStarredItems
                 : section === "recent"
-                ? "No recent files"
-                : "This folder is empty"}
+                ? t.app.noRecentFiles
+                : t.app.folderIsEmpty}
             </p>
             <p className="text-sm max-w-xs text-center">
               {isSearch
-                ? "Try a different search term"
+                ? t.app.tryDifferentSearch
                 : typeFilter !== "all" || colorLabelFilter
-                ? "Try selecting a different file type or color label"
+                ? t.app.tryDifferentFilter
                 : section === "trash"
                 ? "Deleted items will appear here"
                 : section === "files"

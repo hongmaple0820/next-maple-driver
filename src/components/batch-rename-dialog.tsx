@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowRight, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 import type { FileItem } from "@/lib/file-utils";
 
 // Parse a rename pattern for preview
@@ -61,6 +62,7 @@ export function BatchRenameDialog() {
     addActivity, currentFolderId, section, searchQuery,
   } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [pattern, setPattern] = useState("{name}.{ext}");
   const [startIndex, setStartIndex] = useState(1);
   const [step, setStep] = useState(1);
@@ -157,7 +159,7 @@ export function BatchRenameDialog() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Batch rename failed" }));
+        const data = await res.json().catch(() => ({ error: t.app.batchRename + " failed" }));
         toast.error(data.error || "Failed to batch rename files");
         return;
       }
@@ -190,7 +192,7 @@ export function BatchRenameDialog() {
             <Pencil className="w-5 h-5 text-emerald-600" />
             Batch Rename
             <Badge variant="secondary" className="ml-1">
-              {selectedIds.length} file{selectedIds.length !== 1 ? "s" : ""}
+              {selectedIds.length} {t.app.items}
             </Badge>
           </DialogTitle>
           <DialogDescription>
@@ -272,7 +274,7 @@ export function BatchRenameDialog() {
                   ))}
                   {remainingCount > 0 && (
                     <div className="px-3 py-2 text-sm text-muted-foreground text-center">
-                      +{remainingCount} more file{remainingCount > 1 ? "s" : ""}
+                      +{remainingCount} {t.app.moreFiles}
                     </div>
                   )}
                 </div>
@@ -301,7 +303,7 @@ export function BatchRenameDialog() {
             }
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            {loading ? "Renaming..." : "Rename"}
+            {loading ? t.app.renaming : t.app.rename}
           </Button>
         </DialogFooter>
       </DialogContent>

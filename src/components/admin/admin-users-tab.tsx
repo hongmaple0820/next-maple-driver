@@ -30,6 +30,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
+import { useI18n } from "@/lib/i18n";
 import { Progress } from "@/components/ui/progress";
 
 interface AdminUser {
@@ -46,6 +47,7 @@ interface AdminUser {
 
 export function AdminUsersTab() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", password: "", role: "user", storageLimit: "10" });
@@ -217,7 +219,7 @@ export function AdminUsersTab() {
                 onClick={() => createUser.mutate(newUser)}
                 disabled={createUser.isPending || !newUser.name || !newUser.email || !newUser.password}
               >
-                {createUser.isPending ? "Creating..." : "Create User"}
+                {createUser.isPending ? t.app.creating : t.admin.addUser}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -317,7 +319,7 @@ export function AdminUsersTab() {
                                   })}
                                 >
                                   <Shield className="w-4 h-4 mr-2" />
-                                  {user.role === "admin" ? "Demote to User" : "Promote to Admin"}
+                                  {user.role === "admin" ? t.admin.demoteToUser : t.admin.promoteToAdmin}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {

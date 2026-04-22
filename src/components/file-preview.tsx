@@ -12,9 +12,11 @@ import { Download, X } from "lucide-react";
 import { FileTypeIconByProps } from "@/components/file-type-icon";
 import { TextPreviewContent } from "@/components/text-preview-content";
 import { getPreviewType, type FileItem, type PreviewType } from "@/lib/file-utils";
+import { useI18n } from "@/lib/i18n";
 
 export function FilePreview() {
   const { previewFile, setPreviewFile } = useFileStore();
+  const { t } = useI18n();
 
   const handleOpenChange = (open: boolean) => {
     if (!open) setPreviewFile(null);

@@ -22,6 +22,7 @@ import {
   ClipboardPaste,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface ShortcutItem {
   keys: string[];
@@ -29,21 +30,6 @@ interface ShortcutItem {
   macKeys: string[];
   icon: LucideIcon;
 }
-
-const shortcuts: ShortcutItem[] = [
-  { keys: ["Alt", "←"], label: "Navigate Back", macKeys: ["⌥", "←"], icon: ArrowLeft },
-  { keys: ["Alt", "→"], label: "Navigate Forward", macKeys: ["⌥", "→"], icon: ArrowRight },
-  { keys: ["Alt", "Home"], label: "Go to All Files", macKeys: ["⌥", "↖"], icon: Home },
-  { keys: ["Ctrl", "A"], label: "Select All", macKeys: ["⌘", "A"], icon: ListChecks },
-  { keys: ["Delete"], label: "Move to Trash", macKeys: ["⌫"], icon: Trash2 },
-  { keys: ["F2"], label: "Rename", macKeys: ["F2"], icon: Pencil },
-  { keys: ["Esc"], label: "Clear Selection / Close", macKeys: ["⎋"], icon: X },
-  { keys: ["Enter"], label: "Open / Preview", macKeys: ["↵"], icon: CornerDownLeft },
-  { keys: ["?"], label: "Show this help", macKeys: ["?"], icon: HelpCircle },
-  { keys: ["Ctrl", "C"], label: "Copy", macKeys: ["⌘", "C"], icon: Copy },
-  { keys: ["Ctrl", "X"], label: "Cut", macKeys: ["⌘", "X"], icon: Scissors },
-  { keys: ["Ctrl", "V"], label: "Paste", macKeys: ["⌘", "V"], icon: ClipboardPaste },
-];
 
 function KeyBadge({ children }: { children: React.ReactNode }) {
   return (
@@ -55,6 +41,22 @@ function KeyBadge({ children }: { children: React.ReactNode }) {
 
 export function KeyboardShortcutsDialog() {
   const { shortcutsOpen, setShortcutsOpen } = useFileStore();
+  const { t } = useI18n();
+
+  const shortcuts: ShortcutItem[] = [
+    { keys: ["Alt", "←"], label: t.app.navigateBack, macKeys: ["⌥", "←"], icon: ArrowLeft },
+    { keys: ["Alt", "→"], label: t.app.navigateForward, macKeys: ["⌥", "→"], icon: ArrowRight },
+    { keys: ["Alt", "Home"], label: t.app.goToAllFiles, macKeys: ["⌥", "↖"], icon: Home },
+    { keys: ["Ctrl", "A"], label: t.app.selectAll, macKeys: ["⌘", "A"], icon: ListChecks },
+    { keys: ["Del"], label: t.app.moveToTrash, macKeys: ["⌫"], icon: Trash2 },
+    { keys: ["F2"], label: t.app.rename, macKeys: ["F2"], icon: Pencil },
+    { keys: ["Esc"], label: t.app.clearSelection, macKeys: ["⎋"], icon: X },
+    { keys: ["Enter"], label: t.app.openPreview, macKeys: ["↵"], icon: CornerDownLeft },
+    { keys: ["?"], label: t.app.showHelp, macKeys: ["?"], icon: HelpCircle },
+    { keys: ["Ctrl", "C"], label: t.app.copy, macKeys: ["⌘", "C"], icon: Copy },
+    { keys: ["Ctrl", "X"], label: t.app.cut, macKeys: ["⌘", "X"], icon: Scissors },
+    { keys: ["Ctrl", "V"], label: t.app.paste, macKeys: ["⌘", "V"], icon: ClipboardPaste },
+  ];
 
   return (
     <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
@@ -66,7 +68,7 @@ export function KeyboardShortcutsDialog() {
               <span className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                 <HelpCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               </span>
-              Keyboard Shortcuts
+              {t.app.keyboardShortcuts}
             </DialogTitle>
           </DialogHeader>
         </div>

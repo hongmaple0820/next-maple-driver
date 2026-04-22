@@ -16,10 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil } from "lucide-react";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
+import { useI18n } from "@/lib/i18n";
 
 export function RenameDialog() {
   const { renameFile, setRenameFile, addActivity } = useFileStore();
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -112,7 +114,7 @@ export function RenameDialog() {
             disabled={!name.trim() || name.trim() === renameFile?.name || loading}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            {loading ? "Saving..." : "Save"}
+            {loading ? t.app.saving : t.app.save}
           </Button>
         </DialogFooter>
       </DialogContent>

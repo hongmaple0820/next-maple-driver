@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 interface SystemStats {
   totalUsers: number;
@@ -47,14 +48,14 @@ const typeColors: Record<string, string> = {
   other: "bg-gray-500",
 };
 
-const typeLabels: Record<string, string> = {
-  image: "Images",
-  video: "Videos",
-  audio: "Audio",
-  document: "Documents",
-  code: "Code",
-  archive: "Archives",
-  other: "Other",
+const typeLabelKeys: Record<string, "filterImages" | "filterVideos" | "filterAudio" | "filterDocs" | "filterCode" | "filterArchives" | "filterAll"> = {
+  image: "filterImages",
+  video: "filterVideos",
+  audio: "filterAudio",
+  document: "filterDocs",
+  code: "filterCode",
+  archive: "filterArchives",
+  other: "filterAll",
 };
 
 const actionIcons: Record<string, typeof Activity> = {
@@ -63,6 +64,7 @@ const actionIcons: Record<string, typeof Activity> = {
 };
 
 export function AdminSystemTab() {
+  const { t } = useI18n();
   const { data, isLoading } = useQuery<SystemStats>({
     queryKey: ["admin-stats"],
     queryFn: async () => {
@@ -98,28 +100,28 @@ export function AdminSystemTab() {
 
   const statCards = [
     {
-      label: "Total Users",
+      label: t.admin.totalUsers,
       value: stats.totalUsers,
       icon: Users,
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-500/10",
     },
     {
-      label: "Total Files",
+      label: t.admin.totalFiles,
       value: stats.totalFiles,
       icon: FileText,
       color: "text-sky-600 dark:text-sky-400",
       bg: "bg-sky-500/10",
     },
     {
-      label: "Total Folders",
+      label: t.admin.totalFolders,
       value: stats.totalFolders,
       icon: Folder,
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-500/10",
     },
     {
-      label: "Active Shares",
+      label: t.admin.activeShares,
       value: stats.activeShares,
       icon: Share2,
       color: "text-purple-600 dark:text-purple-400",
@@ -153,7 +155,7 @@ export function AdminSystemTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-emerald-600" />
-              Storage Overview
+              {t.admin.storageOverview}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -173,7 +175,7 @@ export function AdminSystemTab() {
                 .map(([type, size]) => (
                   <div key={type} className="flex items-center gap-2">
                     <div className={cn("w-2.5 h-2.5 rounded-full", typeColors[type] || "bg-gray-500")} />
-                    <span className="text-sm flex-1">{typeLabels[type] || type}</span>
+                    <span className="text-sm flex-1">{t.app[typeLabelKeys[type] || "filterAll"]}</span>
                     <span className="text-sm text-muted-foreground">{formatFileSize(size as number)}</span>
                     <div className="w-20">
                       <Progress

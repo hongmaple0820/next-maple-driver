@@ -4,9 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { formatFileSize, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
 import { Folder, File, CheckCircle2 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function FileStatusBar() {
   const { currentFolderId, section, searchQuery, typeFilter, selectedFileIds } = useFileStore();
+  const { t } = useI18n();
 
   const isSearch = searchQuery.trim().length > 0;
 
