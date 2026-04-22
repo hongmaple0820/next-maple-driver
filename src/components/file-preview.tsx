@@ -84,9 +84,25 @@ export function FilePreview() {
           <div className="w-full h-[70vh]">
             <iframe
               src={`/api/files/download?id=${previewFile.id}&mode=inline`}
-              className="w-full h-full rounded-lg"
+              className="w-full h-full border-none rounded-lg"
               title={previewFile.name}
-            />
+            >
+              <div className="flex flex-col items-center justify-center p-8 gap-4 min-h-[300px]">
+                <FileTypeIconByProps
+                  type={previewFile.type as "folder" | "file"}
+                  mimeType={previewFile.mimeType}
+                  name={previewFile.name}
+                  className="w-20 h-20"
+                  strokeWidth={1}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Your browser does not support embedded PDF viewing.
+                </p>
+                <Button variant="outline" onClick={handleDownload} className="gap-2">
+                  <Download className="w-4 h-4" /> Download PDF to view
+                </Button>
+              </div>
+            </iframe>
           </div>
         );
 

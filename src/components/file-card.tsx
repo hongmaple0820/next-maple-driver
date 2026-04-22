@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -20,6 +23,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -28,12 +34,117 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface FileCardProps {
   file: FileItem;
+}
+
+// Color label submenu items for reuse
+function ColorLabelSubmenuItems({ file, queryClient, onColorSelect }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient>; onColorSelect?: (color: string) => void }) {
+  const handleSetColor = useCallback(async (color: string) => {
+    try {
+      const newLabel = file.colorLabel === color ? "" : color;
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id, colorLabel: newLabel }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        onColorSelect?.(newLabel);
+      }
+    } catch {
+      toast.error("Failed to update color label");
+    }
+  }, [file, queryClient, onColorSelect]);
+
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-1 p-1">
+        {Object.entries(COLOR_LABELS).map(([key, style]) => (
+          <button
+            key={key}
+            onClick={() => handleSetColor(key)}
+            className={cn(
+              "w-6 h-6 rounded-full transition-all duration-150 hover:scale-110 flex items-center justify-center",
+              style.dot,
+              file.colorLabel === key && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+            )}
+            title={style.label}
+          >
+            {file.colorLabel === key && (
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        ))}
+      </div>
+      {file.colorLabel && (
+        <DropdownMenuItem
+          className="text-xs text-muted-foreground"
+          onClick={() => handleSetColor(file.colorLabel!)}
+        >
+          Remove Color
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
+// Context menu color label items
+function ColorLabelContextMenuItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
+  const handleSetColor = useCallback(async (color: string) => {
+    try {
+      const newLabel = file.colorLabel === color ? "" : color;
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id, colorLabel: newLabel }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+      }
+    } catch {
+      toast.error("Failed to update color label");
+    }
+  }, [file, queryClient]);
+
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-1 p-1">
+        {Object.entries(COLOR_LABELS).map(([key, style]) => (
+          <button
+            key={key}
+            onClick={() => handleSetColor(key)}
+            className={cn(
+              "w-6 h-6 rounded-full transition-all duration-150 hover:scale-110 flex items-center justify-center",
+              style.dot,
+              file.colorLabel === key && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+            )}
+            title={style.label}
+          >
+            {file.colorLabel === key && (
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        ))}
+      </div>
+      {file.colorLabel && (
+        <ContextMenuItem
+          className="text-xs text-muted-foreground"
+          onClick={() => handleSetColor(file.colorLabel!)}
+        >
+          Remove Color
+        </ContextMenuItem>
+      )}
+    </>
+  );
 }
 
 export function FileCard({ file }: FileCardProps) {
@@ -60,6 +171,7 @@ export function FileCard({ file }: FileCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const isSelected = selectedFileIds.has(file.id);
   const ext = file.type === "file" ? getFileExtension(file.name) : "";
+  const colorStyle = getColorLabelStyle(file.colorLabel);
 
   const isImage = file.type === "file" && (() => {
     const extLower = getFileExtension(file.name);
@@ -222,6 +334,20 @@ export function FileCard({ file }: FileCardProps) {
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {/* Color Label submenu */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Palette className="w-4 h-4" />
+              Color Label
+              {colorStyle && (
+                <span className={cn("w-3 h-3 rounded-full ml-auto", colorStyle.dot)} />
+              )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-[140px]">
+              <ColorLabelSubmenuItems file={file} queryClient={queryClient} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           {/* Share & Info group */}
           {file.type === "file" && (
             <DropdownMenuItem onClick={() => setShareFile({ id: file.id, name: file.name })}>
@@ -287,6 +413,20 @@ export function FileCard({ file }: FileCardProps) {
           <ContextMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          {/* Color Label submenu */}
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Palette className="w-4 h-4" />
+              Color Label
+              {colorStyle && (
+                <span className={cn("w-3 h-3 rounded-full ml-auto", colorStyle.dot)} />
+              )}
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-[140px]">
+              <ColorLabelContextMenuItems file={file} queryClient={queryClient} />
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuSeparator />
           {/* Share & Info group */}
           {file.type === "file" && (
@@ -396,11 +536,17 @@ export function FileCard({ file }: FileCardProps) {
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 dark:bg-emerald-500/10"
                 : isDragOver && file.type === "folder"
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02]"
-                : "border-border/50 bg-card hover:border-border hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:bg-accent/20"
+                : "border-border/50 bg-card hover:border-border hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:bg-accent/20",
+              colorStyle && !isSelected && !isDragOver && colorStyle.border
             )}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           >
+            {/* Color label indicator dot - top right corner */}
+            {colorStyle && (
+              <div className={cn("absolute top-2 right-2 z-20 w-2 h-2 rounded-full", colorStyle.dot)} />
+            )}
+
             {/* Selection indicator */}
             <motion.div
               layout
@@ -440,7 +586,8 @@ export function FileCard({ file }: FileCardProps) {
             <div
               className={cn(
                 "absolute top-2 right-2 z-10 transition-opacity",
-                isHovered || isSelected ? "opacity-100" : "opacity-0"
+                isHovered || isSelected ? "opacity-100" : "opacity-0",
+                colorStyle && "right-7"
               )}
               onClick={(e) => e.stopPropagation()}
             >
@@ -489,6 +636,9 @@ export function FileCard({ file }: FileCardProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex items-center justify-center gap-1.5 w-full sm:mt-1 mt-0 h-8">
+                    {colorStyle && (
+                      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorStyle.dot)} />
+                    )}
                     <p className={cn(
                       "font-medium text-center leading-tight line-clamp-2 min-w-0",
                       compactMode ? "text-[11px]" : "sm:text-sm text-xs"
@@ -512,17 +662,41 @@ export function FileCard({ file }: FileCardProps) {
                 </TooltipContent>
               </Tooltip>
 
+              {/* Separator line */}
+              {!compactMode && (
+                <div className="w-full border-b border-border/30" />
+              )}
               {/* Meta info */}
               {!compactMode && (
-                <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground text-center mt-auto">
-                  {file.type === "folder"
-                    ? `${file.childrenCount ?? 0} items`
-                    : `${formatFileSize(file.size)} · ${formatDate(file.updatedAt)}`}
-                </p>
+                <div className="w-full flex flex-col items-center gap-0.5 mt-auto">
+                  {file.type === "folder" ? (
+                    <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
+                      <Folder className="w-3 h-3" />
+                      {file.childrenCount ?? 0} items
+                    </p>
+                  ) : (
+                    <>
+                      <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
+                        <File className="w-3 h-3" />
+                        {formatFileSize(file.size)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/60">
+                        {formatDate(file.updatedAt)}
+                      </p>
+                    </>
+                  )}
+                </div>
               )}
               {compactMode && file.type === "file" && (
-                <p className="text-[10px] text-muted-foreground/70 text-center mt-auto">
+                <p className="text-[10px] text-muted-foreground/70 text-center mt-auto flex items-center gap-0.5">
+                  <File className="w-2.5 h-2.5" />
                   {formatFileSize(file.size)}
+                </p>
+              )}
+              {compactMode && file.type === "folder" && (
+                <p className="text-[10px] text-muted-foreground/70 text-center mt-auto flex items-center gap-0.5">
+                  <Folder className="w-2.5 h-2.5" />
+                  {file.childrenCount ?? 0}
                 </p>
               )}
             </CardContent>

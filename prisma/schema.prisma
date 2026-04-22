@@ -18,6 +18,7 @@ model FileItem {
   isStarred   Boolean  @default(false)
   isTrashed   Boolean  @default(false)
   description String?
+  colorLabel  String   @default("") // "red", "orange", "yellow", "green", "blue", "purple", "pink", "gray", or "" (none)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

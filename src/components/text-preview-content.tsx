@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getPreviewType, type FileItem, type PreviewType } from "@/lib/file-utils";
+import { useState, useEffect, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 function TextPreviewContent({ fileId }: { fileId: string }) {
@@ -30,6 +29,11 @@ function TextPreviewContent({ fileId }: { fileId: string }) {
     };
   }, [fileId]);
 
+  const lines = useMemo(() => {
+    if (!textContent) return [];
+    return textContent.split("\n");
+  }, [textContent]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 min-h-[200px]">
@@ -40,9 +44,23 @@ function TextPreviewContent({ fileId }: { fileId: string }) {
 
   return (
     <ScrollArea className="h-[70vh]">
-      <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words bg-muted/30 rounded-lg m-2">
-        {textContent}
-      </pre>
+      <div className="flex min-w-0 m-2 bg-muted/30 rounded-lg overflow-hidden">
+        {/* Line numbers */}
+        <div className="flex-shrink-0 py-4 px-2 text-right select-none border-r border-border/50 bg-muted/50">
+          {lines.map((_, index) => (
+            <div
+              key={index}
+              className="text-xs font-mono text-muted-foreground/50 leading-5 h-5"
+            >
+              {index + 1}
+            </div>
+          ))}
+        </div>
+        {/* Code content */}
+        <pre className="flex-1 p-4 text-sm font-mono whitespace-pre-wrap break-words min-w-0 overflow-x-auto">
+          {textContent}
+        </pre>
+      </div>
     </ScrollArea>
   );
 }

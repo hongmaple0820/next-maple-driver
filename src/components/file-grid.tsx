@@ -27,7 +27,7 @@ export function FileGrid() {
     currentFolderId, section, searchQuery, sortBy, sortDirection, typeFilter,
     selectedFileIds, selectAll, clearSelection, setCurrentFolderId, setRenameFile, setPreviewFile,
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard, setSearchResultCount,
-    compactMode, showExtensions, setBatchRenameOpen,
+    compactMode, showExtensions, setBatchRenameOpen, colorLabelFilter,
   } = useFileStore();
   const queryClient = useQueryClient();
   const [allFileIds, setAllFileIds] = useState<string[]>([]);
@@ -64,10 +64,14 @@ export function FileGrid() {
     },
   });
 
-  // Apply type filter first, then sort
-  const filteredFiles = typeFilter === "all"
+  // Apply type filter, then color label filter, then sort
+  const typeFilteredFiles = typeFilter === "all"
     ? files
     : files.filter((file) => matchesTypeFilter(file, typeFilter));
+
+  const filteredFiles = !colorLabelFilter
+    ? typeFilteredFiles
+    : typeFilteredFiles.filter((file) => file.colorLabel === colorLabelFilter || file.type === "folder");
 
   const sortedFiles = [...filteredFiles].sort((a, b) => {
     // Folders always first
@@ -95,7 +99,7 @@ export function FileGrid() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllFileIds(sortedFiles.map(f => f.id));
-  }, [files, typeFilter, sortBy, sortDirection]);
+  }, [files, typeFilter, colorLabelFilter, sortBy, sortDirection]);
 
   // Update search result count
   useEffect(() => {
@@ -319,12 +323,17 @@ export function FileGrid() {
               {isSearch ? (
                 <SearchX className="w-10 h-10 opacity-40" />
               ) : section === "trash" ? (
-                <Trash2 className="w-10 h-10 opacity-40" />
+                <div className="relative">
+                  <Trash2 className="w-10 h-10 opacity-40" />
+                  <svg className="absolute -bottom-0.5 -right-0.5 w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
               ) : section === "starred" ? (
                 <Star className="w-10 h-10 opacity-40" />
               ) : section === "recent" ? (
                 <Clock className="w-10 h-10 opacity-40" />
-              ) : typeFilter !== "all" ? (
+              ) : typeFilter !== "all" || colorLabelFilter ? (
                 <FolderOpen className="w-10 h-10 opacity-40" />
               ) : (
                 <FolderOpen className="w-10 h-10 opacity-40" />
@@ -333,7 +342,7 @@ export function FileGrid() {
             <p className="text-lg font-medium mb-1">
               {isSearch
                 ? "No results found"
-                : typeFilter !== "all"
+                : typeFilter !== "all" || colorLabelFilter
                 ? "No files match this filter"
                 : section === "trash"
                 ? "Trash is empty"
@@ -346,11 +355,13 @@ export function FileGrid() {
             <p className="text-sm max-w-xs text-center">
               {isSearch
                 ? "Try a different search term"
-                : typeFilter !== "all"
-                ? "Try selecting a different file type or 'All'"
+                : typeFilter !== "all" || colorLabelFilter
+                ? "Try selecting a different file type or color label"
+                : section === "trash"
+                ? "Deleted items will appear here"
                 : section === "files"
                 ? "Upload files or create a folder to get started"
-                : `Items you ${section === "starred" ? "star" : section === "trash" ? "delete" : "modify"} will appear here`}
+                : `Items you ${section === "starred" ? "star" : "modify"} will appear here`}
             </p>
           </motion.div>
         </ContextMenuTrigger>

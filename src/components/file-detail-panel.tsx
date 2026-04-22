@@ -1,20 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useFileStore } from "@/store/file-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin, StickyNote, Check, X as XIcon,
+  Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin, StickyNote, Check, X as XIcon, Palette,
 } from "lucide-react";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS } from "@/lib/file-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { BreadcrumbItem } from "@/lib/file-utils";
+import type { BreadcrumbItem, FileItem } from "@/lib/file-utils";
 import { FileVersionPanel } from "@/components/file-version-panel";
+import { cn } from "@/lib/utils";
 
 function InfoRow({ icon, label, value, delay = 0 }: { icon: React.ReactNode; label: string; value: string; delay?: number }) {
   return (
@@ -28,6 +29,106 @@ function InfoRow({ icon, label, value, delay = 0 }: { icon: React.ReactNode; lab
       <span className="text-sm text-muted-foreground w-20">{label}</span>
       <span className="text-sm font-medium">{value}</span>
     </motion.div>
+  );
+}
+
+// Color picker popover for detail panel
+function ColorLabelPicker({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const colorStyle = getColorLabelStyle(file.colorLabel);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const handleSetColor = useCallback(async (color: string) => {
+    try {
+      const newLabel = file.colorLabel === color ? "" : color;
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id, colorLabel: newLabel }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        setIsOpen(false);
+      } else {
+        toast.error("Failed to update color label");
+      }
+    } catch {
+      toast.error("Failed to update color label");
+    }
+  }, [file, queryClient]);
+
+  return (
+    <div className="relative" ref={pickerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 rounded-md hover:bg-muted/50 px-2 py-1 -mx-2 transition-colors"
+      >
+        {colorStyle ? (
+          <>
+            <span className={cn("w-4 h-4 rounded-full", colorStyle.dot)} />
+            <span className={cn("text-sm", colorStyle.text)}>{colorStyle.label}</span>
+          </>
+        ) : (
+          <>
+            <span className="w-4 h-4 rounded-full border-2 border-dashed border-muted-foreground/30" />
+            <span className="text-sm text-muted-foreground">None</span>
+          </>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 mt-1 z-50 bg-popover border rounded-lg shadow-lg p-2 w-[160px]"
+          >
+            <div className="grid grid-cols-4 gap-1.5">
+              {Object.entries(COLOR_LABELS).map(([key, style]) => (
+                <button
+                  key={key}
+                  onClick={() => handleSetColor(key)}
+                  className={cn(
+                    "w-7 h-7 rounded-full transition-all duration-150 hover:scale-110 flex items-center justify-center",
+                    style.dot,
+                    file.colorLabel === key && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                  )}
+                  title={style.label}
+                >
+                  {file.colorLabel === key && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+            {file.colorLabel && (
+              <button
+                onClick={() => handleSetColor(file.colorLabel!)}
+                className="w-full mt-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-2 rounded hover:bg-muted/50 transition-colors"
+              >
+                Remove Color
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -103,6 +204,7 @@ export function FileDetailPanel() {
   const isFolder = detailFile.type === "folder";
   const isImage = !isFolder && detailFile.mimeType?.startsWith("image/");
   const ext = getFileExtension(detailFile.name);
+  const colorStyle = getColorLabelStyle(detailFile.colorLabel);
 
   // Build location path string
   const locationPath = detailFile.parentId === "root"
@@ -157,6 +259,9 @@ export function FileDetailPanel() {
                     <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-5 font-mono">
                       .{ext}
                     </Badge>
+                  )}
+                  {colorStyle && (
+                    <span className={cn("w-3 h-3 rounded-full shrink-0", colorStyle.dot)} />
                   )}
                 </div>
               </SheetTitle>
@@ -262,6 +367,18 @@ export function FileDetailPanel() {
                     <span className="text-sm text-muted-foreground">Starred</span>
                   </motion.div>
                 )}
+
+                {/* Color Label row */}
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.21 }}
+                  className="flex items-center gap-2"
+                >
+                  <Palette className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground w-20">Color Label</span>
+                  <ColorLabelPicker file={detailFile} queryClient={queryClient} />
+                </motion.div>
               </div>
             </div>
 

@@ -1,17 +1,24 @@
 "use client";
 
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X } from "lucide-react";
-import { useFileStore, type SortField, type FileTypeFilter } from "@/store/file-store";
+import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette } from "lucide-react";
+import { useFileStore, type SortField, type FileTypeFilter, type ColorLabelFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MobileMenuButton } from "@/components/file-sidebar";
 import { uploadFilesWithProgress } from "@/lib/upload-utils";
+import { COLOR_LABELS } from "@/lib/file-utils";
 import type { StorageStats } from "@/lib/file-utils";
 import { ActivityPanel } from "@/components/activity-panel";
 import {
@@ -53,12 +60,16 @@ export function FileToolbar() {
     typeFilter,
     setTypeFilter,
     setShortcutsOpen,
+    colorLabelFilter,
+    setColorLabelFilter,
   } = useFileStore();
 
   const queryClient = useQueryClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchInputValue, setSearchInputValue] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Fetch storage stats (for trash count)
   const { data: stats } = useQuery<StorageStats>({
@@ -98,6 +109,20 @@ export function FileToolbar() {
     setSearchInputValue("");
     setSearchQuery("");
   }, [setSearchQuery]);
+
+  // "/" keyboard shortcut to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable) return;
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleUploadClick = () => {
     const input = document.createElement("input");
@@ -187,14 +212,23 @@ export function FileToolbar() {
         <div className="relative hidden sm:block w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
+            ref={searchInputRef}
             placeholder="Search files..."
             value={searchInputValue}
             className={cn(
               "pl-9 h-9 transition-all duration-200 focus:w-80",
-              "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50"
+              "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50",
+              !searchInputValue && !searchFocused && "pr-9"
             )}
             onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
+          {!searchInputValue && !searchFocused && (
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono text-muted-foreground pointer-events-none">
+              /
+            </kbd>
+          )}
           {searchInputValue && (
             <button
               onClick={handleClearSearch}
@@ -328,6 +362,47 @@ export function FileToolbar() {
 
         {/* Sort controls */}
         <div className="flex items-center gap-1.5">
+          {/* Color label filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-8 gap-1.5 text-xs transition-all duration-200",
+                  colorLabelFilter
+                    ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5"
+                    : "hover:border-emerald-500/30 hover:bg-accent/50"
+                )}
+              >
+                <Palette className="w-3.5 h-3.5" />
+                {colorLabelFilter ? (
+                  <span className={cn("w-2.5 h-2.5 rounded-full", COLOR_LABELS[colorLabelFilter]?.dot)} />
+                ) : (
+                  <span className="hidden sm:inline">Color</span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuItem
+                onClick={() => setColorLabelFilter("" as ColorLabelFilter)}
+                className={cn(!colorLabelFilter && "font-semibold")}
+              >
+                All Colors
+              </DropdownMenuItem>
+              {Object.entries(COLOR_LABELS).map(([key, style]) => (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => setColorLabelFilter(key as ColorLabelFilter)}
+                  className={cn("flex items-center gap-2", colorLabelFilter === key && "font-semibold")}
+                >
+                  <span className={cn("w-3 h-3 rounded-full", style.dot)} />
+                  {style.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Select
             value={sortBy}
             onValueChange={(val) => {
@@ -432,6 +507,24 @@ export function FileToolbar() {
               </button>
             );
           })}
+
+          {/* Active color label filter indicator in tab bar */}
+          {colorLabelFilter && (
+            <>
+              <div className="w-px h-4 bg-border/50 mx-1" />
+              <button
+                onClick={() => setColorLabelFilter("" as ColorLabelFilter)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap",
+                  "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                )}
+              >
+                <span className={cn("w-2.5 h-2.5 rounded-full", COLOR_LABELS[colorLabelFilter]?.dot)} />
+                {COLOR_LABELS[colorLabelFilter]?.label}
+                <X className="w-3 h-3 ml-0.5" />
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

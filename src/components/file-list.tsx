@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -21,6 +21,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -34,10 +37,114 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+// Color label dropdown submenu items
+function ColorLabelDropdownItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
+  const handleSetColor = useCallback(async (color: string) => {
+    try {
+      const newLabel = file.colorLabel === color ? "" : color;
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id, colorLabel: newLabel }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+      }
+    } catch {
+      toast.error("Failed to update color label");
+    }
+  }, [file, queryClient]);
+
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-1 p-1">
+        {Object.entries(COLOR_LABELS).map(([key, style]) => (
+          <button
+            key={key}
+            onClick={() => handleSetColor(key)}
+            className={cn(
+              "w-6 h-6 rounded-full transition-all duration-150 hover:scale-110 flex items-center justify-center",
+              style.dot,
+              file.colorLabel === key && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+            )}
+            title={style.label}
+          >
+            {file.colorLabel === key && (
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        ))}
+      </div>
+      {file.colorLabel && (
+        <DropdownMenuItem
+          className="text-xs text-muted-foreground"
+          onClick={() => handleSetColor(file.colorLabel!)}
+        >
+          Remove Color
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
+// Color label context submenu items
+function ColorLabelContextItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
+  const handleSetColor = useCallback(async (color: string) => {
+    try {
+      const newLabel = file.colorLabel === color ? "" : color;
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: file.id, colorLabel: newLabel }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+      }
+    } catch {
+      toast.error("Failed to update color label");
+    }
+  }, [file, queryClient]);
+
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-1 p-1">
+        {Object.entries(COLOR_LABELS).map(([key, style]) => (
+          <button
+            key={key}
+            onClick={() => handleSetColor(key)}
+            className={cn(
+              "w-6 h-6 rounded-full transition-all duration-150 hover:scale-110 flex items-center justify-center",
+              style.dot,
+              file.colorLabel === key && "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+            )}
+            title={style.label}
+          >
+            {file.colorLabel === key && (
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        ))}
+      </div>
+      {file.colorLabel && (
+        <ContextMenuItem
+          className="text-xs text-muted-foreground"
+          onClick={() => handleSetColor(file.colorLabel!)}
+        >
+          Remove Color
+        </ContextMenuItem>
+      )}
+    </>
+  );
+}
 
 export function FileList() {
   const {
@@ -46,6 +153,7 @@ export function FileList() {
     setShareFile, setPreviewFile, sortBy, sortDirection, toggleSort, typeFilter,
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard,
     setPropertiesFile, setSearchResultCount, compactMode, showExtensions, setBatchRenameOpen,
+    colorLabelFilter,
   } = useFileStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,12 +193,16 @@ export function FileList() {
     },
   });
 
-  // Apply type filter first, then sort
+  // Apply type filter, then color label filter, then sort
   const filteredFiles = typeFilter === "all"
     ? files
     : files.filter((file) => matchesTypeFilter(file, typeFilter));
 
-  const sortedFiles = [...filteredFiles].sort((a, b) => {
+  const colorFilteredFiles = !colorLabelFilter
+    ? filteredFiles
+    : filteredFiles.filter((file) => file.colorLabel === colorLabelFilter || file.type === "folder");
+
+  const sortedFiles = [...colorFilteredFiles].sort((a, b) => {
     // Folders first
     if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
 
@@ -116,7 +228,7 @@ export function FileList() {
     }
   }, [searchQuery, sortedFiles.length, setSearchResultCount]);
 
-  const allSelected = filteredFiles.length > 0 && filteredFiles.every((f) => selectedFileIds.has(f.id));
+  const allSelected = colorFilteredFiles.length > 0 && colorFilteredFiles.every((f) => selectedFileIds.has(f.id));
 
   const handleStar = useCallback(async (file: FileItem) => {
     try {
@@ -313,6 +425,7 @@ export function FileList() {
   }, [queryClient]);
 
   const getActionItems = (file: FileItem) => {
+    const colorStyle = getColorLabelStyle(file.colorLabel);
     if (section !== "trash") {
       return (
         <>
@@ -337,6 +450,20 @@ export function FileList() {
           <DropdownMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* Color Label submenu */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Palette className="w-4 h-4" />
+              Color Label
+              {colorStyle && (
+                <span className={cn("w-3 h-3 rounded-full ml-auto", colorStyle.dot)} />
+              )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-[140px]">
+              <ColorLabelDropdownItems file={file} queryClient={queryClient} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           {/* Share & Info group */}
           {file.type === "file" && (
@@ -369,6 +496,7 @@ export function FileList() {
   };
 
   const getContextItems = (file: FileItem) => {
+    const colorStyle = getColorLabelStyle(file.colorLabel);
     if (section !== "trash") {
       return (
         <>
@@ -398,6 +526,20 @@ export function FileList() {
           <ContextMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          {/* Color Label submenu */}
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Palette className="w-4 h-4" />
+              Color Label
+              {colorStyle && (
+                <span className={cn("w-3 h-3 rounded-full ml-auto", colorStyle.dot)} />
+              )}
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-[140px]">
+              <ColorLabelContextItems file={file} queryClient={queryClient} />
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuSeparator />
           {/* Share & Info group */}
           {file.type === "file" && (
@@ -520,12 +662,17 @@ export function FileList() {
               {isSearch ? (
                 <SearchX className="w-10 h-10 opacity-40" />
               ) : section === "trash" ? (
-                <Trash2 className="w-10 h-10 opacity-40" />
+                <div className="relative">
+                  <Trash2 className="w-10 h-10 opacity-40" />
+                  <svg className="absolute -bottom-0.5 -right-0.5 w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
               ) : section === "starred" ? (
                 <Star className="w-10 h-10 opacity-40" />
               ) : section === "recent" ? (
                 <Clock className="w-10 h-10 opacity-40" />
-              ) : typeFilter !== "all" ? (
+              ) : typeFilter !== "all" || colorLabelFilter ? (
                 <FolderOpen className="w-10 h-10 opacity-40" />
               ) : (
                 <FolderOpen className="w-10 h-10 opacity-40" />
@@ -534,7 +681,7 @@ export function FileList() {
             <p className="text-lg font-medium mb-1">
               {isSearch
                 ? "No results found"
-                : typeFilter !== "all"
+                : typeFilter !== "all" || colorLabelFilter
                 ? "No files match this filter"
                 : section === "trash"
                 ? "Trash is empty"
@@ -547,11 +694,13 @@ export function FileList() {
             <p className="text-sm max-w-xs text-center">
               {isSearch
                 ? "Try a different search term"
-                : typeFilter !== "all"
-                ? "Try selecting a different file type or 'All'"
+                : typeFilter !== "all" || colorLabelFilter
+                ? "Try selecting a different file type or color label"
+                : section === "trash"
+                ? "Deleted items will appear here"
                 : section === "files"
                 ? "Upload files or create a folder to get started"
-                : `Items you ${section === "starred" ? "star" : section === "trash" ? "delete" : "modify"} will appear here`}
+                : `Items you ${section === "starred" ? "star" : "modify"} will appear here`}
             </p>
           </motion.div>
         </ContextMenuTrigger>
@@ -572,7 +721,7 @@ export function FileList() {
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={(checked) => {
-                      if (checked) selectAll(filteredFiles.map((f) => f.id));
+                      if (checked) selectAll(colorFilteredFiles.map((f) => f.id));
                       else clearSelection();
                     }}
                   />
@@ -605,6 +754,7 @@ export function FileList() {
                 const isSelected = selectedFileIds.has(file.id);
                 const isDragging = draggingId === file.id;
                 const isDragOver = dragOverId === file.id && file.type === "folder";
+                const colorStyle = getColorLabelStyle(file.colorLabel);
 
                 return (
                   <ContextMenu key={file.id}>
@@ -617,14 +767,15 @@ export function FileList() {
                         onDragLeave={handleRowDragLeave}
                         onDrop={(e) => handleRowDrop(e, file)}
                         className={cn(
-                          "cursor-pointer transition-colors duration-150",
+                          "group/row cursor-pointer transition-all duration-150 border-t border-border/30",
                           isDragging && "opacity-50",
                           isDragOver
                             ? "border-l-[3px] border-l-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/15"
                             : isSelected
                             ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-[3px] border-l-emerald-500"
-                            : "border-l-[3px] border-l-transparent hover:bg-muted/50",
-                          index % 2 === 1 && !isSelected && !isDragOver && "bg-muted/20 hover:bg-muted/40"
+                            : colorStyle
+                            ? cn("border-l-[3px] hover:bg-muted/50 hover:border-l-emerald-500/60", colorStyle.border)
+                            : "border-l-[3px] border-l-transparent hover:bg-muted/50 hover:border-l-emerald-500/60"
                         )}
                         onClick={() => handleRowClick(file)}
                         onDoubleClick={() => handleRowDoubleClick(file)}
@@ -636,8 +787,11 @@ export function FileList() {
                             onClick={(e) => e.stopPropagation()}
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="min-w-[240px]">
                           <div className="flex items-center gap-2 min-w-0">
+                            {colorStyle && (
+                              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorStyle.dot)} />
+                            )}
                             <FileTypeIcon file={file} className={cn("shrink-0", compactMode ? "w-4 h-4" : "w-5 h-5")} />
                             <span className={cn("truncate font-medium", compactMode ? "text-xs" : "text-sm")}>
                               {showExtensions && file.type === "file" && getFileExtension(file.name) ? getFileNameWithoutExtension(file.name) : file.name}
@@ -665,8 +819,10 @@ export function FileList() {
                         <TableCell className={cn("hidden lg:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
                           {formatDate(file.updatedAt)}
                         </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
+                        <TableCell className="w-12">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/0 group-hover/row:text-muted-foreground/50 transition-colors duration-150" />
+                            <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                               <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <MoreVerticalIcon className="w-4 h-4" />
@@ -676,6 +832,7 @@ export function FileList() {
                               {getActionItems(file)}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     </ContextMenuTrigger>

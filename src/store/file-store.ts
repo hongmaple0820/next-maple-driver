@@ -6,6 +6,7 @@ export type Section = "files" | "starred" | "trash" | "recent";
 export type SortField = "name" | "updatedAt" | "size" | "type";
 export type SortDirection = "asc" | "desc";
 export type FileTypeFilter = "all" | "images" | "videos" | "audio" | "documents" | "code" | "archives";
+export type ColorLabelFilter = "" | "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink" | "gray";
 
 export interface UploadProgress {
   id: string;
@@ -50,6 +51,10 @@ interface FileStore {
   // Type filter
   typeFilter: FileTypeFilter;
   setTypeFilter: (filter: FileTypeFilter) => void;
+
+  // Color label filter
+  colorLabelFilter: ColorLabelFilter;
+  setColorLabelFilter: (filter: ColorLabelFilter) => void;
 
   // Selection
   selectedFileIds: Set<string>;
@@ -130,7 +135,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all", searchResultCount: 0 }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0 }),
 
   // View mode
   viewMode: "grid",
@@ -153,8 +158,12 @@ export const useFileStore = create<FileStore>((set) => ({
   })),
 
   // Type filter
-  typeFilter: "all",
+  typeFilter: "all" as FileTypeFilter,
   setTypeFilter: (filter) => set({ typeFilter: filter }),
+
+  // Color label filter
+  colorLabelFilter: "" as ColorLabelFilter,
+  setColorLabelFilter: (filter) => set({ colorLabelFilter: filter }),
 
   // Selection
   selectedFileIds: new Set<string>(),

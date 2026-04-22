@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       starred: file.isStarred,
       trashed: file.isTrashed,
       description: file.description,
+      colorLabel: file.colorLabel || "",
       createdAt: file.createdAt.toISOString(),
       updatedAt: file.updatedAt.toISOString(),
       childrenCount: file._count.children,
@@ -186,7 +187,7 @@ export async function PUT(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, description } = body;
+    const { id, description, colorLabel } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -203,6 +204,9 @@ export async function PATCH(request: NextRequest) {
     const data: Record<string, unknown> = {};
     if (description !== undefined) {
       data.description = description;
+    }
+    if (colorLabel !== undefined) {
+      data.colorLabel = colorLabel;
     }
 
     if (Object.keys(data).length === 0) {
@@ -227,6 +231,7 @@ export async function PATCH(request: NextRequest) {
       starred: updated.isStarred,
       trashed: updated.isTrashed,
       description: updated.description,
+      colorLabel: updated.colorLabel || "",
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     });

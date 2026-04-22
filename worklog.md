@@ -1465,3 +1465,201 @@ Stage Summary:
 - Add file size upload limit indicator
 - Add video thumbnail generation
 - Improve mobile responsive layout further
+
+---
+Task ID: 11-pdf-viewer-upload-limit
+Agent: PDF Viewer & Upload Limit Agent
+Task: Add PDF viewer and upload size limit indicator
+
+Work Log:
+- Enhanced PDF viewer in file-preview.tsx: added border-none styling to iframe, added fallback content inside iframe for browsers that don't support embedded PDF viewing (shows file icon, message, and download button)
+- Enhanced text-preview-content.tsx: added line numbers column with proper styling (muted text, right-aligned, select-none), improved monospace formatting with whitespace-pre-wrap and break-words
+- Added upload size limit constants to upload-utils.ts: MAX_FILE_SIZE (100MB) and MAX_TOTAL_STORAGE (10GB)
+- Added validateFileSize() function that checks file size against MAX_FILE_SIZE and returns validation result with error message
+- Integrated size validation into uploadFileWithProgress() — validates before starting upload, shows error toast if file exceeds 100MB limit
+- Integrated size validation into uploadFilesWithProgress() — pre-validates all files, filters out oversized ones with error toasts, then uploads valid files
+- Added "Max 100MB" hint text next to Upload button in file-toolbar.tsx (hidden on mobile via hidden sm:inline)
+- Added remaining storage indicator in upload-zone.tsx: shows "X GB available · Max 100.0 MB per file" at bottom of the drop zone
+- Added storage info in drag overlay: shows "Max 100.0 MB per file · X GB available" when dragging files
+- Removed unused Upload import from upload-zone.tsx
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- PDF viewer now has proper iframe styling (border-none) and browser fallback with download button
+- Text preview enhanced with line numbers for better code/document readability
+- Upload file size validation fully implemented: 100MB per file limit enforced across all upload paths
+- Upload limit hint visible in toolbar next to Upload button
+- Remaining storage displayed in upload zone footer
+- 5 files modified (file-preview.tsx, text-preview-content.tsx, upload-utils.ts, file-toolbar.tsx, upload-zone.tsx)
+- Lint clean, no errors
+
+---
+Task ID: 11-color-labels
+Agent: Color Labels Agent
+Task: Add file color labels/tags feature
+
+Work Log:
+- Updated Prisma schema: added `colorLabel` String field to FileItem model with default "" (empty string = no label)
+- Valid color values: "red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"
+- Ran `bun run db:push` to sync schema with database
+- Updated GET /api/files response mapping: added `colorLabel: file.colorLabel || ""`
+- Updated PATCH /api/files: now accepts `{ id, description?, colorLabel? }` body and updates colorLabel field
+- Added `colorLabel?: string` to FileItem interface in file-utils.ts
+- Added `COLOR_LABELS` constant with color name → { bg, text, border, dot, label } mappings for 8 colors
+- Added `getColorLabelStyle(colorLabel)` helper function
+- Added `ColorLabelFilter` type and `colorLabelFilter`/`setColorLabelFilter` state to file-store.ts
+- Updated `setSection` to reset `colorLabelFilter` on section change
+- Updated file-card.tsx:
+  - Added small 8x8px colored dot indicator in top-right corner when file has a colorLabel
+  - Added colored left border on card when color label is set (using border class from COLOR_LABELS)
+  - Moved action menu button right when color dot is present (right-7 instead of right-2)
+  - Added small colored dot before filename in card
+  - Added "Color Label" submenu in dropdown menu (DropdownMenuSub with 4x2 grid of color dots)
+  - Added "Color Label" submenu in context menu (ContextMenuSub with same grid)
+  - Color picker shows checkmark on active color, "Remove Color" option when label is set
+  - Clicking a color calls PATCH /api/files with { id, colorLabel }
+- Updated file-list.tsx:
+  - Added small 1.5x1.5px colored dot before filename when file has a colorLabel
+  - Added colored left border on rows with color labels (using border class from COLOR_LABELS)
+  - Added "Color Label" submenu in both dropdown and context menus
+  - Applied colorLabelFilter in filter pipeline (type filter → color filter → sort)
+  - Updated empty state message for color filter
+- Updated file-detail-panel.tsx:
+  - Added "Color Label" row in Details section showing current color with dot + label
+  - Clicking the color area opens a small color picker dropdown (4x2 grid with checkmark on active)
+  - "Remove Color" button when label is set
+  - Color dot also appears next to filename in panel header
+  - Uses PATCH /api/files to update colorLabel
+- Updated file-toolbar.tsx:
+  - Added "Color" filter button (Palette icon) in sort controls area
+  - Dropdown shows "All Colors" + 8 color options with colored dots
+  - Active filter shows emerald styling with current color dot
+  - When color filter is active, shows dismissible tag in filter tab bar
+- Updated file-grid.tsx:
+  - Added colorLabelFilter to store destructuring
+  - Applied color label filtering in pipeline (type filter → color filter → sort)
+  - Updated empty state messages for color filter
+  - Folders always pass through color filter (same as type filter)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- File color labels/tags feature fully implemented across all views
+- Backend: colorLabel field added to DB schema and API endpoints
+- Frontend: color indicators in grid cards, list rows, detail panel
+- Color label submenus in dropdown and context menus
+- Color filter in toolbar with visual feedback
+- 8 colors supported: Red, Orange, Yellow, Green, Blue, Purple, Pink, Gray
+- 8 files modified: prisma/schema.prisma, api/files/route.ts, file-utils.ts, file-store.ts, file-card.tsx, file-list.tsx, file-detail-panel.tsx, file-toolbar.tsx, file-grid.tsx
+- Lint clean, no errors
+
+
+---
+Task ID: 11-ui-polish
+Agent: UI Polish Agent
+Task: Add more UI style details and polish
+
+Work Log:
+- Polish 1: Added Quick Stats section in file-sidebar.tsx between Navigation and User Profile
+  - Shows "X files · Y folders" as a single line in muted text using text-[11px] text-muted-foreground/70
+  - Added border-t border-sidebar-border/40 divider above the stats
+  - Fetches counts from the existing /api/files/stats endpoint (stats?.totalFiles and stats?.totalFolders)
+- Polish 2: Improved File Card meta area in file-card.tsx
+  - For folders: Shows "X items" with a small Folder icon (w-3 h-3) before it
+  - For files: Shows size with a small File icon (w-3 h-3) before it, and date below in smaller text (text-[10px] text-muted-foreground/60)
+  - Added subtle separator line (border-b border-border/30) between the filename area and meta area
+  - Added compact mode folder meta showing icon + count
+- Polish 3: Better List View row styling in file-list.tsx
+  - Added hover effect with subtle left border highlight (2px emerald on hover via hover:border-l-emerald-500/60)
+  - On hover, shows a subtle ChevronRight icon on the right side of the row (opacity 0 → 0.5 transition)
+  - Made the Name column wider with min-w-[240px]
+  - Added subtle top border between rows (border-t border-border/30) instead of alternating backgrounds
+  - Added group/row class for hover targeting
+- Polish 4: Toolbar Search Enhancement in file-toolbar.tsx
+  - Added "/" keyboard shortcut hint inside the search input as a kbd pill: text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono
+  - When user presses "/" anywhere on the page (not in an input), focus the search input
+  - The "/" key hint is hidden when the search input is focused or has a value
+  - Added searchFocused state and searchInputRef for focus management
+- Polish 5: Better Empty Trash View in file-grid.tsx and file-list.tsx
+  - Trash empty icon now has a subtle green checkmark overlay (emerald-500 SVG check icon)
+  - Updated subtitle text to "Deleted items will appear here" for a more encouraging tone
+- Polish 6: Sidebar Navigation Item Active State Enhancement in file-sidebar.tsx
+  - For active item: Added shadow-sm shadow-emerald-500/10 for a subtle "lift" effect
+  - For hover on non-active items: Changed to hover:bg-sidebar-accent/80 for smoother transition
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- 6 polish items implemented across 4 files
+- Sidebar: Quick Stats section, active nav item shadow/lift effect, smoother hover transitions
+- File Card: structured meta area with icons, separator line, date below size
+- List View: hover left border highlight, chevron-right indicator, wider name column, top border rows
+- Search: "/" keyboard shortcut with kbd hint pill, auto-focus
+- Empty Trash: green checkmark overlay on icon, encouraging subtitle
+- Lint clean, no errors
+
+---
+Task ID: 11-cron-review-round8
+Agent: Main Agent
+Task: QA testing, add color labels, PDF viewer, upload limit, UI polish
+
+Work Log:
+- QA Round 8: Verified dev server running, API endpoints responding correctly
+  - /api/files/stats: ✅ Returns correct stats (3 files, 7 folders, 106 bytes)
+  - /api/files?parentId=root: ✅ Returns file listing
+  - Lint check: ✅ Clean, no errors
+- Feature 1: File Color Labels/Tags (subagent)
+  - Added colorLabel String field to FileItem Prisma model (default "")
+  - Updated GET/PATCH /api/files to support colorLabel
+  - Added COLOR_LABELS constant with 8 colors (red, orange, yellow, green, blue, purple, pink, gray)
+  - Added getColorLabelStyle() utility in file-utils.ts
+  - Color dot indicator on file cards (top-right corner, 8x8px)
+  - Color left border on cards and list rows when label is set
+  - Color label submenu in dropdown and context menus
+  - Color picker in file detail panel
+  - Color filter in toolbar (Palette icon button with dropdown)
+  - ColorLabelFilter type and colorLabelFilter state in file store
+- Feature 2: PDF Viewer Enhancement (subagent)
+  - Enhanced PDF iframe in file-preview.tsx with border-none styling
+  - Added fallback message for browsers without PDF support
+  - Enhanced text preview with line numbers column
+- Feature 3: Upload File Size Limit (subagent)
+  - Added MAX_FILE_SIZE (100MB) and MAX_TOTAL_STORAGE (10GB) constants
+  - Added validateFileSize() function in upload-utils.ts
+  - Size validation integrated into upload flows with toast errors
+  - "Max 100MB" hint text next to Upload button
+  - Storage availability indicator in upload zone
+- Feature 4: UI Polish (subagent)
+  - Sidebar Quick Stats: "X files · Y folders" below nav section
+  - File Card meta area: icons before folder/file meta, separator line
+  - List view: emerald left border on hover, chevron-right indicator, wider name column
+  - Toolbar search: "/" keyboard shortcut to focus, kbd pill hint
+  - Better empty trash view: green checkmark overlay, encouraging subtitle
+  - Sidebar active nav: shadow-sm shadow-emerald-500/10 lift effect
+
+Stage Summary:
+- 4 major features added: color labels, PDF viewer, upload limits, UI polish
+- Color labels support 8 colors with filtering capability
+- PDF viewer works with iframe embedding and fallback
+- Upload validation prevents files > 100MB
+- Multiple UI polish items for better visual hierarchy
+- Lint clean, dev server running, all APIs responding
+
+## Current Project State
+- Fully functional cloud storage application
+- 60+ features including color labels, PDF viewer, upload limits, file versioning, batch operations, etc.
+- 25+ API endpoints
+- 40+ frontend components
+- Responsive design with mobile support
+- Both light and dark modes
+- Lint clean, no errors
+
+## Known Issues / Risks
+- Minor: Dev server occasionally crashes and needs restart
+- Minor: agent-browser can't directly access port 3000 (needs Caddy proxy)
+
+## Recommended Next Steps
+- Add undo/redo operations with Ctrl+Z/Ctrl+Shift+Z
+- Add video thumbnail generation
+- Add file/folder size quota per user
+- Add notification system for share link accesses
+- Improve mobile responsive layout further
+- Add breadcrumb navigation keyboard navigation

@@ -26,6 +26,25 @@ export interface FileItem {
   url?: string;
   childrenCount?: number;
   description?: string;
+  colorLabel?: string;
+}
+
+// Color label definitions
+export const COLOR_LABELS: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
+  red: { bg: "bg-red-500/10", text: "text-red-600 dark:text-red-400", border: "border-red-500/30", dot: "bg-red-500", label: "Red" },
+  orange: { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/30", dot: "bg-orange-500", label: "Orange" },
+  yellow: { bg: "bg-yellow-500/10", text: "text-yellow-600 dark:text-yellow-400", border: "border-yellow-500/30", dot: "bg-yellow-500", label: "Yellow" },
+  green: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-500/30", dot: "bg-emerald-500", label: "Green" },
+  blue: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-500/30", dot: "bg-blue-500", label: "Blue" },
+  purple: { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", border: "border-purple-500/30", dot: "bg-purple-500", label: "Purple" },
+  pink: { bg: "bg-pink-500/10", text: "text-pink-600 dark:text-pink-400", border: "border-pink-500/30", dot: "bg-pink-500", label: "Pink" },
+  gray: { bg: "bg-gray-500/10", text: "text-gray-600 dark:text-gray-400", border: "border-gray-500/30", dot: "bg-gray-500", label: "Gray" },
+};
+
+// Get color label style helper
+export function getColorLabelStyle(colorLabel?: string) {
+  if (!colorLabel || !COLOR_LABELS[colorLabel]) return null;
+  return COLOR_LABELS[colorLabel];
 }
 
 export interface BreadcrumbItem {

@@ -98,8 +98,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 className={cn(
                   "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5"
+                    ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground hover:translate-x-0.5"
                 )}
               >
                 {/* Active indicator bar */}
@@ -131,6 +131,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             );
           })}
         </nav>
+        {/* Quick Stats */}
+        <div className="px-5 py-2 border-t border-sidebar-border/40">
+          <p className="text-[11px] text-muted-foreground/70">
+            {stats?.totalFiles ?? 0} files · {stats?.totalFolders ?? 0} folders
+          </p>
+        </div>
       </ScrollArea>
 
       {/* User Profile Area */}
