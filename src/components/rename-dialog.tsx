@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil } from "lucide-react";
+import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 
 export function RenameDialog() {
   const { renameFile, setRenameFile, addActivity } = useFileStore();
@@ -30,17 +31,31 @@ export function RenameDialog() {
 
   const handleRename = async () => {
     if (!renameFile || !name.trim() || name.trim() === renameFile.name) return;
+    const oldName = renameFile.name;
+    const newName = name.trim();
     setLoading(true);
     try {
       const res = await fetch("/api/files", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: renameFile.id, name: name.trim() }),
+        body: JSON.stringify({ id: renameFile.id, name: newName }),
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
-        addActivity({ action: "rename", fileName: name.trim() });
+        addActivity({ action: "rename", fileName: newName });
         setRenameFile(null);
+        showUndoToast(
+          `Renamed to "${newName}"`,
+          async () => {
+            const undoRes = await fetch("/api/files", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: renameFile.id, name: oldName }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Reverted name to "${oldName}"` },
+        );
       }
     } catch {
       // Error handled silently

@@ -34,9 +34,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 
 interface FileCardProps {
   file: FileItem;
@@ -45,8 +46,9 @@ interface FileCardProps {
 // Color label submenu items for reuse
 function ColorLabelSubmenuItems({ file, queryClient, onColorSelect }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient>; onColorSelect?: (color: string) => void }) {
   const handleSetColor = useCallback(async (color: string) => {
+    const oldLabel = file.colorLabel ?? "";
+    const newLabel = file.colorLabel === color ? "" : color;
     try {
-      const newLabel = file.colorLabel === color ? "" : color;
       const res = await fetch("/api/files", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -55,6 +57,18 @@ function ColorLabelSubmenuItems({ file, queryClient, onColorSelect }: { file: Fi
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         onColorSelect?.(newLabel);
+        showUndoToast(
+          `Changed color of "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, colorLabel: oldLabel }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Reverted color of "${file.name}"` },
+        );
       }
     } catch {
       toast.error("Failed to update color label");
@@ -98,8 +112,9 @@ function ColorLabelSubmenuItems({ file, queryClient, onColorSelect }: { file: Fi
 // Context menu color label items
 function ColorLabelContextMenuItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
   const handleSetColor = useCallback(async (color: string) => {
+    const oldLabel = file.colorLabel ?? "";
+    const newLabel = file.colorLabel === color ? "" : color;
     try {
-      const newLabel = file.colorLabel === color ? "" : color;
       const res = await fetch("/api/files", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -107,6 +122,18 @@ function ColorLabelContextMenuItems({ file, queryClient }: { file: FileItem; que
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        showUndoToast(
+          `Changed color of "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, colorLabel: oldLabel }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Reverted color of "${file.name}"` },
+        );
       }
     } catch {
       toast.error("Failed to update color label");
@@ -170,6 +197,7 @@ export function FileCard({ file }: FileCardProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const isSelected = selectedFileIds.has(file.id);
+
   const ext = file.type === "file" ? getFileExtension(file.name) : "";
   const colorStyle = getColorLabelStyle(file.colorLabel);
 
@@ -201,15 +229,28 @@ export function FileCard({ file }: FileCardProps) {
   }, [file, setCurrentFolderId, setPreviewFile]);
 
   const handleStar = useCallback(async () => {
+    const wasStarred = file.starred;
     try {
       const res = await fetch("/api/files/star", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: file.id, starred: !file.starred }),
+        body: JSON.stringify({ id: file.id, starred: !wasStarred }),
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         addActivity({ action: "star", fileName: file.name });
+        showUndoToast(
+          wasStarred ? `Unstarred "${file.name}"` : `Starred "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files/star", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, starred: wasStarred }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: wasStarred ? `Re-starred "${file.name}"` : `Unstarred "${file.name}"` },
+        );
       }
     } catch {
       // Error handled silently
@@ -217,16 +258,32 @@ export function FileCard({ file }: FileCardProps) {
   }, [file, queryClient, addActivity]);
 
   const handleDelete = useCallback(async () => {
+    const isPermanent = section === "trash";
     try {
       const res = await fetch("/api/files", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: file.id, permanent: section === "trash" }),
+        body: JSON.stringify({ id: file.id, permanent: isPermanent }),
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
         addActivity({ action: "delete", fileName: file.name });
+        // Show undo toast only for move-to-trash (not permanent delete)
+        if (!isPermanent) {
+          showUndoToast(
+            `Moved "${file.name}" to trash`,
+            async () => {
+              const undoRes = await fetch("/api/files/restore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: file.id }),
+              });
+              if (undoRes.ok) invalidateAfterUndo(queryClient);
+            },
+            { onSuccess: `Restored "${file.name}"` },
+          );
+        }
       }
     } catch {
       // Error handled silently
@@ -518,7 +575,7 @@ export function FileCard({ file }: FileCardProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          whileHover={{ y: -2, scale: 1.02 }}
+          whileHover={{ scale: 1.02 }}
           layout
           onHoverStart={() => setIsHovered(true)}
           onHoverEnd={() => setIsHovered(false)}
@@ -531,12 +588,13 @@ export function FileCard({ file }: FileCardProps) {
         >
           <Card
             className={cn(
-              "group relative cursor-pointer transition-all duration-200 border overflow-hidden",
+              "group relative cursor-pointer transition-all duration-300 border overflow-hidden hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2",
+              "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-emerald-500/0 hover:after:bg-emerald-500/40 after:transition-colors after:duration-300",
               isSelected
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 dark:bg-emerald-500/10"
                 : isDragOver && file.type === "folder"
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02]"
-                : "border-border/50 bg-card hover:border-border hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:bg-accent/20",
+                : "border-border/50 bg-card hover:border-border hover:bg-accent/20",
               colorStyle && !isSelected && !isDragOver && colorStyle.border
             )}
             onClick={handleClick}
@@ -558,7 +616,9 @@ export function FileCard({ file }: FileCardProps) {
                   animate={{ scale: 1 }}
                   exit={{ scale: 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                  className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center"
+                  className={cn(
+                    "w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center animate-pulse-once"
+                  )}
                 >
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -668,12 +728,15 @@ export function FileCard({ file }: FileCardProps) {
               )}
               {/* Meta info */}
               {!compactMode && (
-                <div className="w-full flex flex-col items-center gap-0.5 mt-auto">
+                <div className="w-full flex flex-col items-center gap-0.5 mt-auto relative">
                   {file.type === "folder" ? (
-                    <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
-                      <Folder className="w-3 h-3" />
-                      {file.childrenCount ?? 0} items
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
+                        <Folder className="w-3 h-3" />
+                        {file.childrenCount ?? 0} items
+                      </p>
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-1">Open</span>
+                    </div>
                   ) : (
                     <>
                       <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
@@ -681,7 +744,7 @@ export function FileCard({ file }: FileCardProps) {
                         {formatFileSize(file.size)}
                       </p>
                       <p className="text-[10px] text-muted-foreground/60">
-                        {formatDate(file.updatedAt)}
+                        {formatRelativeTime(file.updatedAt)}
                       </p>
                     </>
                   )}

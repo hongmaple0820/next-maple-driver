@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, LayoutGrid, List, Upload, FolderPlus, ChevronRight, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette } from "lucide-react";
+import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter, type ColorLabelFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,11 @@ import { uploadFilesWithProgress } from "@/lib/upload-utils";
 import { COLOR_LABELS } from "@/lib/file-utils";
 import type { StorageStats } from "@/lib/file-utils";
 import { ActivityPanel } from "@/components/activity-panel";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -62,7 +67,14 @@ export function FileToolbar() {
     setShortcutsOpen,
     colorLabelFilter,
     setColorLabelFilter,
+    navigateBack,
+    navigateForward,
+    historyIndex,
+    navigationHistory,
   } = useFileStore();
+
+  const canGoBack = historyIndex > 0;
+  const canGoForward = historyIndex < navigationHistory.length - 1;
 
   const queryClient = useQueryClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -146,10 +158,62 @@ export function FileToolbar() {
   const isSearchActive = searchQuery.trim().length > 0;
 
   return (
-    <div className="border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="border-b border-border/60 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50 sticky top-0 z-30">
       {/* Top row: hamburger + breadcrumb + search */}
       <div className="flex items-center gap-2 px-4 py-2.5">
         <MobileMenuButton />
+
+        {/* Back / Forward / Home navigation buttons */}
+        <div className="flex items-center gap-0.5 mr-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                disabled={!canGoBack}
+                onClick={() => navigateBack()}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Back <span className="text-muted-foreground ml-1">Alt+←</span>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                disabled={!canGoForward}
+                onClick={() => navigateForward()}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Forward <span className="text-muted-foreground ml-1">Alt+→</span>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                disabled={currentFolderId === "root"}
+                onClick={() => setCurrentFolderId("root")}
+              >
+                <Home className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              All Files <span className="text-muted-foreground ml-1">Alt+Home</span>
+            </TooltipContent>
+          </Tooltip>
+        </div>
 
         {/* Breadcrumb with animations */}
         <div className="flex-1 min-w-0">
@@ -210,7 +274,10 @@ export function FileToolbar() {
 
         {/* Desktop Search */}
         <div className="relative hidden sm:block w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Search className={cn(
+            "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none transition-transform duration-200",
+            searchFocused && "rotate-12"
+          )} />
           <Input
             ref={searchInputRef}
             placeholder="Search files..."
@@ -218,6 +285,7 @@ export function FileToolbar() {
             className={cn(
               "pl-9 h-9 transition-all duration-200 focus:w-80",
               "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50",
+              "focus-visible:shadow-[0_0_0_3px_rgba(16,185,129,0.1)]",
               !searchInputValue && !searchFocused && "pr-9"
             )}
             onChange={(e) => handleSearch(e.target.value)}
@@ -252,7 +320,7 @@ export function FileToolbar() {
         <Button
           variant="ghost"
           size="icon"
-          className="sm:hidden h-9 w-9 transition-all duration-200"
+          className="sm:hidden h-9 w-9 transition-all duration-150 active:scale-95"
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
         >
           {mobileSearchOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
@@ -304,19 +372,18 @@ export function FileToolbar() {
           {section === "files" && (
             <>
               <Button
-                variant="outline"
                 size="sm"
                 onClick={handleUploadClick}
-                className="gap-1.5 h-8 text-xs transition-all duration-200 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
               >
-                <Upload className="w-3.5 h-3.5" />
+                <CloudUpload className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Upload</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCreateFolderOpen(true)}
-                className="gap-1.5 h-8 text-xs transition-all duration-200 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">New Folder</span>
@@ -326,7 +393,7 @@ export function FileToolbar() {
           {section === "trash" && (stats?.trashedCount ?? 0) > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-200">
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-150 active:scale-95">
                   <Trash2 className="w-4 h-4" />
                   <span className="hidden sm:inline">Empty Trash</span>
                 </Button>
@@ -369,7 +436,7 @@ export function FileToolbar() {
                 variant="outline"
                 size="sm"
                 className={cn(
-                  "h-8 gap-1.5 text-xs transition-all duration-200",
+                  "h-8 gap-1.5 text-xs transition-all duration-150 active:scale-95",
                   colorLabelFilter
                     ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5"
                     : "hover:border-emerald-500/30 hover:bg-accent/50"
@@ -409,7 +476,7 @@ export function FileToolbar() {
               setSortBy(val as SortField);
             }}
           >
-            <SelectTrigger className="h-9 w-[140px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center transition-all duration-200 hover:bg-accent/50 hover:border-emerald-500/30">
+            <SelectTrigger className="h-9 w-[140px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:border-emerald-500/30">
               <ArrowUpDown className="w-4 h-4 mr-1.5 max-[400px]:mr-0" />
               <SelectValue className="max-[400px]:hidden" />
             </SelectTrigger>
@@ -423,7 +490,7 @@ export function FileToolbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 transition-all duration-200 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
+            className="h-9 w-9 transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
             onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
           >
             <ArrowUpDown className={cn("w-4 h-4 transition-transform", sortDirection === "desc" && "rotate-180")} />
@@ -434,7 +501,7 @@ export function FileToolbar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 transition-all duration-200 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
+          className="h-9 w-9 transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
           onClick={() => setShortcutsOpen(true)}
           title="Keyboard shortcuts (?)"
         >
@@ -458,7 +525,7 @@ export function FileToolbar() {
             size="sm"
             aria-label="Grid view"
             className={cn(
-              "transition-all duration-200",
+              "transition-all duration-200 data-[state=on]:shadow-sm data-[state=on]:shadow-emerald-500/10",
               viewMode === "grid" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
             )}
           >
@@ -469,7 +536,7 @@ export function FileToolbar() {
             size="sm"
             aria-label="List view"
             className={cn(
-              "transition-all duration-200",
+              "transition-all duration-200 data-[state=on]:shadow-sm data-[state=on]:shadow-emerald-500/10",
               viewMode === "list" && "text-emerald-700 dark:text-emerald-400 data-[state=on]:bg-emerald-500/10"
             )}
           >
@@ -480,7 +547,7 @@ export function FileToolbar() {
 
       {/* Type filter tabs - only in All Files section at root level without search */}
       {section === "files" && currentFolderId === "root" && !searchQuery && (
-        <div className="flex items-center gap-1 px-4 pb-2 pt-1 border-t border-border/50 overflow-x-auto">
+        <div className="flex items-center gap-1 px-4 pb-2 pt-1 border-t border-border/50 overflow-x-auto bg-muted/20">
           {[
             { id: "all", label: "All", icon: null },
             { id: "images", label: "Images", icon: Image },
@@ -498,8 +565,8 @@ export function FileToolbar() {
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap",
                   typeFilter === tab.id
-                    ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
-                    : "text-muted-foreground hover:bg-accent/50"
+                    ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10 ring-1 ring-emerald-500/20"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 )}
               >
                 {Icon && <Icon className="w-3.5 h-3.5" />}

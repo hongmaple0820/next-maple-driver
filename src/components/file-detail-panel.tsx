@@ -9,7 +9,7 @@ import {
   Download, Star, Trash2, Share2, Pencil, File as FileIcon, Calendar, HardDrive, MapPin, StickyNote, Check, X as XIcon, Palette,
 } from "lucide-react";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS } from "@/lib/file-utils";
+import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS } from "@/lib/file-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -247,6 +247,12 @@ export function FileDetailPanel() {
     <>
       <Sheet open={!!detailFile} onOpenChange={(open) => !open && setDetailFile(null)}>
         <SheetContent side="right" className="w-[340px] sm:w-[380px] p-0 sm:max-w-[380px]">
+          <motion.div
+            initial={{ x: 20, opacity: 0.8 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="h-full flex flex-col"
+          >
           <SheetHeader className="p-6 pb-4 border-b border-border/50">
             <div className="flex items-start justify-between">
               <SheetTitle className="flex items-center gap-3 text-base">
@@ -300,11 +306,11 @@ export function FileDetailPanel() {
               transition={{ duration: 0.2 }}
               className="p-4 border-b border-border/50"
             >
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {!isFolder && (
                   <button
                     onClick={handleDownload}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-muted transition-colors"
+                    className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg hover:bg-emerald-500/10 transition-all duration-200 hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 focus-visible:outline-none"
                   >
                     <Download className="w-5 h-5 text-emerald-600" />
                     <span className="text-[11px] text-muted-foreground">Download</span>
@@ -312,33 +318,34 @@ export function FileDetailPanel() {
                 )}
                 <button
                   onClick={handlePreview}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-muted transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg hover:bg-sky-500/10 transition-all duration-200 hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:outline-none"
                 >
                   <FileIcon className="w-5 h-5 text-sky-500" />
                   <span className="text-[11px] text-muted-foreground">Preview</span>
                 </button>
                 <button
                   onClick={() => { setRenameFile({ id: detailFile.id, name: detailFile.name }); setDetailFile(null); }}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-muted transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg hover:bg-amber-500/10 transition-all duration-200 hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:outline-none"
                 >
                   <Pencil className="w-5 h-5 text-amber-500" />
                   <span className="text-[11px] text-muted-foreground">Rename</span>
                 </button>
                 <button
                   onClick={() => { setShareFile({ id: detailFile.id, name: detailFile.name }); setDetailFile(null); }}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-muted transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg hover:bg-purple-500/10 transition-all duration-200 hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1 focus-visible:outline-none"
                 >
                   <Share2 className="w-5 h-5 text-purple-500" />
                   <span className="text-[11px] text-muted-foreground">Share</span>
                 </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg hover:bg-destructive/10 transition-colors"
-                >
-                  <Trash2 className="w-5 h-5 text-destructive" />
-                  <span className="text-[11px] text-destructive">Delete</span>
-                </button>
               </div>
+              {/* Delete button - full width, separated */}
+              <button
+                onClick={handleDelete}
+                className="w-full flex items-center justify-center gap-2 mt-2 p-2 rounded-lg hover:bg-destructive/10 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-1 focus-visible:outline-none"
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+                <span className="text-xs text-destructive font-medium">Delete</span>
+              </button>
             </motion.div>
 
             {/* File Info */}
@@ -351,8 +358,8 @@ export function FileDetailPanel() {
                   <InfoRow icon={<HardDrive className="w-4 h-4" />} label="Size" value={formatFileSize(detailFile.size)} delay={0.03} />
                 )}
                 <InfoRow icon={<MapPin className="w-4 h-4" />} label="Location" value={locationPath || "All Files"} delay={0.06} />
-                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Modified" value={formatDate(detailFile.updatedAt)} delay={0.09} />
-                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Created" value={formatDate(detailFile.createdAt)} delay={0.12} />
+                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Modified" value={formatRelativeTime(detailFile.updatedAt)} delay={0.09} />
+                <InfoRow icon={<Calendar className="w-4 h-4" />} label="Created" value={formatRelativeTime(detailFile.createdAt)} delay={0.12} />
                 {detailFile.mimeType && (
                   <InfoRow icon={<FileIcon className="w-4 h-4" />} label="MIME Type" value={detailFile.mimeType} delay={0.15} />
                 )}
@@ -469,6 +476,7 @@ export function FileDetailPanel() {
               )}
             </motion.div>
           </ScrollArea>
+          </motion.div>
         </SheetContent>
       </Sheet>
 

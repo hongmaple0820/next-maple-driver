@@ -25,7 +25,13 @@ export interface ActivityItem {
 interface FileStore {
   // Navigation
   currentFolderId: string;
-  setCurrentFolderId: (id: string) => void;
+  setCurrentFolderId: (id: string, skipHistory?: boolean) => void;
+  navigationHistory: string[];
+  historyIndex: number;
+  navigateBack: () => void;
+  navigateForward: () => void;
+  canNavigateBack: () => boolean;
+  canNavigateForward: () => boolean;
 
   // Section
   section: Section;
@@ -129,13 +135,56 @@ interface FileStore {
 export const useFileStore = create<FileStore>((set) => ({
   // Navigation
   currentFolderId: "root",
-  setCurrentFolderId: (id) =>
-    set({ currentFolderId: id, selectedFileIds: new Set() }),
+  navigationHistory: ["root"],
+  historyIndex: 0,
+  setCurrentFolderId: (id, skipHistory = false) =>
+    set((state) => {
+      if (skipHistory) {
+        return { currentFolderId: id, selectedFileIds: new Set() };
+      }
+      // Trim any forward history when navigating to a new folder
+      const newHistory = state.navigationHistory.slice(0, state.historyIndex + 1);
+      newHistory.push(id);
+      return {
+        currentFolderId: id,
+        selectedFileIds: new Set(),
+        navigationHistory: newHistory,
+        historyIndex: newHistory.length - 1,
+      };
+    }),
+  navigateBack: () =>
+    set((state) => {
+      if (state.historyIndex <= 0) return state;
+      const newIndex = state.historyIndex - 1;
+      return {
+        currentFolderId: state.navigationHistory[newIndex],
+        historyIndex: newIndex,
+        selectedFileIds: new Set(),
+      };
+    }),
+  navigateForward: () =>
+    set((state) => {
+      if (state.historyIndex >= state.navigationHistory.length - 1) return state;
+      const newIndex = state.historyIndex + 1;
+      return {
+        currentFolderId: state.navigationHistory[newIndex],
+        historyIndex: newIndex,
+        selectedFileIds: new Set(),
+      };
+    }),
+  canNavigateBack: () => {
+    const state = useFileStore.getState();
+    return state.historyIndex > 0;
+  },
+  canNavigateForward: () => {
+    const state = useFileStore.getState();
+    return state.historyIndex < state.navigationHistory.length - 1;
+  },
 
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0 }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0 }),
 
   // View mode
   viewMode: "grid",

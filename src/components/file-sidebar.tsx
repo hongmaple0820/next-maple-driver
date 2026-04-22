@@ -59,9 +59,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border/60">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-500/25 dark:shadow-emerald-500/10">
-          <Cloud className="w-5 h-5" />
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-border/40">
+        <div className="group/logo relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-500/25 dark:shadow-emerald-500/10 overflow-hidden">
+          <Cloud className="w-5 h-5 relative z-10" />
+          {/* Shimmer effect on hover */}
+          <div className="absolute inset-0 -translate-x-full group-hover/logo:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
         </div>
         <div className="flex flex-col">
           <span className="text-lg font-bold tracking-tight leading-tight bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-400 dark:to-emerald-600 bg-clip-text text-transparent">CloudDrive</span>
@@ -80,73 +82,81 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-3">
-        <div className="px-2 mb-2">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Navigation</span>
-        </div>
-        <nav className="space-y-0.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = section === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setSection(item.id);
-                  onNavigate?.();
-                }}
-                className={cn(
-                  "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground hover:translate-x-0.5"
-                )}
-              >
-                {/* Active indicator bar */}
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active-indicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-600 dark:bg-emerald-400"
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                )}
-                <Icon
+      <div className="relative flex-1 min-h-0">
+        <ScrollArea className="h-full px-3 py-3">
+          <div className="px-2 mb-2">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Navigation</span>
+          </div>
+          <nav className="space-y-0.5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = section === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setSection(item.id);
+                    onNavigate?.();
+                  }}
                   className={cn(
-                    "w-5 h-5 transition-colors",
-                    isActive && "text-emerald-600 dark:text-emerald-400"
+                    "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
+                    isActive
+                      ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground hover:translate-x-0.5"
                   )}
-                />
-                {item.label}
-                {item.id === "starred" && (stats?.starredCount ?? 0) > 0 && (
-                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
-                    {stats.starredCount}
-                  </Badge>
-                )}
-                {item.id === "trash" && (stats?.trashedCount ?? 0) > 0 && (
-                  <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
-                    {stats.trashedCount}
-                  </Badge>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-        {/* Quick Stats */}
-        <div className="px-5 py-2 border-t border-sidebar-border/40">
-          <p className="text-[11px] text-muted-foreground/70">
-            {stats?.totalFiles ?? 0} files · {stats?.totalFolders ?? 0} folders
-          </p>
-        </div>
-      </ScrollArea>
+                >
+                  {/* Active indicator bar */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="sidebar-active-indicator"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-600 dark:bg-emerald-400"
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  )}
+                  <Icon
+                    className={cn(
+                      "w-5 h-5 transition-colors",
+                      isActive && "text-emerald-600 dark:text-emerald-400"
+                    )}
+                  />
+                  {item.label}
+                  {item.id === "starred" && (stats?.starredCount ?? 0) > 0 && (
+                    <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                      {stats.starredCount}
+                    </Badge>
+                  )}
+                  {item.id === "trash" && (stats?.trashedCount ?? 0) > 0 && (
+                    <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                      {stats.trashedCount}
+                    </Badge>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          {/* Quick Stats */}
+          <div className="px-5 py-2 border-t border-border/40">
+            <p className="text-[11px] text-muted-foreground/70">
+              {stats?.totalFiles ?? 0} files · {stats?.totalFolders ?? 0} folders
+            </p>
+          </div>
+        </ScrollArea>
+        {/* Gradient overlay at bottom of navigation */}
+        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-sidebar to-transparent pointer-events-none" />
+      </div>
 
       {/* User Profile Area */}
-      <div className="border-t border-sidebar-border/60 px-3 py-3">
+      <div className="border-t border-border/40 px-3 py-3">
         <div
           className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-sidebar-accent/50 transition-all duration-200 cursor-pointer"
           onClick={() => setPreferencesOpen(true)}
         >
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10 shrink-0">
-            U
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-emerald-500/20 dark:shadow-emerald-500/10">
+              U
+            </div>
+            {/* Ring effect */}
+            <div className="absolute -inset-1 rounded-full ring-2 ring-emerald-500/20 dark:ring-emerald-400/20" />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold truncate leading-tight">My CloudDrive</span>
@@ -184,15 +194,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      {/* Storage Stats */}
-      <div className="border-t border-sidebar-border/60" data-storage-section>
+      {/* Storage Stats - More prominent */}
+      <div className="border-t border-border/40" data-storage-section>
         <button 
-          className="w-full px-4 py-3 hover:bg-sidebar-accent/50 transition-colors text-left"
+          className="w-full px-4 py-4 hover:bg-sidebar-accent/50 transition-colors text-left"
           onClick={() => setShowStorageDetail(!showStorageDetail)}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <HardDrive className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-semibold">Storage</span>
+          <div className="flex items-center gap-2 mb-2.5">
+            <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider">Storage</span>
             <ChevronIcon className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
           </div>
           <Progress value={usagePercent} className={cn("h-1.5 mb-2", usagePercent > 80 && "animate-pulse")} />
@@ -241,7 +251,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               transition={{ duration: 0.2, ease: "easeInOut" }}
               className="overflow-hidden"
             >
-              <div className="px-4 pb-3 space-y-1.5 border-t border-sidebar-border/50 pt-2">
+              <div className="px-4 pb-3 space-y-1.5 border-t border-border/40 pt-2">
                 {Object.entries(stats.byType)
                   .sort(([, a], [, b]) => (b as number) - (a as number))
                   .map(([type, size]) => (
@@ -262,7 +272,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                       <span className="text-muted-foreground">{formatFileSize(size as number)}</span>
                     </div>
                   ))}
-                <div className="border-t border-sidebar-border/50 pt-1.5 mt-1.5 flex items-center justify-between text-xs font-medium">
+                <div className="border-t border-border/40 pt-1.5 mt-1.5 flex items-center justify-between text-xs font-medium">
                   <span>Free</span>
                   <span className="text-muted-foreground">{formatFileSize(totalBytes - usedBytes)}</span>
                 </div>
@@ -291,7 +301,7 @@ export function FileSidebar() {
   }
 
   return (
-    <aside className="hidden md:flex w-[260px] shrink-0 border-r border-border/60 dark:border-border/40">
+    <aside className="hidden md:flex w-[260px] shrink-0 border-r border-border/60 dark:border-border/40 transition-all duration-300">
       <SidebarContent />
     </aside>
   );

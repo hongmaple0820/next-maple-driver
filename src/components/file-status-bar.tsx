@@ -50,7 +50,7 @@ export function FileStatusBar() {
   const selectedCount = selectedFileIds.size;
 
   return (
-    <div className="border-t border-border/60 bg-muted/20 backdrop-blur-sm px-4 py-2 flex items-center justify-between text-xs text-muted-foreground">
+    <div className="border-t border-border/60 bg-muted/20 backdrop-blur-sm px-4 py-2 flex items-center justify-between text-xs text-muted-foreground border-l-2 border-l-emerald-500/30 hover:text-[13px] transition-all duration-150">
       <div className="flex items-center gap-2.5">
         <div className="flex items-center gap-1.5">
           {folderCount > 0 && (

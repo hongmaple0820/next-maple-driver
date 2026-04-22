@@ -99,7 +99,7 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-emerald-500/5 border-[3px] border-dashed border-emerald-400/50 rounded-lg backdrop-blur-[2px]"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-emerald-500/5 border-[3px] border-dashed border-emerald-400/50 rounded-lg backdrop-blur-[2px] animate-border-dash"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -108,7 +108,7 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
               transition={{ type: "spring", stiffness: 400, damping: 25 }}
               className="flex flex-col items-center gap-4 p-10 rounded-2xl bg-background/95 shadow-2xl border border-emerald-200/50 dark:border-emerald-800/50"
             >
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center animate-pulse">
                 <CloudUpload className="w-8 h-8 text-emerald-600" />
               </div>
               <div className="text-center">

@@ -25,6 +25,7 @@ export function validateFileSize(file: File): { valid: boolean; message?: string
 
 /**
  * Upload a single file using XMLHttpRequest for real progress tracking.
+ * Also updates the store's uploadProgress state for the overlay panel.
  * Returns a Promise that resolves when the upload is complete.
  */
 export function uploadFileWithProgress(
@@ -41,11 +42,16 @@ export function uploadFileWithProgress(
       return;
     }
 
-    const toastId = `upload-${Date.now()}-${file.name}`;
+    // Create a unique ID for this upload in the store
+    const uploadId = crypto.randomUUID();
 
-    toast.loading(`Uploading ${file.name}...`, {
-      id: toastId,
-      description: "0%",
+    // Add to store uploadProgress
+    const { addUploadProgress, updateUploadProgress, removeUploadProgress } = useFileStore.getState();
+    addUploadProgress({
+      id: uploadId,
+      fileName: file.name,
+      progress: 0,
+      status: "uploading",
     });
 
     const xhr = new XMLHttpRequest();
@@ -56,16 +62,19 @@ export function uploadFileWithProgress(
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const percent = Math.round((e.loaded / e.total) * 100);
-        toast.loading(`Uploading ${file.name}...`, {
-          id: toastId,
-          description: `${percent}%`,
-        });
+        // Update store progress
+        updateUploadProgress(uploadId, percent);
       }
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        toast.success(`${file.name} uploaded`, { id: toastId });
+        // Mark as done in store, then remove after a delay
+        updateUploadProgress(uploadId, 100, "done");
+        setTimeout(() => {
+          removeUploadProgress(uploadId);
+        }, 2000);
+
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
         // Add activity log entry
@@ -75,13 +84,21 @@ export function uploadFileWithProgress(
         } catch { /* non-critical */ }
         resolve();
       } else {
-        toast.error(`Failed to upload ${file.name}`, { id: toastId });
+        updateUploadProgress(uploadId, 0, "error");
+        setTimeout(() => {
+          removeUploadProgress(uploadId);
+        }, 3000);
+        toast.error(`Failed to upload ${file.name}`);
         reject(new Error(`Upload failed with status ${xhr.status}`));
       }
     };
 
     xhr.onerror = () => {
-      toast.error(`Failed to upload ${file.name}`, { id: toastId });
+      updateUploadProgress(uploadId, 0, "error");
+      setTimeout(() => {
+        removeUploadProgress(uploadId);
+      }, 3000);
+      toast.error(`Failed to upload ${file.name}`);
       reject(new Error("Upload network error"));
     };
 
@@ -92,7 +109,7 @@ export function uploadFileWithProgress(
 
 /**
  * Upload multiple files sequentially with real progress tracking.
- * Each file gets its own toast with progress percentage.
+ * Each file gets tracked in the store's uploadProgress state.
  * Files exceeding the size limit are skipped with an error toast.
  */
 export async function uploadFilesWithProgress(
@@ -112,11 +129,27 @@ export async function uploadFilesWithProgress(
     return true;
   });
 
+  if (validFiles.length === 0) return;
+
+  let successCount = 0;
   for (const file of validFiles) {
     try {
       await uploadFileWithProgress(file, parentId, queryClient);
+      successCount++;
     } catch {
       // Error already shown via toast, continue with next file
+    }
+  }
+
+  // Show summary toast if multiple files were uploaded
+  if (validFiles.length > 1) {
+    const failedCount = validFiles.length - successCount;
+    if (failedCount === 0) {
+      toast.success(`${successCount} files uploaded successfully`);
+    } else {
+      toast.warning(`${successCount} of ${validFiles.length} files uploaded`, {
+        description: `${failedCount} file${failedCount > 1 ? "s" : ""} failed to upload`,
+      });
     }
   }
 }

@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { FolderInput, Folder, ChevronRight, ChevronDown } from "lucide-react";
 import type { FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
+import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 
 function FolderTreeItem({
   folder,
@@ -109,6 +110,7 @@ export function MoveDialog() {
 
   const handleMove = async () => {
     if (!moveFile || !selectedId) return;
+    const originalParentId = moveFile.parentId;
     setLoading(true);
     try {
       const res = await fetch("/api/files/move", {
@@ -120,6 +122,18 @@ export function MoveDialog() {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         addActivity({ action: "move", fileName: moveFile.name });
         setMoveFile(null);
+        showUndoToast(
+          `Moved "${moveFile.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files/move", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: moveFile.id, targetParentId: originalParentId }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Moved "${moveFile.name}" back` },
+        );
       }
     } catch {
       // Error handled silently

@@ -121,6 +121,28 @@
   }
 }
 
+/* Animated dashed border for upload zone */
+@keyframes border-dash {
+  0% { border-color: rgba(16, 185, 129, 0.3); }
+  50% { border-color: rgba(16, 185, 129, 0.7); }
+  100% { border-color: rgba(16, 185, 129, 0.3); }
+}
+
+.animate-border-dash {
+  animation: border-dash 1.5s ease-in-out infinite;
+}
+
+/* Pulse once animation for selection indicator */
+@keyframes pulse-once {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-pulse-once {
+  animation: pulse-once 0.5s ease-in-out 1;
+}
+
 /* Custom scrollbar */
 @layer base {
   ::-webkit-scrollbar {

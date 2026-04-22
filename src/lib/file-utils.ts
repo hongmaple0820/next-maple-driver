@@ -85,25 +85,48 @@ export function formatFileSize(bytes?: number | null): string {
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-// Format date to relative or short format
+// Format date to compact relative or short format (for compact display contexts)
 export function formatDate(dateStr?: string | null): string {
   if (!dateStr) return "—";
-  const date = new Date(dateStr);
+  return formatRelativeTime(dateStr);
+}
+
+// Format date to a compact relative time string
+// Returns: "just now", "5 min ago", "2 hr ago", "3 days ago", "Jan 15"
+export function formatRelativeTime(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
+  const diffMs = now.getTime() - d.getTime();
+
+  // Future dates
+  if (diffMs < 0) {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
 
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffSeconds < 10) return "just now";
+  if (diffSeconds < 60) return `${diffSeconds} sec ago`;
+  if (diffMinutes === 1) return "1 min ago";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffHours === 1) return "1 hr ago";
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffWeeks === 1) return "1 wk ago";
+  if (diffWeeks < 4) return `${diffWeeks} wks ago`;
+  if (diffMonths === 1) return "1 mo ago";
+  if (diffMonths < 12) return `${diffMonths} mo ago`;
 
-  return date.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
   });
 }
 

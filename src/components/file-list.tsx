@@ -41,12 +41,14 @@ import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFil
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 
 // Color label dropdown submenu items
 function ColorLabelDropdownItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
   const handleSetColor = useCallback(async (color: string) => {
+    const oldLabel = file.colorLabel ?? "";
+    const newLabel = file.colorLabel === color ? "" : color;
     try {
-      const newLabel = file.colorLabel === color ? "" : color;
       const res = await fetch("/api/files", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -54,6 +56,18 @@ function ColorLabelDropdownItems({ file, queryClient }: { file: FileItem; queryC
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        showUndoToast(
+          `Changed color of "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, colorLabel: oldLabel }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Reverted color of "${file.name}"` },
+        );
       }
     } catch {
       toast.error("Failed to update color label");
@@ -97,8 +111,9 @@ function ColorLabelDropdownItems({ file, queryClient }: { file: FileItem; queryC
 // Color label context submenu items
 function ColorLabelContextItems({ file, queryClient }: { file: FileItem; queryClient: ReturnType<typeof useQueryClient> }) {
   const handleSetColor = useCallback(async (color: string) => {
+    const oldLabel = file.colorLabel ?? "";
+    const newLabel = file.colorLabel === color ? "" : color;
     try {
-      const newLabel = file.colorLabel === color ? "" : color;
       const res = await fetch("/api/files", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -106,6 +121,18 @@ function ColorLabelContextItems({ file, queryClient }: { file: FileItem; queryCl
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
+        showUndoToast(
+          `Changed color of "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, colorLabel: oldLabel }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: `Reverted color of "${file.name}"` },
+        );
       }
     } catch {
       toast.error("Failed to update color label");
@@ -231,26 +258,56 @@ export function FileList() {
   const allSelected = colorFilteredFiles.length > 0 && colorFilteredFiles.every((f) => selectedFileIds.has(f.id));
 
   const handleStar = useCallback(async (file: FileItem) => {
+    const wasStarred = file.starred;
     try {
       const res = await fetch("/api/files/star", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: file.id, starred: !file.starred }),
+        body: JSON.stringify({ id: file.id, starred: !wasStarred }),
       });
-      if (res.ok) queryClient.invalidateQueries({ queryKey: ["files"] });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        showUndoToast(
+          wasStarred ? `Unstarred "${file.name}"` : `Starred "${file.name}"`,
+          async () => {
+            const undoRes = await fetch("/api/files/star", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: file.id, starred: wasStarred }),
+            });
+            if (undoRes.ok) invalidateAfterUndo(queryClient);
+          },
+          { onSuccess: wasStarred ? `Re-starred "${file.name}"` : `Unstarred "${file.name}"` },
+        );
+      }
     } catch { /* silent */ }
   }, [queryClient]);
 
   const handleDelete = useCallback(async (file: FileItem) => {
+    const isPermanent = section === "trash";
     try {
       const res = await fetch("/api/files", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: file.id, permanent: section === "trash" }),
+        body: JSON.stringify({ id: file.id, permanent: isPermanent }),
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["files"] });
         queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        if (!isPermanent) {
+          showUndoToast(
+            `Moved "${file.name}" to trash`,
+            async () => {
+              const undoRes = await fetch("/api/files/restore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: file.id }),
+              });
+              if (undoRes.ok) invalidateAfterUndo(queryClient);
+            },
+            { onSuccess: `Restored "${file.name}"` },
+          );
+        }
       }
     } catch { /* silent */ }
   }, [section, queryClient]);

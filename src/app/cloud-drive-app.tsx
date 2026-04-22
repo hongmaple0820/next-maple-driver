@@ -12,6 +12,7 @@ import { BatchActions } from "@/components/batch-actions";
 import { FileStatusBar } from "@/components/file-status-bar";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
+import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
 import { useFileStore } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ export default function CloudDriveApp() {
     setShortcutsOpen, setClipboard, currentFolderId, section,
     preferencesOpen, setPreferencesOpen,
     setViewMode, setSortBy, setSortDirection, setCompactMode, setShowExtensions,
+    navigateBack, navigateForward, setCurrentFolderId,
   } = useFileStore();
 
   const prefs = useUserPreferences();
@@ -194,11 +196,29 @@ export default function CloudDriveApp() {
         e.preventDefault();
         setPreferencesOpen(true);
       }
+
+      // Alt+Left - Navigate back
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        navigateBack();
+      }
+
+      // Alt+Right - Navigate forward
+      if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        navigateForward();
+      }
+
+      // Alt+Home - Navigate to root
+      if (e.altKey && e.key === "Home") {
+        e.preventDefault();
+        setCurrentFolderId("root");
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedFileIds, detailFile, setDetailFile, clearSelection, setShortcutsOpen, setClipboard, setPreferencesOpen, currentFolderId]);
+  }, [selectedFileIds, detailFile, setDetailFile, clearSelection, setShortcutsOpen, setClipboard, setPreferencesOpen, currentFolderId, navigateBack, navigateForward, setCurrentFolderId]);
 
   return (
     <motion.div
@@ -246,6 +266,9 @@ export default function CloudDriveApp() {
 
       {/* User preferences dialog */}
       <UserPreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
+
+      {/* Upload progress floating panel */}
+      <UploadProgressOverlay />
     </motion.div>
   );
 }

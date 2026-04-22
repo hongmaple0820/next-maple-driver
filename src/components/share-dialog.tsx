@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound } from "lucide-react";
 import type { ShareInfo } from "@/lib/file-utils";
+import { showActionToast } from "@/lib/undo-toast";
 
 export function ShareDialog() {
   const { shareFile, setShareFile, addActivity } = useFileStore();
@@ -58,6 +60,20 @@ export function ShareDialog() {
         setShareInfo(data);
         queryClient.invalidateQueries({ queryKey: ["files"] });
         addActivity({ action: "share", fileName: shareFile.name });
+        // Show share link created toast with Copy Link action
+        const link = `${window.location.origin}/share/${data.token}`;
+        showActionToast(
+          "Share link created",
+          "Copy Link",
+          async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              toast.success("Link copied to clipboard");
+            } catch {
+              toast.error("Failed to copy link");
+            }
+          },
+        );
       }
     } catch {
       // Error handled silently

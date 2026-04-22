@@ -6,6 +6,7 @@ import { Star, Trash2, X, Archive, Pencil } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 
 export function BatchActions() {
   const { selectedFileIds, clearSelection, section, setBatchRenameOpen } = useFileStore();
@@ -15,7 +16,8 @@ export function BatchActions() {
   if (count === 0) return null;
 
   const handleBatchStar = async () => {
-    for (const id of selectedFileIds) {
+    const ids = Array.from(selectedFileIds);
+    for (const id of ids) {
       await fetch("/api/files/star", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -24,19 +26,54 @@ export function BatchActions() {
     }
     queryClient.invalidateQueries({ queryKey: ["files"] });
     clearSelection();
+    showUndoToast(
+      `Starred ${ids.length} item${ids.length > 1 ? "s" : ""}`,
+      async () => {
+        for (const id of ids) {
+          await fetch("/api/files/star", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, starred: false }),
+          });
+        }
+        invalidateAfterUndo(queryClient);
+      },
+      { onSuccess: `Unstarred ${ids.length} item${ids.length > 1 ? "s" : ""}` },
+    );
   };
 
   const handleBatchDelete = async () => {
-    for (const id of selectedFileIds) {
+    const isPermanent = section === "trash";
+    const ids = Array.from(selectedFileIds);
+    for (const id of ids) {
       await fetch("/api/files", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, permanent: section === "trash" }),
+        body: JSON.stringify({ id, permanent: isPermanent }),
       });
     }
     queryClient.invalidateQueries({ queryKey: ["files"] });
     queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
     clearSelection();
+    // Show undo toast only for move-to-trash (not permanent delete)
+    if (!isPermanent) {
+      showUndoToast(
+        `Moved ${ids.length} item${ids.length > 1 ? "s" : ""} to trash`,
+        async () => {
+          for (const id of ids) {
+            await fetch("/api/files/restore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id }),
+            });
+          }
+          invalidateAfterUndo(queryClient);
+        },
+        { onSuccess: `Restored ${ids.length} item${ids.length > 1 ? "s" : ""}` },
+      );
+    } else {
+      toast.success(`Permanently deleted ${ids.length} item${ids.length > 1 ? "s" : ""}`);
+    }
   };
 
   const handleBatchDownloadZip = async () => {
