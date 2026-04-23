@@ -22,6 +22,7 @@ import { uploadFilesWithProgress } from "@/lib/upload-utils";
 import { COLOR_LABELS } from "@/lib/file-utils";
 import type { StorageStats } from "@/lib/file-utils";
 import { ActivityPanel } from "@/components/activity-panel";
+import { QuickTransferPopover } from "@/components/quick-transfer-popover";
 import { useI18n } from "@/lib/i18n";
 import {
   Tooltip,
@@ -399,9 +400,11 @@ export function FileToolbar() {
             onBlur={() => setSearchFocused(false)}
           />
           {!searchInputValue && !searchFocused && (
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono text-muted-foreground pointer-events-none">
-              /
-            </kbd>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+              <kbd className="text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono text-muted-foreground">⌘K</kbd>
+              <span className="text-[10px] text-muted-foreground/50">or</span>
+              <kbd className="text-[10px] bg-muted border rounded px-1 py-0.5 font-mono text-muted-foreground">/</kbd>
+            </div>
           )}
           {searchInputValue && (
             <button
@@ -477,23 +480,28 @@ export function FileToolbar() {
         <div className="flex items-center gap-1.5">
           {section === "files" && (
             <>
-              <Button
-                size="sm"
-                onClick={handleUploadClick}
-                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
-              >
-                <CloudUpload className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t.app.upload}</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFolderUploadClick}
-                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
-              >
-                <FolderUp className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t.app.uploadFolder}</span>
-              </Button>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    onClick={handleUploadClick}
+                    className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{t.app.upload}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFolderUploadClick}
+                    className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                  >
+                    <FolderUp className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{t.app.uploadFolder}</span>
+                  </Button>
+                </div>
+                <span className="text-[10px] text-muted-foreground/70 pl-1 hidden sm:block">Up to 500 MB per file</span>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -503,6 +511,7 @@ export function FileToolbar() {
                 <FolderPlus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">{t.app.newFolder}</span>
               </Button>
+              <QuickTransferPopover />
             </>
           )}
           {selectedFileIds.size > 0 && section === "files" && (

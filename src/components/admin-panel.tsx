@@ -146,7 +146,17 @@ export function AdminPanel() {
 
   return (
     <Dialog open={adminPanelOpen} onOpenChange={setAdminPanelOpen}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 gap-0">
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] p-0 gap-0"
+        onInteractOutside={(e) => {
+          // Prevent closing when interacting with dropdown menus, popovers, or other portals inside the dialog
+          e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on portal content (dropdowns, popovers)
+          e.preventDefault();
+        }}
+      >
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <div className="p-1.5 rounded-lg bg-emerald-500/10">

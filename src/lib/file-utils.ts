@@ -243,6 +243,34 @@ export function getFileIconColor(item: FileItem): string {
   return "text-muted-foreground";
 }
 
+// Get icon background color class based on file type (for colored bg behind icons)
+export function getFileTypeBgColor(item: FileItem): string {
+  if (item.type === "folder") return "bg-amber-500/10";
+
+  const mime = item.mimeType?.toLowerCase() || "";
+  const ext = getFileExtension(item.name);
+
+  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"].includes(ext)) return "bg-emerald-500/10";
+  if (mime.startsWith("video/") || ["mp4", "webm", "avi", "mov", "mkv", "flv"].includes(ext)) return "bg-rose-500/10";
+  if (mime.startsWith("audio/") || ["mp3", "wav", "ogg", "flac", "aac", "m4a"].includes(ext)) return "bg-purple-500/10";
+  if (mime === "application/pdf" || ext === "pdf") return "bg-red-500/10";
+  if (mime.includes("spreadsheet") || ["xls", "xlsx", "csv", "ods"].includes(ext)) return "bg-emerald-500/10";
+  if (
+    mime.includes("json") || mime.includes("javascript") || mime.includes("typescript") ||
+    mime.includes("xml") || mime.includes("html") || mime.includes("css") ||
+    ["js", "ts", "tsx", "jsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "cs", "php",
+      "swift", "kt", "sh", "bash", "yaml", "yml", "toml", "json", "xml", "html", "css",
+      "scss", "less", "sql", "md", "vue", "svelte"].includes(ext)
+  ) return "bg-amber-500/10";
+  if (
+    mime.includes("zip") || mime.includes("rar") || mime.includes("tar") || mime.includes("gzip") || mime.includes("7z") ||
+    ["zip", "rar", "tar", "gz", "bz2", "7z", "xz", "tgz"].includes(ext)
+  ) return "bg-orange-500/10";
+  if (mime.includes("document") || mime.includes("word") || mime.includes("text/plain") || ["doc", "docx", "txt", "rtf", "odt"].includes(ext)) return "bg-sky-500/10";
+
+  return "bg-muted/50";
+}
+
 // Get file type label
 export function getFileTypeLabel(item: FileItem): string {
   if (item.type === "folder") return "Folder";

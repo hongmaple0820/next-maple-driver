@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive, HardDrive } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive, HardDrive, ClipboardCopy } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, getFileTypeBgColor, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
@@ -193,6 +193,7 @@ export function FileCard({ file }: FileCardProps) {
     showExtensions,
     setCrossDriverMoveOpen,
     setCrossDriverMoveFileIds,
+    setCopyToFile,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -201,6 +202,7 @@ export function FileCard({ file }: FileCardProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const isSelected = selectedFileIds.has(file.id);
+  const typeBgColor = getFileTypeBgColor(file);
 
   const ext = file.type === "file" ? getFileExtension(file.name) : "";
   const colorStyle = getColorLabelStyle(file.colorLabel);
@@ -419,6 +421,9 @@ export function FileCard({ file }: FileCardProps) {
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setCopyToFile({ id: file.id, name: file.name, parentId: file.parentId })}>
+            <ClipboardCopy className="w-4 h-4" /> Copy to...
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
             <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
           </DropdownMenuItem>
@@ -506,6 +511,9 @@ export function FileCard({ file }: FileCardProps) {
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => setCopyToFile({ id: file.id, name: file.name, parentId: file.parentId })}>
+            <ClipboardCopy className="w-4 h-4" /> Copy to...
           </ContextMenuItem>
           <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
             <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
@@ -633,11 +641,14 @@ export function FileCard({ file }: FileCardProps) {
             className={cn(
               "group relative cursor-pointer transition-all duration-300 border overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2",
               "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-emerald-500/0 hover:after:bg-emerald-500/40 after:transition-colors after:duration-300",
+              "hover:bg-gradient-to-br hover:from-accent/40 hover:to-accent/10",
+              // Colored left border for color label
+              colorStyle && !isSelected && !isDragOver ? `border-l-[3px] ${colorStyle.border}` : !isSelected && !isDragOver && "border-l-[3px] border-l-transparent",
               isSelected
-                ? "border-emerald-500/70 shadow-lg shadow-emerald-500/20 bg-emerald-500/[0.07] dark:bg-emerald-500/15 ring-1 ring-emerald-500/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/25"
+                ? "border-emerald-500/70 shadow-lg shadow-emerald-500/20 bg-emerald-500/[0.07] dark:bg-emerald-500/15 ring-1 ring-emerald-500/30 border-l-emerald-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/25"
                 : isDragOver && file.type === "folder"
-                ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02]"
-                : "border-border/40 bg-card hover:border-emerald-500/30 hover:bg-accent/30 hover:shadow-md hover:shadow-emerald-500/[0.07] hover:-translate-y-1",
+                ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02] border-l-emerald-500"
+                : "border-border/40 bg-card hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/[0.07] hover:-translate-y-1",
               colorStyle && !isSelected && !isDragOver && colorStyle.border
             )}
             onClick={handleClick}
@@ -648,39 +659,39 @@ export function FileCard({ file }: FileCardProps) {
               <div className={cn("absolute top-2 right-2 z-20 w-2 h-2 rounded-full", colorStyle.dot)} />
             )}
 
-            {/* Selection indicator */}
-            <motion.div
-              layout
-              className="absolute top-2 left-2 z-10"
+            {/* Selection checkbox - appears on hover or when selected */}
+            <div
+              className={cn(
+                "absolute top-1.5 left-1.5 z-10 transition-all duration-200",
+                isSelected ? "opacity-100 scale-100" : isHovered ? "opacity-100 scale-100" : "opacity-0 scale-75"
+              )}
+              onClick={(e) => { e.stopPropagation(); toggleSelect(file.id); }}
             >
-              {isSelected && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                  className={cn(
-                    "w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center animate-pulse-once"
-                  )}
-                >
+              <div className={cn(
+                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
+                isSelected
+                  ? "bg-emerald-500 border-emerald-500 shadow-sm shadow-emerald-500/30"
+                  : "border-muted-foreground/40 bg-background/80 backdrop-blur-sm hover:border-emerald-500/60"
+              )}>
+                {isSelected && (
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
-                </motion.div>
-              )}
-            </motion.div>
+                )}
+              </div>
+            </div>
 
             {/* Star badge with animation */}
             <AnimatePresence>
-              {file.starred && !isSelected && (
+              {file.starred && !isSelected && !isHovered && (
                 <motion.div
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                  className="absolute top-2 left-2 z-10"
+                  className="absolute top-1.5 left-9 z-10"
                 >
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -714,9 +725,9 @@ export function FileCard({ file }: FileCardProps) {
               "flex flex-col items-center gap-2 relative z-[2]",
               compactMode ? "p-2 pb-1.5 min-h-[80px]" : "sm:p-4 p-3 sm:pb-3 pb-2 min-h-[120px]"
             )}>
-              {/* Icon / Thumbnail - consistent height area */}
+              {/* Icon / Thumbnail - consistent height area with type-colored background */}
               <div className={cn(
-                "flex items-center justify-center mt-1",
+                "flex items-center justify-center mt-1 relative",
                 compactMode ? "h-8" : "sm:h-14 h-10"
               )}>
                 {isImage ? (
@@ -731,7 +742,22 @@ export function FileCard({ file }: FileCardProps) {
                     />
                   </div>
                 ) : (
-                  <FileTypeIcon file={file} className={compactMode ? "w-8 h-8" : "sm:w-14 sm:h-14 w-10 h-10"} strokeWidth={compactMode ? 1.5 : 1.2} />
+                  <div className={cn(
+                    "rounded-xl flex items-center justify-center",
+                    typeBgColor,
+                    compactMode ? "w-8 h-8" : "sm:w-14 sm:h-14 w-10 h-10"
+                  )}>
+                    <FileTypeIcon file={file} className={compactMode ? "w-5 h-5" : "sm:w-8 sm:h-8 w-6 h-6"} strokeWidth={compactMode ? 1.5 : 1.2} />
+                  </div>
+                )}
+                {/* Folder item count badge */}
+                {file.type === "folder" && (file.childrenCount ?? 0) > 0 && (
+                  <div className={cn(
+                    "absolute -bottom-0.5 -right-0.5 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold shadow-sm shadow-amber-500/30",
+                    compactMode ? "w-4 h-4 text-[8px]" : "w-5 h-5 text-[9px]"
+                  )}>
+                    {file.childrenCount ?? 0}
+                  </div>
                 )}
               </div>
 
@@ -776,7 +802,7 @@ export function FileCard({ file }: FileCardProps) {
                     <div className="flex items-center gap-1">
                       <p className="sm:text-xs text-[11px] text-muted-foreground/80 dark:text-muted-foreground flex items-center gap-1">
                         <Folder className="w-3 h-3" />
-                        {file.childrenCount ?? 0} items
+                        {(file.childrenCount ?? 0) > 0 ? `${file.childrenCount} items` : "Empty folder"}
                       </p>
                       <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground ml-1">Open</span>
                     </div>

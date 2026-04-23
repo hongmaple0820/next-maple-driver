@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { readFile, stat } from 'fs/promises';
+import { readFile, stat, open } from 'fs/promises';
 import { join } from 'path';
 import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 const STORAGE_PATH = join(process.cwd(), 'storage');
 
-// GET /api/files/download - Download file
+// GET /api/files/download - Download file with range request support
 // Supports auth-based access and share-token-based access (for public share links)
+// Supports Range headers for resumable downloads
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
@@ -97,18 +98,70 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Read the file
+    const fileSize = fileStat.size;
+
+    // Parse Range header for resumable downloads
+    const rangeHeader = request.headers.get('range');
+
+    if (rangeHeader) {
+      // Parse range: "bytes=start-end"
+      const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+      if (!rangeMatch) {
+        return NextResponse.json(
+          { error: 'Invalid Range header' },
+          { status: 416 }
+        );
+      }
+
+      const start = parseInt(rangeMatch[1], 10);
+      const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+
+      // Validate range
+      if (start >= fileSize || end >= fileSize || start > end) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: {
+            'Content-Range': `bytes */${fileSize}`,
+          },
+        });
+      }
+
+      const contentLength = end - start + 1;
+
+      // Read only the requested range
+      const fileHandle = await open(filePath, 'r');
+      const buffer = Buffer.alloc(contentLength);
+      await fileHandle.read(buffer, 0, contentLength, start);
+      await fileHandle.close();
+
+      const headers = new Headers();
+      const disposition = mode === 'inline' ? 'inline' : 'attachment';
+      headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.name)}"`);
+      headers.set('Content-Type', file.mimeType || 'application/octet-stream');
+      headers.set('Content-Length', contentLength.toString());
+      headers.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      headers.set('Accept-Ranges', 'bytes');
+
+      if (mode === 'inline') {
+        headers.set('Access-Control-Allow-Origin', '*');
+      }
+
+      return new NextResponse(buffer, {
+        status: 206,
+        headers,
+      });
+    }
+
+    // No Range header — return full file
     const fileBuffer = await readFile(filePath);
 
-    // Return with proper headers
     const headers = new Headers();
     const disposition = mode === 'inline' ? 'inline' : 'attachment';
-    headers.set(
-      'Content-Disposition',
-      `${disposition}; filename="${encodeURIComponent(file.name)}"`
-    );
+    headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.name)}"`);
     headers.set('Content-Type', file.mimeType || 'application/octet-stream');
-    headers.set('Content-Length', fileStat.size.toString());
+    headers.set('Content-Length', fileSize.toString());
+    headers.set('Accept-Ranges', 'bytes');
+
     // Allow CORS for inline previews
     if (mode === 'inline') {
       headers.set('Access-Control-Allow-Origin', '*');

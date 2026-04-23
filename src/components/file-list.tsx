@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight, FileArchive, Archive } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight, FileArchive, Archive, ClipboardCopy } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -37,7 +37,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, getFileTypeBgColor, type FileItem } from "@/lib/file-utils";
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -184,6 +184,7 @@ export function FileList() {
     colorLabelFilter,
     setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
     currentDriverId,
+    setCopyToFile,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -565,6 +566,9 @@ export function FileList() {
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setCopyToFile({ id: file.id, name: file.name, parentId: file.parentId })}>
+            <ClipboardCopy className="w-4 h-4" /> Copy to...
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
             <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
           </DropdownMenuItem>
@@ -653,6 +657,9 @@ export function FileList() {
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => setCopyToFile({ id: file.id, name: file.name, parentId: file.parentId })}>
+            <ClipboardCopy className="w-4 h-4" /> Copy to...
           </ContextMenuItem>
           <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
             <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
@@ -843,9 +850,37 @@ export function FileList() {
                 : section === "trash"
                 ? "Deleted items will appear here"
                 : section === "files"
-                ? "Upload files or create a folder to get started"
+                ? "This folder is empty. Drop files here or click Upload to add files."
                 : `Items you ${section === "starred" ? "star" : "modify"} will appear here`}
             </p>
+            {/* Upload button for empty files section */}
+            {section === "files" && !isSearch && !typeFilter && !colorLabelFilter && (
+              <Button
+                size="sm"
+                className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.multiple = true;
+                  input.onchange = async (ev) => {
+                    const fileList = (ev.target as HTMLInputElement).files;
+                    if (!fileList || fileList.length === 0) return;
+                    for (const file of Array.from(fileList)) {
+                      try {
+                        await uploadFileWithProgress(file, currentFolderId, queryClient);
+                      } catch {
+                        // Error already shown via toast
+                      }
+                    }
+                  };
+                  input.click();
+                }}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload Files
+              </Button>
+            )}
           </motion.div>
         </ContextMenuTrigger>
         {emptyAreaContextMenu}
@@ -912,11 +947,13 @@ export function FileList() {
                         onDrop={(e) => handleRowDrop(e, file)}
                         className={cn(
                           "group/row cursor-pointer transition-all duration-150 border-t border-border/30",
+                          // Alternating row backgrounds (zebra striping)
+                          index % 2 === 1 && !isSelected && !isDragOver && "bg-muted/15",
                           isDragging && "opacity-50",
                           isDragOver
                             ? "border-l-[3px] border-l-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/15"
                             : isSelected
-                            ? "bg-emerald-500/5 hover:bg-emerald-500/10 border-l-[3px] border-l-emerald-500"
+                            ? "bg-emerald-500/8 hover:bg-emerald-500/12 border-l-[3px] border-l-emerald-500"
                             : colorStyle
                             ? cn("border-l-[3px] hover:bg-muted/50 hover:border-l-emerald-500/60", colorStyle.border)
                             : "border-l-[3px] border-l-transparent hover:bg-muted/50 hover:border-l-emerald-500/60"
@@ -936,7 +973,9 @@ export function FileList() {
                             {colorStyle && (
                               <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", colorStyle.dot)} />
                             )}
-                            <FileTypeIcon file={file} className={cn("shrink-0", compactMode ? "w-4 h-4" : "w-5 h-5")} />
+                            <div className={cn("shrink-0 rounded-md flex items-center justify-center", getFileTypeBgColor(file), compactMode ? "w-6 h-6" : "w-7 h-7")}>
+                              <FileTypeIcon file={file} className={compactMode ? "w-3.5 h-3.5" : "w-4 h-4"} />
+                            </div>
                             <span className={cn("truncate font-medium", compactMode ? "text-xs" : "text-sm")}>
                               {showExtensions && file.type === "file" && getFileExtension(file.name) ? getFileNameWithoutExtension(file.name) : file.name}
                             </span>
@@ -949,11 +988,25 @@ export function FileList() {
                           </div>
                         </TableCell>
                         <TableCell className={cn("hidden md:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
-                          {file.type === "folder" ? "—" : formatFileSize(file.size)}
+                          {file.type === "folder" ? (
+                            <div className="flex items-center gap-2">
+                              <span>{file.childrenCount ?? 0} items</span>
+                              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-all",
+                                    (file.childrenCount ?? 0) === 0 ? "bg-muted-foreground/20 w-0" : (file.childrenCount ?? 0) < 10 ? "bg-emerald-400" : (file.childrenCount ?? 0) < 50 ? "bg-amber-400" : "bg-rose-400"
+                                  )}
+                                  style={{ width: `${Math.min(100, ((file.childrenCount ?? 0) / 100) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : formatFileSize(file.size)}
                         </TableCell>
                         <TableCell className={cn("hidden sm:table-cell text-muted-foreground", compactMode ? "text-xs" : "text-sm")}>
                           <div className="flex items-center gap-1.5">
-                            {getFileTypeLabel(file)}
+                            <FileTypeIcon file={file} className="w-4 h-4 shrink-0" />
+                            <span>{getFileTypeLabel(file)}</span>
                             {showExtensions && file.type === "file" && (() => {
                               const ext = file.name.split(".").length > 1 ? `.${file.name.split(".").pop()}` : "";
                               return ext ? <span className="text-[10px] text-muted-foreground/70 font-mono">{ext.toLowerCase()}</span> : null;

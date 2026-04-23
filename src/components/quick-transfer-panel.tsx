@@ -575,7 +575,15 @@ function QuickTransferPanelInner() {
           </div>
           <div>
             <h2 className="text-xl font-bold">{t.app.quickTransfer}</h2>
-            <p className="text-sm text-muted-foreground">{t.app.quickTransferDesc}</p>
+            <p className="text-sm text-muted-foreground">
+              {t.app.quickTransferDesc}
+              {currentFolderId !== "root" && (
+                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+                  <Folder className="w-3 h-3" />
+                  {t.app.currentFolder}
+                </span>
+              )}
+            </p>
           </div>
         </motion.div>
 

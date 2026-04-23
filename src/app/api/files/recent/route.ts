@@ -24,7 +24,7 @@ export async function GET() {
       take: 10,
       include: {
         _count: {
-          select: { children: true },
+          select: { children: { where: { isTrashed: false } } },
         },
       },
     });

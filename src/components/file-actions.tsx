@@ -3,6 +3,7 @@
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { RenameDialog } from "@/components/rename-dialog";
 import { MoveDialog } from "@/components/move-dialog";
+import { CopyToDialog } from "@/components/copy-to-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { FilePreview } from "@/components/file-preview";
 import { FileDetailPanel } from "@/components/file-detail-panel";
@@ -16,6 +17,7 @@ export function FileActions() {
       <CreateFolderDialog />
       <RenameDialog />
       <MoveDialog />
+      <CopyToDialog />
       <ShareDialog />
       <FilePreview />
       <FileDetailPanel />

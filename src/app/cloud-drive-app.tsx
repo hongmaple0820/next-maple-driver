@@ -9,11 +9,13 @@ import { FileList } from "@/components/file-list";
 import { UploadZone } from "@/components/upload-zone";
 import { FileActions } from "@/components/file-actions";
 import { BatchActions } from "@/components/batch-actions";
+import { BatchMoveDialog, BatchCopyDialog } from "@/components/batch-move-copy-dialog";
 import { FileStatusBar } from "@/components/file-status-bar";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
 import { AdminPanel } from "@/components/admin-panel";
 import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
+import { TaskManagerPanel } from "@/components/task-manager-panel";
 import { TransferPanel } from "@/components/transfer-panel";
 import { QuickTransferPanel } from "@/components/quick-transfer-panel";
 import { TransferStationPanel } from "@/components/transfer-station-panel";
@@ -272,6 +274,10 @@ export default function CloudDriveApp() {
       {/* Batch actions floating bar */}
       <BatchActions />
 
+      {/* Batch move/copy dialogs */}
+      <BatchMoveDialog />
+      <BatchCopyDialog />
+
       {/* Keyboard shortcuts dialog */}
       <KeyboardShortcutsDialog />
 
@@ -280,6 +286,9 @@ export default function CloudDriveApp() {
 
       {/* Upload progress floating panel */}
       <UploadProgressOverlay />
+
+      {/* Task Manager floating panel */}
+      <TaskManagerPanel />
 
       {/* Admin Panel */}
       <AdminPanel />

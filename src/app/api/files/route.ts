@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         _count: {
-          select: { children: true },
+          select: { children: { where: { isTrashed: false } } },
         },
       },
       orderBy: [{ type: 'desc' }, { name: 'asc' }],

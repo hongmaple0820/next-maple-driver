@@ -2,15 +2,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
-import { formatFileSize, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
-import { Folder, File, CheckCircle2 } from "lucide-react";
+import { formatFileSize, matchesTypeFilter, type FileItem, type StorageStats } from "@/lib/file-utils";
+import { Folder, File, CheckCircle2, ArrowUpCircle, HardDrive } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 export function FileStatusBar() {
-  const { currentFolderId, section, searchQuery, typeFilter, selectedFileIds, currentDriverId } = useFileStore();
+  const { currentFolderId, section, searchQuery, typeFilter, selectedFileIds, currentDriverId, uploadProgress } = useFileStore();
   const { t } = useI18n();
 
   const isSearch = searchQuery.trim().length > 0;
+  const activeUploads = uploadProgress.filter(u => u.status === "uploading");
 
   const { data: files = [] } = useQuery<FileItem[]>({
     queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId],
@@ -44,6 +47,16 @@ export function FileStatusBar() {
     },
   });
 
+  const { data: stats } = useQuery<StorageStats>({
+    queryKey: ["storage-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/files/stats");
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
   const filteredFiles = typeFilter === "all"
     ? files
     : files.filter((file) => matchesTypeFilter(file, typeFilter));
@@ -55,40 +68,67 @@ export function FileStatusBar() {
   const selectedCount = selectedFileIds.size;
 
   return (
-    <div className="border-t border-border/60 bg-muted/20 backdrop-blur-sm px-4 py-2 flex items-center justify-between text-xs text-muted-foreground border-l-2 border-l-emerald-500/30 hover:text-[13px] transition-all duration-150">
-      <div className="flex items-center gap-2.5">
+    <div className="border-t border-border/60 bg-muted/20 backdrop-blur-sm px-4 py-1.5 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex items-center gap-3">
+        {/* Folder count */}
         <div className="flex items-center gap-1.5">
           {folderCount > 0 && (
             <span className="flex items-center gap-1">
-              <Folder className="w-3 h-3 text-amber-500/60" />
-              {folderCount}
+              <Folder className="w-3 h-3 text-amber-500/70" />
+              <span>{folderCount} {folderCount === 1 ? "folder" : "folders"}</span>
             </span>
           )}
           {onlyFileCount > 0 && (
             <span className="flex items-center gap-1">
-              <File className="w-3 h-3 text-sky-500/60" />
-              {onlyFileCount}
+              <File className="w-3 h-3 text-sky-500/70" />
+              <span>{onlyFileCount} {onlyFileCount === 1 ? "file" : "files"}</span>
             </span>
           )}
           {fileCount === 0 && (
             <span>0 items</span>
           )}
         </div>
+        {/* Divider */}
         {fileCount > 0 && (
           <>
-            <span className="text-border/60">·</span>
-            <span>{formatFileSize(totalSize)}</span>
+            <div className="w-px h-3 bg-border/40" />
+            <span className="flex items-center gap-1">
+              <HardDrive className="w-3 h-3 text-muted-foreground/50" />
+              {formatFileSize(totalSize)}
+            </span>
+          </>
+        )}
+        {/* Storage usage indicator */}
+        {stats && (
+          <>
+            <div className="w-px h-3 bg-border/40" />
+            <div className="flex items-center gap-1.5">
+              <Progress value={(stats.usedBytes / stats.totalBytes) * 100} className="w-16 h-1" />
+              <span>{((stats.usedBytes / stats.totalBytes) * 100).toFixed(0)}% {t.app.used}</span>
+            </div>
           </>
         )}
       </div>
-      {selectedCount > 0 && (
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-            {selectedCount} selected
-          </span>
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        {/* Active uploads indicator */}
+        {activeUploads.length > 0 && (
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-sky-500/10">
+            <ArrowUpCircle className="w-3 h-3 text-sky-500 animate-pulse" />
+            <span className="text-sky-600 dark:text-sky-400 font-medium">
+              {activeUploads.length} {activeUploads.length === 1 ? "upload" : "uploads"} in progress
+            </span>
+          </div>
+        )}
+        {/* Selected count */}
+        {selectedCount > 0 && (
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+              {selectedCount} selected
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -588,7 +588,21 @@ export function AdminDriversTab() {
               {t.admin.addDriver}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent
+            className="max-w-lg max-h-[85vh] overflow-y-auto"
+            onInteractOutside={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest('[role="menu"]') || target.closest('[data-radix-popper-content-wrapper]')) {
+                e.preventDefault();
+              }
+            }}
+            onPointerDownOutside={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest('[role="menu"]') || target.closest('[data-radix-popper-content-wrapper]')) {
+                e.preventDefault();
+              }
+            }}
+          >
             <DialogHeader>
               <DialogTitle>{t.admin.addStorageDriver}</DialogTitle>
             </DialogHeader>

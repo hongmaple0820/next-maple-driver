@@ -127,6 +127,18 @@ interface FileStore {
   crossDriverMoveFileIds: string[];
   setCrossDriverMoveFileIds: (ids: string[]) => void;
 
+  // Batch move/copy dialog
+  batchMoveOpen: boolean;
+  setBatchMoveOpen: (open: boolean) => void;
+  batchCopyOpen: boolean;
+  setBatchCopyOpen: (open: boolean) => void;
+  batchOperationFileIds: string[];
+  setBatchOperationFileIds: (ids: string[]) => void;
+
+  // Batch delete confirmation
+  batchDeleteOpen: boolean;
+  setBatchDeleteOpen: (open: boolean) => void;
+
   // Dialogs
   createFolderOpen: boolean;
   setCreateFolderOpen: (open: boolean) => void;
@@ -136,6 +148,9 @@ interface FileStore {
 
   moveFile: { id: string; name: string; parentId: string } | null;
   setMoveFile: (file: { id: string; name: string; parentId: string } | null) => void;
+
+  copyToFile: { id: string; name: string; parentId: string } | null;
+  setCopyToFile: (file: { id: string; name: string; parentId: string } | null) => void;
 
   shareFile: { id: string; name: string } | null;
   setShareFile: (file: { id: string; name: string } | null) => void;
@@ -314,6 +329,18 @@ export const useFileStore = create<FileStore>((set) => ({
   crossDriverMoveFileIds: [],
   setCrossDriverMoveFileIds: (ids) => set({ crossDriverMoveFileIds: ids }),
 
+  // Batch move/copy dialog
+  batchMoveOpen: false,
+  setBatchMoveOpen: (open) => set({ batchMoveOpen: open }),
+  batchCopyOpen: false,
+  setBatchCopyOpen: (open) => set({ batchCopyOpen: open }),
+  batchOperationFileIds: [],
+  setBatchOperationFileIds: (ids) => set({ batchOperationFileIds: ids }),
+
+  // Batch delete confirmation
+  batchDeleteOpen: false,
+  setBatchDeleteOpen: (open) => set({ batchDeleteOpen: open }),
+
   // Detail panel
   detailFile: null,
   setDetailFile: (file) => set({ detailFile: file }),
@@ -327,6 +354,9 @@ export const useFileStore = create<FileStore>((set) => ({
 
   moveFile: null,
   setMoveFile: (file) => set({ moveFile: file }),
+
+  copyToFile: null,
+  setCopyToFile: (file) => set({ copyToFile: file }),
 
   shareFile: null,
   setShareFile: (file) => set({ shareFile: file }),

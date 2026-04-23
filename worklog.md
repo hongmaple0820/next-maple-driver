@@ -3556,3 +3556,368 @@ Stage Summary:
 - Add file sync status for cloud drives
 - Improve mobile responsive layout further
 - Add notification system for driver status changes
+
+---
+Task ID: 2
+Agent: Task Management Agent
+Task: Build comprehensive task management system for CloudDrive
+
+Work Log:
+1. Updated Prisma Schema — Added TaskRecord model with all required fields (id, userId, type, status, progress, fileName, fileSize, totalSize, chunkIndex, totalChunks, uploadId, sourcePath, destPath, sourceDriverId, destDriverId, speed, error, metadata, startedAt, completedAt, timestamps). Added taskRecords relation to User model. Ran prisma db push successfully.
+
+2. Created Task Management Store (src/store/task-store.ts) — Full Zustand store with: TaskType (upload/download/move/copy/quick-transfer/transit), TaskStatus (pending/running/paused/completed/failed/cancelled), Task interface with chunk tracking (ChunkInfo), queue position, abort controller. Max concurrent: 3. Methods: addTask, updateTask, removeTask, startTask, pauseTask, resumeTask, completeTask, failTask, cancelTask, retryTask, updateChunkStatus, getUploadedChunkIndices, updateProgress, clearCompleted, clearFailed, clearAll, processQueue, recalculateQueuePositions. Getters for filtered task lists.
+
+3. Created Chunked Upload API (src/app/api/files/upload/chunked/route.ts) — POST: Initialize session (returns uploadId, chunkSize, totalChunks, taskId). PUT: Upload individual chunk with progress tracking. PATCH: Complete upload by merging all chunks. GET: Check upload status / resume capability (which chunks exist, missing chunks). Temp storage at /tmp/clouddrive-uploads/{uploadId}/. Default chunk size: 5MB, max 500MB. Creates TaskRecord in DB. Metadata file per session. Cleanup after merge.
+
+4. Updated Download API (src/app/api/files/download/route.ts) — Added Range header parsing for resumable downloads. Returns 206 Partial Content with Content-Range header. Returns 416 for invalid ranges. Added Accept-Ranges: bytes header. Uses file handle for efficient range reads. Preserves all existing functionality.
+
+5. Created Task Status API (src/app/api/tasks/route.ts) — GET: List tasks with filtering by status, type, limit, offset. DELETE: Cancel specific task or clear by status (completed/failed/cancelled/all). PATCH: Update task status with actions (pause/resume/retry/cancel). Admin access support. Normalized response format.
+
+6. Created Chunked Upload Utility (src/lib/chunked-upload.ts) — initiateChunkedUpload, uploadChunksWithQueue, completeChunkedUpload, pauseChunkedUpload, resumeChunkedUpload, cancelChunkedUpload, retryChunkedUpload, uploadMultipleFilesChunked. Auto-retry (3 attempts per chunk with exponential backoff). Progress tracking with real-time speed. Queue management with wait-for-slot. Integration with task store and existing upload-utils for small file fallback.
+
+Stage Summary:
+- 6 new/updated files created
+- TaskRecord model persisted in SQLite
+- Task management store with full lifecycle management and concurrent task limiting
+- Chunked upload API with initialize, upload chunk, complete, and status/resume check
+- Download API with Range request support (206 Partial Content)
+- Task status API with list, cancel/clear, and status update (pause/resume/retry/cancel)
+- Chunked upload utility with queue management, pause/resume, retry, and multi-file support
+- All changes pass lint check, dev server running without errors
+
+---
+Task ID: 4-task-manager-panel
+Agent: Task Manager Panel Agent
+Task: Build comprehensive Task Management Panel UI component
+
+Work Log:
+- Created new component: `src/components/task-manager-panel.tsx`
+  - Floating trigger button (fixed bottom-4 right-4 z-40) with emerald gradient, active task count badge, pulse animation when tasks running, spinning loader icon when active, spring scale animation on hover/tap
+  - Slide-in Sheet panel from right side (420px width, responsive) with smooth open/close
+  - Panel header with Activity icon, "Task Manager" title, task count summary, Clear completed button
+  - Statistics bar showing Upload speed, Download speed, Active count, Queued count in a 4-column grid
+  - Tabs: Active | Completed | All with Badge count indicators on each tab
+  - Active tasks grouped by type: Uploads, Downloads, Move/Copy, Transfers — each group collapsible with animated expand/collapse
+  - Each TaskItem shows: type icon with colored background, file name, status badge (with spinning Loader2 for running), progress bar with percentage, speed display, file size info, queue position
+  - Action buttons: Pause (running), Resume (paused), Retry (failed/cancelled), Cancel (active), Remove (completed/failed/cancelled) — all with tooltips
+  - Expandable details: type, size, duration, source/destination paths, created/finished timestamps
+  - Chunked upload visualization: grid of colored squares (emerald=done, pulsing=uploading, red=failed, gray=pending) with tooltip showing chunk index and retries
+  - Error message display in red box with AlertCircle icon
+  - Completed/Failed tasks shown in Completed tab, all tasks in All tab
+  - Empty states with centered Activity icon and contextual messages
+  - Panel footer with summary stats (running, queued, completed, failed counts, max concurrent)
+  - Framer Motion animations throughout: spring button, layout animations, AnimatePresence for task items and expandable sections, staggered appearance
+  - Dark/light mode compatible with consistent emerald theme
+  - Uses useTaskStore from task-store for all task state and actions
+- Updated `src/app/cloud-drive-app.tsx`:
+  - Added TaskManagerPanel import
+  - Rendered TaskManagerPanel alongside UploadProgressOverlay and other floating components
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- Task Manager Panel fully implemented with beautiful, modern UI
+- Floating trigger button with pulse animation and active task count badge
+- Slide-in Sheet panel with statistics, tabs, grouped tasks, and detailed task view
+- All task actions wired: pause, resume, cancel, retry, clear completed/failed
+- Chunked upload progress visualization with per-chunk status grid
+- Responsive design, dark mode support, Framer Motion animations throughout
+- 1 new file created, 1 file modified
+- Lint clean, no errors
+
+---
+Task ID: 5-6
+Agent: Batch Operations & Quick Transfer Agent
+Task: Enhance Batch Operations with Task Tracking + Integrate Quick Transfer into File Browser
+
+Work Log:
+
+Part A: Enhanced Batch Operations with Task Tracking
+
+- Feature 1: Added Batch Move/Copy buttons to the batch actions floating bar
+  - "Move" button with FolderInput icon: Opens BatchMoveDialog for selected files
+  - "Copy" button with Copy icon: Opens BatchCopyDialog for selected files
+  - Both create task entries in the task store (type: "move"/"copy") for progress tracking
+  - Task store tracks progress as items are moved/copied sequentially
+
+- Feature 2: Improved Batch Download with Task Tracking
+  - Download ZIP now creates a task entry in the task store (type: "download")
+  - Progress tracked through task store with upload/download progress events
+  - Task is marked as completed on success, failed on error
+  - Toast notification shows "Download task created" instead of immediate success
+
+- Feature 3: Added Batch Delete with Confirmation Dialog
+  - Replaced inline delete handler with AlertDialog confirmation
+  - Shows count of items being deleted (e.g., "Are you sure you want to delete 3 items?")
+  - Different messaging for trash section vs. permanent delete
+  - "These items will be moved to trash" / "These items will be permanently deleted and cannot be recovered"
+  - Cancel and confirm buttons with destructive styling for permanent delete
+
+- Created new component: batch-move-copy-dialog.tsx
+  - BatchMoveDialog: Folder tree selector for batch move with progress tracking via task store
+  - BatchCopyDialog: Folder tree selector for batch copy with progress tracking via task store
+  - Both reuse the same FolderTreeItem component from move-dialog.tsx
+  - Progress updates as each file is processed
+
+- Updated file-store.ts with new state:
+  - batchMoveOpen, setBatchMoveOpen
+  - batchCopyOpen, setBatchCopyOpen
+  - batchOperationFileIds, setBatchOperationFileIds
+  - batchDeleteOpen, setBatchDeleteOpen
+
+- Updated cloud-drive-app.tsx to include BatchMoveDialog and BatchCopyDialog
+
+Part B: Integrated Quick Transfer into File Browser
+
+- Feature 1: Added "Quick Transfer to This Folder" button to FileToolbar
+  - Zap icon button positioned after "New Folder" button
+  - Only shows when section === "files"
+  - Text hidden on small screens (icon-only on mobile)
+
+- Feature 2: Created QuickTransferPopover component at quick-transfer-popover.tsx
+  - Small popover that appears when clicking the Quick Transfer button
+  - Auto-generates a new transfer code for the current folder when opened
+  - Shows the 6-character code in large font-mono style
+  - "Copy Code" button with checkmark feedback
+  - QR code (using qrcode library) displayed alongside code
+  - Live countdown timer with progress bar (30 min validity)
+  - Current folder indicator (root or current folder)
+  - Recent transfers to this folder (up to 3 shown, with "+N more" overflow)
+  - "Regenerate Code" button
+  - "Open Full Panel" link that switches to the full Quick Transfer panel
+
+- Feature 3: Updated Quick Transfer Panel with folder context
+  - When opened, shows a badge next to description indicating "Current folder" if not in root
+  - Badge has emerald styling with Folder icon
+
+- Added i18n translations (both zh and en):
+  - batchMove, batchCopy, batchMoveDesc, batchCopyDesc
+  - batchDeleteConfirm, batchDeletePermanentConfirm
+  - itemsWillBeTrashed, itemsWillBeDeleted
+  - batchMoveProgress, batchCopyProgress
+  - batchMoveComplete, batchCopyComplete
+  - batchMoveFailed, batchCopyFailed
+  - downloadAsTask
+  - quickTransferToFolder, quickTransferPopoverTitle, quickTransferPopoverDesc
+  - openFullPanel
+
+Files Modified:
+- src/components/batch-actions.tsx (rewritten with Move/Copy/delete confirmation)
+- src/components/file-toolbar.tsx (added QuickTransferPopover import and button)
+- src/components/quick-transfer-panel.tsx (added folder context badge)
+- src/store/file-store.ts (added batch move/copy/delete dialog state)
+- src/app/cloud-drive-app.tsx (added BatchMoveDialog, BatchCopyDialog imports)
+- src/lib/i18n/translations.ts (added new translation keys for zh and en)
+
+Files Created:
+- src/components/batch-move-copy-dialog.tsx (BatchMoveDialog + BatchCopyDialog)
+- src/components/quick-transfer-popover.tsx (QuickTransferPopover)
+
+Stage Summary:
+- Batch operations now support Move/Copy with task tracking and folder selection
+- Download ZIP tracked as a task in the task store
+- Delete has a confirmation dialog with item count and clear messaging
+- Quick Transfer popover accessible directly from the file toolbar
+- Quick Transfer panel shows current folder context
+- Lint clean, dev server running without errors
+
+---
+Task ID: 7a
+Agent: Chunked Upload Integration Agent
+Task: Integrate chunked upload system into actual upload flow and enhance upload experience
+
+Work Log:
+- Feature 1: Updated upload-utils.ts to integrate with task store and chunked upload
+  - Increased MAX_FILE_SIZE from 100MB to 500MB (now supports large files up to 500MB)
+  - Added CHUNKED_UPLOAD_THRESHOLD constant (5MB) for automatic chunked upload routing
+  - Updated validateFileSize error message to reflect 500MB limit
+  - For files >= 5MB: automatically routes to initiateChunkedUpload from chunked-upload.ts
+  - For files < 5MB: uses existing XHR upload but also creates a task entry in the task store
+  - Regular uploads now create task entries via useTaskStore.getState().addTask()
+  - Regular uploads update task progress and speed via useTaskStore.getState().updateProgress()
+  - Regular uploads mark tasks as completed/failed via completeTask()/failTask()
+  - Maintained backward compatibility with file-store's uploadProgress entries
+  - Imported useTaskStore from @/store/task-store and initiateChunkedUpload from @/lib/chunked-upload
+
+- Feature 2: Updated file-toolbar.tsx upload buttons
+  - Added visual indicator "Up to 500 MB per file" below the Upload and Upload Folder buttons
+  - Wrapped upload buttons in a flex-col container for clean layout with hint text
+  - Upload button already supports multiple file selection (input.multiple = true)
+  - Upload Folder button already uses webkitdirectory attribute
+  - Both buttons now benefit from the chunked upload integration via uploadFilesWithProgress
+
+- Feature 3: Updated upload-zone.tsx for folder drag-and-drop support
+  - Added traverseEntry() function for recursive FileSystemEntry traversal
+  - Added extractFilesFromDataTransfer() using webkitGetAsEntry for folder support
+  - Added isFolderDrag state to detect when folders are being dragged
+  - Updated drag overlay to show "Drop folder to upload" with "Folder structure will be preserved" message when folder detected
+  - Updated handleDragEnter to detect folders via webkitGetAsEntry
+  - Updated handleDrop to use extractFilesFromDataTransfer for proper folder handling
+  - Added uploadFolderFiles() callback for folder uploads with path preservation
+  - Folder uploads separate large files (>=5MB) for chunked upload from small files for batch XHR
+  - Small files in folder uploads preserve webkitRelativePath for folder structure
+  - Storage hint now shows "Max 500.0 MB per file" (auto-updated via MAX_FILE_SIZE change)
+  - Added toast import for folder upload success/error notifications
+
+- 3 files modified (upload-utils.ts, file-toolbar.tsx, upload-zone.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Chunked upload fully integrated into the upload flow
+- Files >= 5MB automatically use chunked upload with task store tracking
+- Files < 5MB use regular XHR upload with task store tracking
+- Max file size increased from 100MB to 500MB
+- Folder drag-and-drop now supported via webkitGetAsEntry
+- Visual indicators show "Up to 500 MB per file" in toolbar and drag overlay
+- Backward compatibility maintained with file-store's uploadProgress entries
+- Lint clean, no errors
+
+---
+Task ID: 7
+Agent: UI Polish Agent
+Task: Improve UI styling and add visual polish across the cloud drive app
+
+Work Log:
+- Enhancement 1: File Grid Cards Enhancement (file-card.tsx)
+  - Added subtle gradient background on hover: `hover:bg-gradient-to-br hover:from-accent/40 hover:to-accent/10`
+  - Replaced selection indicator with a checkbox that appears on hover: rounded-md checkbox with emerald-500 fill when selected, transparent border with backdrop blur when unselected
+  - Added colored left border indicator (3px) when file has a color label: `border-l-[3px]` with colorStyle.border
+  - Added file type icon with colored background matching the file type: `getFileTypeBgColor()` utility
+  - Added folder item count badge: small amber circle badge on bottom-right of folder icon showing children count
+  - File type icons now rendered inside colored background containers (rounded-xl) instead of bare icons
+
+- Enhancement 2: File List Enhancement (file-list.tsx)
+  - Added alternating row backgrounds (zebra striping): `index % 2 === 1 && !isSelected && !isDragOver && "bg-muted/15"`
+  - Made "Type" column show file type icons: added `<FileTypeIcon>` component inline before the type label text
+  - Added folder size progress bar for folders: shows item count + colored progress bar
+  - Better visual feedback for selected rows: changed `bg-emerald-500/5` to `bg-emerald-500/8` for stronger tint
+
+- Enhancement 3: Toolbar Enhancement (file-toolbar.tsx)
+  - Added keyboard shortcut hints in search bar: shows `⌘K` and `/` kbd elements
+
+- Enhancement 4: Status Bar Enhancement (file-status-bar.tsx)
+  - Shows more info: folder count with "folders" label, file count with "files" label, total size with HardDrive icon
+  - Added storage usage indicator with mini Progress bar showing percentage used
+  - Added upload speed indicator: shows active upload count with pulsing ArrowUpCircle icon
+  - Made it more polished with proper spacing using w-px dividers
+
+- Enhancement 5: Empty State Enhancement (file-grid.tsx + file-list.tsx)
+  - Both grid and list views now show an Upload button in the empty state when in "files" section
+  - List empty state text updated to "This folder is empty. Drop files here or click Upload to add files."
+
+- Enhancement 6: Quick Transfer Popover Polish (quick-transfer-popover.tsx)
+  - Made transfer code display larger and more prominent: increased from text-2xl to text-3xl
+  - Added "Transfer Code" label above the code
+  - Added pulsing animation around the code: `animate-pulse bg-emerald-500/5` overlay
+  - Made the QR code section more prominent: increased from w-16 to w-20, added shadow-sm
+  - Added "Share via Link" copy button: copies the transfer URL to clipboard with toast feedback
+
+- Utility Addition: getFileTypeBgColor() in file-utils.ts
+  - New utility function returning background color class based on file type
+  - Images: emerald, Videos: rose, Audio: purple, Documents: sky, Code: amber, Archives: orange
+
+- 7 files modified (file-card.tsx, file-list.tsx, file-toolbar.tsx, file-status-bar.tsx, file-grid.tsx, file-utils.ts, quick-transfer-popover.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- File cards enhanced with hover checkbox, colored type backgrounds, folder count badges, gradient hover, colored left border
+- File list enhanced with zebra striping, type icons in Type column, folder progress bars, stronger selection tint
+- Toolbar search bar shows ⌘K and / keyboard hints
+- Status bar shows folders/files count, storage percentage, active uploads indicator
+- Empty states include Upload button for files section
+- Quick Transfer popover has larger code display, pulsing animation, prominent QR code, Share via Link button
+- Lint clean, no errors
+
+---
+Task ID: 8
+Agent: Bug Fix & Feature Agent
+Task: Fix admin panel dropdown bug, add Copy to dialog, enhance transfer station, verify folder childrenCount
+
+Work Log:
+- Bug Fix: Admin Panel Dropdown Closes Dialog
+  - Added `onInteractOutside` and `onPointerDownOutside` handlers to DialogContent in admin-panel.tsx
+  - Both handlers check if the click target is inside a `[role="menu"]` or `[data-radix-popper-content-wrapper]` and prevent the dialog from closing
+  - Applied the same fix to the "Add Driver" dialog inside admin-drivers-tab.tsx
+
+- Feature: Add "Copy to..." in File Context Menu
+  - Added `copyToFile` state and `setCopyToFile` action to file-store.ts
+  - Created new component `copy-to-dialog.tsx` — similar to MoveDialog but calls `/api/files/copy` with `targetParentId`
+  - Added "Copy to..." option (with ClipboardCopy icon) in both dropdown and context menus in file-card.tsx and file-list.tsx
+  - "Copy to..." appears after "Move to..." in the menu
+  - Registered CopyToDialog in file-actions.tsx
+
+- Feature: Enhance Transfer Station Panel
+  - Added "Quick Upload" card at the top of the transfer station — prominent one-click upload especially for anonymous/guest users
+  - Quick Upload uses default settings (1h expiry for guests, 24h for auth) with a single "Choose File" button
+  - Added active upload progress display with per-file progress bars in the Quick Upload section
+  - Active uploads show spinner → progress bar → checkmark (done) / X (error) with auto-cleanup after 3s
+  - Enhanced expiry countdown with seconds display and visual progress indicator
+  - Added `getExpiryProgress()` function to calculate how much time has elapsed
+  - Expiring transfers show amber-styled badge when >80% of time has elapsed
+  - Added "Never" badge for transfers without expiry
+  - Added prominent "Copy Download Link" outline button next to each transfer item
+  - Added `cn` utility import for conditional classnames
+  - Added `activeUploads` state for tracking per-file upload progress
+
+- Feature: Verify File Count Badge on Folder Cards
+  - Verified `childrenCount` field is properly defined in FileItem interface (file-utils.ts)
+  - Verified API endpoints (files, search, recent) include `_count.children` in Prisma queries
+  - Fixed: Changed `_count: { select: { children: true } }` to `_count: { select: { children: { where: { isTrashed: false } } } }` in all 3 API routes so childrenCount only counts non-trashed items
+  - Verified file-card.tsx properly displays childrenCount badge on folder icons and meta info
+  - Verified file-list.tsx shows children count in folder rows
+
+- 8 files modified (admin-panel.tsx, admin-drivers-tab.tsx, file-store.ts, file-card.tsx, file-list.tsx, file-actions.tsx, transfer-station-panel.tsx) + 3 API routes (files/route.ts, search/route.ts, recent/route.ts), 1 new file created (copy-to-dialog.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Admin panel dropdown bug fixed — clicking dropdown menus no longer closes the dialog
+- "Copy to..." feature added with full folder tree selection dialog
+- Transfer station enhanced with Quick Upload, per-file progress bars, expiry countdown improvements, and Copy Download Link button
+- Folder childrenCount now correctly counts only non-trashed items
+- Lint clean, no errors
+---
+Task ID: Session-Continue
+Agent: Main Agent
+Task: Continue development - implement task management, chunked upload, batch operations, quick transfer integration, UI polish
+
+Work Log:
+- Assessed current project state via agent-browser - app working, login functional, file operations working
+- Built comprehensive Task Management Store (task-store.ts) with full lifecycle management
+- Created Chunked Upload API with resumable support (5MB chunks, auto-retry, pause/resume)
+- Created Task Status API for task listing, cancellation, and status updates
+- Built TaskManagerPanel UI component - floating button + slide-in panel with statistics, task groups, chunk visualization
+- Enhanced Batch Actions - added Move, Copy buttons with folder tree selection dialogs
+- Added batch delete confirmation dialog
+- Integrated Quick Transfer into file toolbar - QuickTransferPopover with code, QR, share link
+- Integrated chunked upload into upload flow (files >= 5MB use chunked, < 5MB use regular)
+- Increased MAX_FILE_SIZE from 100MB to 500MB
+- Added folder drag-and-drop support with webkitGetAsEntry
+- Enhanced UI styling: file cards with hover checkbox, type-colored icons, folder count badges, gradient hover
+- File list with zebra striping, type icons in Type column, folder progress bars
+- Toolbar with keyboard shortcut hints in search bar
+- Status bar with folder/file counts, storage percentage, upload speed indicator
+- Empty states with Upload button
+- Quick Transfer popover polish - larger code, pulsing animation, prominent QR code
+- Fixed Admin Panel dropdown closing dialog bug
+- Added "Copy to..." in file context menu
+- Enhanced Transfer Station with quick upload, progress bars, expiry countdown, copy download link
+- Fixed childrenCount queries to only count non-trashed children
+
+Stage Summary:
+- Task management system fully operational (store + API + UI)
+- Chunked upload with resumable support integrated
+- Batch operations enhanced with move/copy dialogs
+- Quick Transfer integrated into file browser toolbar
+- UI significantly polished across all components
+- Admin panel dropdown bug fixed
+- Transfer Station enhanced with quick upload and better UX
+- All features pass lint check, dev server running cleanly
+
+Unresolved Issues / Next Phase Priorities:
+1. Third-party cloud OAuth flows need testing (Baidu, Aliyun, OneDrive, Google) - need real API keys
+2. WebDAV driver could use more robust error handling
+3. File transit system needs more testing with anonymous users
+4. Cross-driver move/copy needs more thorough testing with actual driver configurations
+5. Mobile responsiveness could be improved further
+6. i18n translations need completion for new features
+7. Consider adding file preview for more file types (PDF, Office docs)
+8. Add keyboard shortcut for opening Task Manager

@@ -47,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
@@ -160,6 +161,14 @@ export function TransferStationPanel() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
 
+  // Active uploads with per-file progress
+  const [activeUploads, setActiveUploads] = useState<{
+    id: string;
+    fileName: string;
+    progress: number;
+    status: "uploading" | "done" | "error";
+  }[]>([]);
+
   // Capacity limits
   const ANON_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   const AUTH_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
@@ -222,6 +231,81 @@ export function TransferStationPanel() {
 
     return result;
   }, [transfers, searchQuery, sortField, sortDirection]);
+
+  // Quick upload for guests - single file, immediate upload with defaults
+  const handleQuickUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > maxFileSize) {
+      toast.error(`${t.app.fileExceedsLimit} (${isAuth ? "500MB" : "50MB"})`);
+      e.target.value = "";
+      return;
+    }
+
+    const uploadId = crypto.randomUUID();
+    setActiveUploads(prev => [...prev, { id: uploadId, fileName: file.name, progress: 0, status: "uploading" }]);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("expiresHours", isAuth ? "24" : "1");
+      formData.append("maxDownloads", "-1");
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/transfer/upload");
+
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            const pct = Math.round((ev.loaded / ev.total) * 100);
+            setActiveUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress: pct } : u));
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              const shareUrl = `${window.location.origin}${data.shareUrl}`;
+              setUploadResults(prev => [...prev, { token: data.token, shareUrl, fileName: data.fileName }]);
+              setActiveUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress: 100, status: "done" } : u));
+              toast.success(`${data.fileName} uploaded!`);
+
+              // Generate QR for first result
+              if (uploadResults.length === 0) {
+                QRCode.toDataURL(shareUrl, {
+                  width: 200, margin: 2,
+                  color: { dark: "#059669", light: "#ffffff" },
+                  errorCorrectionLevel: "M",
+                }).then(qr => setResultQrDataUrl(qr)).catch(() => {});
+              }
+            } catch {
+              reject(new Error("Parse error"));
+            }
+          } else {
+            reject(new Error("Upload failed"));
+          }
+          resolve();
+        };
+
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(formData);
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["transfer-list"] });
+    } catch {
+      setActiveUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: "error" } : u));
+      toast.error(`${t.app.failedToUpload}: ${file.name}`);
+    }
+
+    // Clean up completed uploads after a delay
+    setTimeout(() => {
+      setActiveUploads(prev => prev.filter(u => u.status === "uploading"));
+    }, 3000);
+
+    e.target.value = "";
+  }, [isAuth, maxFileSize, t, queryClient, uploadResults.length]);
 
   // Handle file selection
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -507,7 +591,7 @@ export function TransferStationPanel() {
         { value: "168", label: t.app.expires7Days },
       ];
 
-  // Get expiry countdown for a transfer
+  // Get expiry countdown for a transfer - with detailed seconds
   const getExpiryCountdown = (expiresAt: string | null) => {
     if (!expiresAt) return null;
     const diff = new Date(expiresAt).getTime() - Date.now();
@@ -515,9 +599,23 @@ export function TransferStationPanel() {
     const days = Math.floor(diff / 86400000);
     const hours = Math.floor((diff % 86400000) / 3600000);
     const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
     if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  };
+
+  // Get expiry progress percentage (how much time has elapsed)
+  const getExpiryProgress = (createdAt: string, expiresAt: string | null) => {
+    if (!expiresAt) return -1; // Never expires
+    const created = new Date(createdAt).getTime();
+    const expires = new Date(expiresAt).getTime();
+    const now = Date.now();
+    const total = expires - created;
+    const elapsed = now - created;
+    if (total <= 0) return 100;
+    return Math.min(100, Math.max(0, (elapsed / total) * 100));
   };
 
   // Total transfer size used
@@ -555,6 +653,100 @@ export function TransferStationPanel() {
             <QrCode className="w-4 h-4" />
             <span className="hidden sm:inline">{t.app.scanToUpload}</span>
           </Button>
+        </motion.div>
+
+        {/* Quick Upload - especially for guests */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04 }}
+        >
+          <Card className="border-dashed border-2 border-amber-300/60 dark:border-amber-700/40 bg-gradient-to-br from-amber-50/30 to-orange-50/20 dark:from-amber-950/10 dark:to-orange-950/10">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 rounded-lg bg-amber-500/10">
+                  <Upload className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">Quick Upload</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {isAuth ? "Upload a file instantly with default settings" : "Upload a file without signing in (max 50MB, expires in 1 hour)"}
+                  </p>
+                </div>
+                <div className="flex-1" />
+                <label htmlFor="quick-upload-input">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-amber-600 hover:bg-amber-700 cursor-pointer"
+                    asChild
+                  >
+                    <span>
+                      <Upload className="w-3.5 h-3.5" />
+                      Choose File
+                    </span>
+                  </Button>
+                </label>
+                <input
+                  id="quick-upload-input"
+                  type="file"
+                  className="hidden"
+                  onChange={handleQuickUpload}
+                />
+              </div>
+
+              {/* Active Uploads Progress */}
+              <AnimatePresence>
+                {activeUploads.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-2 mt-2"
+                  >
+                    {activeUploads.map((upload) => (
+                      <motion.div
+                        key={upload.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        className="flex items-center gap-3 p-2.5 rounded-lg bg-background/60 border border-border/50"
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                          upload.status === "done" ? "bg-emerald-500/10" :
+                          upload.status === "error" ? "bg-red-500/10" :
+                          "bg-amber-500/10"
+                        )}>
+                          {upload.status === "done" ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : upload.status === "error" ? (
+                            <X className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{upload.fileName}</p>
+                          {upload.status === "uploading" && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Progress value={upload.progress} className="h-1.5 flex-1" />
+                              <span className="text-[10px] text-muted-foreground font-mono w-8 text-right">{upload.progress}%</span>
+                            </div>
+                          )}
+                          {upload.status === "done" && (
+                            <p className="text-xs text-emerald-600 mt-0.5">Upload complete</p>
+                          )}
+                          {upload.status === "error" && (
+                            <p className="text-xs text-red-500 mt-0.5">Upload failed</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* Mode Indicator Banner */}
@@ -1223,11 +1415,19 @@ export function TransferStationPanel() {
                                       {t.app.transferExpired}
                                     </Badge>
                                   ) : countdown ? (
-                                    <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                                    <Badge variant="outline" className={cn(
+                                      "h-4 px-1 text-[9px]",
+                                      getExpiryProgress(transfer.createdAt, transfer.expiresAt) > 80 && "border-amber-500/50 text-amber-600"
+                                    )}>
                                       <Clock className="w-2.5 h-2.5 mr-0.5" />
                                       {countdown}
                                     </Badge>
-                                  ) : null}
+                                  ) : (
+                                    <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                                      <Clock className="w-2.5 h-2.5 mr-0.5" />
+                                      Never
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -1261,13 +1461,26 @@ export function TransferStationPanel() {
                                   size="icon"
                                   className="h-7 w-7"
                                   onClick={() => handleCopyLink(`${window.location.origin}${transfer.shareUrl}`, transfer.id)}
-                                  title={t.app.copyTransferLink}
+                                  title={t.app.copyTransferLink || "Copy Download Link"}
                                 >
                                   {copiedLink === transfer.id ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-600" />
                                   ) : (
                                     <Copy className="w-3.5 h-3.5" />
                                   )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1 px-2"
+                                  onClick={() => handleCopyLink(`${window.location.origin}${transfer.shareUrl}`, `dl-${transfer.id}`)}
+                                >
+                                  {copiedLink === `dl-${transfer.id}` ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                  <span className="hidden sm:inline">{t.app.copyTransferLink || "Copy Link"}</span>
                                 </Button>
                                 <Button
                                   variant="ghost"

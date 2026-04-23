@@ -7,8 +7,9 @@ import { FolderOpen, SearchX, Star, Trash2, Clock, FolderPlus, Upload, Clipboard
 import { useFileStore, type SortField } from "@/store/file-store";
 import { FileCard } from "@/components/file-card";
 import { getFileTypeLabel, matchesTypeFilter, type FileItem } from "@/lib/file-utils";
-import { uploadFileWithProgress } from "@/lib/upload-utils";
+import { uploadFileWithProgress, uploadFilesWithProgress } from "@/lib/upload-utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
@@ -389,6 +390,28 @@ export function FileGrid() {
                 ? t.app.starredItemsAppearHere
                 : t.app.modifiedItemsAppearHere}
             </p>
+            {/* Upload button for empty files section */}
+            {section === "files" && !isSearch && !typeFilter && !colorLabelFilter && (
+              <Button
+                size="sm"
+                className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.multiple = true;
+                  input.onchange = async (ev) => {
+                    const fileList = (ev.target as HTMLInputElement).files;
+                    if (!fileList || fileList.length === 0) return;
+                    await uploadFilesWithProgress(fileList, currentFolderId, queryClient);
+                  };
+                  input.click();
+                }}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload Files
+              </Button>
+            )}
             {/* Quick action hint */}
             {section === "starred" && !isSearch && !typeFilter && (
               <p className="text-xs text-muted-foreground/50 mt-2 flex items-center gap-1">
