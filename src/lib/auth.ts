@@ -2,6 +2,9 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.NEXTAUTH_SECRET || "clouddrive-dev-secret-key-2024";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,6 +17,34 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           return null;
+        }
+
+        // QR Token login: when email is __qr_token__, verify the JWT token
+        if (credentials.email === "__qr_token__") {
+          try {
+            const decoded = jwt.verify(credentials.password, JWT_SECRET) as {
+              id: string;
+              email: string;
+              name: string;
+              role: string;
+            };
+
+            // Verify user still exists in database
+            const user = await db.user.findUnique({
+              where: { id: decoded.id },
+            });
+
+            if (!user) return null;
+
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            };
+          } catch {
+            return null;
+          }
         }
 
         const user = await db.user.findUnique({

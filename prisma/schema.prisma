@@ -20,6 +20,7 @@ model User {
 
   files         FileItem[]
   shares        ShareLink[]
+  transfers     TransferFile[]
 
   @@index([email])
 }
@@ -92,7 +93,9 @@ model StorageDriverConfig {
   id        String   @id @default(cuid())
   name      String
   type      String   @default("local") // "local", "webdav", "s3", "mount"
+  basePath  String?  @default("") // File system path for local/mount drivers
   config    String   @default("{}") // JSON string of driver-specific config
+  status    String   @default("active") // "active", "inactive", "error"
   isDefault Boolean  @default(false)
   isEnabled Boolean  @default(true)
   priority  Int      @default(0) // Higher priority drivers are tried first
@@ -101,4 +104,26 @@ model StorageDriverConfig {
 
   @@index([type])
   @@index([isDefault])
+  @@index([status])
+}
+
+model TransferFile {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  fileName      String
+  fileSize      Int
+  mimeType      String    @default("")
+  storagePath   String
+  password      String?   @default("")
+  expiresAt     DateTime?
+  downloadCount Int       @default(0)
+  maxDownloads  Int       @default(-1) // -1 means unlimited
+  userId        String?   // null for anonymous
+  isAnonymous   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expiresAt])
 }

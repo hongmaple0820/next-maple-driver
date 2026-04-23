@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight, FileArchive } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -37,7 +37,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, getFileTypeLabel, matchesTypeFilter, getFileNameWithoutExtension, getFileExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, type FileItem } from "@/lib/file-utils";
 import { uploadFileWithProgress } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -342,6 +342,28 @@ export function FileList() {
     } catch { /* silent */ }
   }, [queryClient]);
 
+  const handleExtract = useCallback(async (file: FileItem) => {
+    try {
+      toast.loading(`${t.app.extracting} "${file.name}"...`, { id: "extract" });
+      const res = await fetch("/api/files/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`${t.app.extractionComplete} "${data.folderName}" (${data.extractedCount} ${t.app.items})`, { id: "extract" });
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+      } else {
+        const errData = await res.json().catch(() => ({ error: "Extraction failed" }));
+        toast.error(errData.error || t.app.extractionFailed, { id: "extract" });
+      }
+    } catch {
+      toast.error(t.app.extractionFailed, { id: "extract" });
+    }
+  }, [queryClient, t]);
+
   const handleDownload = useCallback((file: FileItem) => {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
   }, []);
@@ -509,6 +531,11 @@ export function FileList() {
           <DropdownMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          {file.type === "file" && isArchiveFile(file) && (
+            <DropdownMenuItem onClick={() => handleExtract(file)}>
+              <FileArchive className="w-4 h-4" /> {t.app.extract}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           {/* Color Label submenu */}
           <DropdownMenuSub>
@@ -585,6 +612,11 @@ export function FileList() {
           <ContextMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </ContextMenuItem>
+          {file.type === "file" && isArchiveFile(file) && (
+            <ContextMenuItem onClick={() => handleExtract(file)}>
+              <FileArchive className="w-4 h-4" /> {t.app.extract}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           {/* Color Label submenu */}
           <ContextMenuSub>

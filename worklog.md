@@ -2253,3 +2253,133 @@ Stage Summary:
 - Add more language support (Japanese, Korean, etc.)
 - Add RTL layout support
 - Continue with advanced features (WebDAV, S3 drivers, etc.)
+
+---
+Task ID: 1
+Agent: Video Player Agent
+Task: Enhanced Video Preview with Custom Controls
+
+Work Log:
+- Added video-related i18n translation keys to both zh and en sections in translations.ts:
+  - play, pause, mute, unmute, fullscreen, exitFullscreen, playbackSpeed, speedNormal, skipBack, skipForward, volume
+- Created new component src/components/video-player.tsx with comprehensive custom video player:
+  - Progress/seek bar with custom styled Slider (emerald theme), buffered indicator, hover-to-reveal thumb
+  - Play/pause button overlaid in center when paused (emerald circle with animation)
+  - Bottom control bar with: play/pause, skip back/forward (hidden on mobile), volume icon + expandable slider, time display (current/total), speed selector (DropdownMenu with 0.5x/0.75x/1x/1.25x/1.5x/2x), fullscreen toggle
+  - Auto-hide controls after 3 seconds of inactivity when playing, show on mouse move
+  - Smooth Framer Motion animations for showing/hiding controls and center play button
+  - Keyboard shortcuts: Space/K for play/pause, ArrowLeft for -5s, ArrowRight for +5s, M for mute, F for fullscreen, ArrowUp/Down for volume
+  - Controls always visible when paused, auto-hide only when playing
+  - Responsive design: skip buttons and speed label hidden on mobile, volume slider expands on hover
+  - Fullscreen support via Fullscreen API
+  - i18n support via useI18n() hook
+- Updated file-preview.tsx: replaced basic <video controls> with VideoPlayer component for video previews
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Custom video player component created with full playback controls
+- Replaced basic HTML5 video controls with rich, themed custom controls
+- 3 files modified/created: video-player.tsx (new), file-preview.tsx (modified), translations.ts (modified)
+- Emerald theme styling consistent with project design
+- Lint clean, no errors
+
+---
+Task ID: 4
+Agent: Transfer Service Agent
+Task: File Quick Transfer Service (快传)
+
+Work Log:
+- Analyzed existing codebase: most transfer features already partially implemented by previous agents
+- Database: Added `isAnonymous` Boolean field to TransferFile model in prisma/schema.prisma, ran `bun run db:push`
+- Created shared QR sessions utility at `src/lib/qr-sessions.ts`:
+  - In-memory Map-based session store with createSession, getSession, deleteSession, getAllSessions
+  - Automatic cleanup of expired sessions every 5 minutes
+  - Sessions expire after 10 minutes by default
+- Updated QR session API route (`src/app/api/transfer/qr-session/route.ts`):
+  - Changed from GET to POST method per spec
+  - Now uses shared QR sessions module instead of local Map
+  - Returns proper `qrData` URL format: `{origin}/transfer-upload?session={sessionId}`
+- Updated QR upload route (`src/app/api/transfer/qr-upload/[sessionId]/route.ts`):
+  - Replaced local in-memory Map with shared QR sessions module
+  - Added `isAnonymous` field to transfer file creation
+- Updated main upload route (`src/app/api/transfer/upload/route.ts`):
+  - Added `isAnonymous: !isAuth` field to database record creation
+- Updated transfer panel component (`src/components/transfer-panel.tsx`):
+  - Changed QR session creation from GET to POST request
+  - Updated QR code URL to use `data.qrData` from API or fallback format `/transfer-upload?session={sessionId}`
+- Created mobile upload page at `/transfer-upload`:
+  - `src/app/transfer-upload/page.tsx` - Server component that reads `session` query param
+  - `src/app/transfer-upload/transfer-upload-client.tsx` - Client component with:
+    - States: invalid, ready, uploading, success, error, expired
+    - Drag-and-drop upload area with click-to-upload
+    - Upload progress bar with XMLHttpRequest for real-time percentage
+    - Success state shows file info, token, share link, and copy button
+    - Clean centered card design with CloudDrive branding, matching share page style
+    - i18n support via useI18n hook
+- Added i18n translations:
+  - `uploadSuccess: "上传成功！"` / `"Upload successful!"` in both zh and en sections
+- Lint clean, dev server running without errors
+
+Stage Summary:
+- Transfer service fully functional with 7 API endpoints:
+  - POST /api/transfer/upload (with isAnonymous field)
+  - GET /api/transfer/[token] (public info)
+  - POST /api/transfer/[token]/download (with password verification)
+  - GET /api/transfer/list (user's transfers)
+  - DELETE /api/transfer/[token] (owner only)
+  - POST /api/transfer/qr-session (creates mobile upload session)
+  - POST /api/transfer/qr-upload/[sessionId] (upload via QR)
+- Frontend components:
+  - TransferPanel (main UI with upload, options, result, QR upload, transfer list)
+  - TransferClient (public download page at /transfer/[token])
+  - TransferUploadClient (mobile upload page at /transfer-upload)
+- Shared QR sessions module for consistent session management
+- All existing features preserved and working
+
+---
+Task ID: 3
+Agent: Admin Disk Management Developer
+Task: Enhance Admin Disk Tab with Real Disk Management Functionality
+
+Work Log:
+- Updated Prisma schema: Added `basePath` and `status` fields to StorageDriverConfig model
+- Ran `bun run db:push` to sync schema changes to database
+- Created Disk Info API endpoint at `/api/admin/disk/info/route.ts`:
+  - Returns system disk partitions (via `df -T` with fallback to `statfsSync`)
+  - Returns CloudDrive storage directory info (path, file/folder counts, total size, disk usage percent)
+  - Returns configured network mount entries from database
+  - Filters out pseudo filesystems (tmpfs, devtmpfs, squashfs, etc.)
+  - Deduplicates partitions by mount point
+  - Admin-only access check
+- Created Cleanup API endpoint at `/api/admin/disk/cleanup/route.ts`:
+  - POST with action: "orphaned-files" | "orphaned-records" | "expired-shares" | "expired-transfers"
+  - orphaned-files: Scans storage dir for files without DB records, optionally deletes them
+  - orphaned-records: Finds DB records referencing missing files, optionally marks as trashed
+  - expired-shares: Finds and optionally deletes expired share links
+  - expired-transfers: Finds and optionally deletes expired transfer files + records
+  - Scan mode (execute=false) returns list without performing changes
+  - Execute mode (execute=true) performs the cleanup
+  - Admin-only access check
+- Added 60+ i18n translation keys for both zh and en locales:
+  - Disk info: diskInfo, systemDisks, storageDirectory, cloudDriveStorage, etc.
+  - Network mount: networkMount, mountProtocol, mountUrl, mountPath, addMount, etc.
+  - Cleanup: cleanup, orphanedFiles, orphanedRecords, expiredShares, expiredTransfers, etc.
+  - System disk: mountPoint, fileSystem, usedSpace, availableSpace, totalSpace, etc.
+  - Fixed duplicate `password` key in admin section
+- Enhanced Admin Disk Tab UI at `src/components/admin/admin-disk-tab.tsx`:
+  - System Disk Overview: Partitions with color-coded progress bars (green<70%, yellow 70-90%, red>90%), mount point, filesystem type, space info, refresh button, collapsible
+  - Storage Directory Section: Path display, file/folder counts, total size, disk usage percent, stats grid, collapsible
+  - Network Mount Configuration: WebDAV quick-mount form, Add Mount dialog (name, protocol, URL, path, credentials), configured mounts list, "Coming Soon" toast on mount button, collapsible
+  - Storage Cleanup Section: 4 cleanup actions with scan/clean buttons, scan results with item list, "Clean All" button, collapsible
+  - All sections use framer-motion for expand/collapse animations
+  - CleanupActionCard sub-component for consistent cleanup UI
+  - Color-coded icons and badges throughout
+  - Loading skeletons for async data
+  - Kept original disk list, browse panel, and mount directory dialog
+
+Stage Summary:
+- 2 new API endpoints created (disk info, cleanup)
+- 1 Prisma schema update (basePath + status fields on StorageDriverConfig)
+- 60+ i18n translation keys added (zh + en)
+- Admin disk tab fully enhanced with 4 major sections
+- All changes pass lint check, dev server running without errors

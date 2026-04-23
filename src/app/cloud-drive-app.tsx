@@ -14,6 +14,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
 import { AdminPanel } from "@/components/admin-panel";
 import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
+import { TransferPanel } from "@/components/transfer-panel";
 import { useFileStore } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
 import { toast } from "sonner";
@@ -233,27 +234,32 @@ export default function CloudDriveApp() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
-        <FileToolbar />
+        {/* Toolbar - hide for transfer section */}
+        {section !== "transfer" && <FileToolbar />}
 
-        {/* File area with upload zone */}
-        <UploadZone>
-          <div className="flex-1 flex flex-col min-h-0">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${section}-${currentFolderId}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15, ease: "easeInOut" }}
-                className="flex-1 overflow-y-auto"
-              >
-                {viewMode === "grid" ? <FileGrid /> : <FileList />}
-              </motion.div>
-            </AnimatePresence>
-            <FileStatusBar />
-          </div>
-        </UploadZone>
+        {/* Transfer Panel */}
+        {section === "transfer" ? (
+          <TransferPanel />
+        ) : (
+          /* File area with upload zone */
+          <UploadZone>
+            <div className="flex-1 flex flex-col min-h-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${section}-${currentFolderId}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: "easeInOut" }}
+                  className="flex-1 overflow-y-auto"
+                >
+                  {viewMode === "grid" ? <FileGrid /> : <FileList />}
+                </motion.div>
+              </AnimatePresence>
+              <FileStatusBar />
+            </div>
+          </UploadZone>
+        )}
       </div>
 
       {/* Dialogs */}

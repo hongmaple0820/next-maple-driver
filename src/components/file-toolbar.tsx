@@ -3,9 +3,10 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home } from "lucide-react";
+import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home, FolderUp } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter, type ColorLabelFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -147,6 +148,86 @@ export function FileToolbar() {
       const files = (e.target as HTMLInputElement).files;
       if (!files || files.length === 0) return;
       await uploadFilesWithProgress(files, currentFolderId, queryClient);
+    };
+    input.click();
+  };
+
+  const handleFolderUploadClick = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    // @ts-expect-error webkitdirectory is not in the type definitions
+    input.webkitdirectory = true;
+    // @ts-expect-error directory is not in the type definitions
+    input.directory = true;
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files || files.length === 0) return;
+
+      // Build paths mapping from webkitRelativePath
+      const paths: Record<string, string> = {};
+      const fileArray = Array.from(files);
+      fileArray.forEach((file, idx) => {
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+        if (relativePath) {
+          paths[idx] = relativePath;
+        }
+      });
+
+      // Upload with paths for folder structure preservation
+      const formData = new FormData();
+      fileArray.forEach((file) => {
+        formData.append("files", file);
+      });
+      formData.append("parentId", currentFolderId);
+      if (Object.keys(paths).length > 0) {
+        formData.append("paths", JSON.stringify(paths));
+      }
+
+      try {
+        const xhr = new XMLHttpRequest();
+        const uploadId = crypto.randomUUID();
+        const { addUploadProgress, updateUploadProgress, removeUploadProgress } = useFileStore.getState();
+
+        addUploadProgress({
+          id: uploadId,
+          fileName: fileArray.length === 1 ? fileArray[0].name : `${fileArray.length} files`,
+          progress: 0,
+          status: "uploading",
+        });
+
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            const percent = Math.round((ev.loaded / ev.total) * 100);
+            updateUploadProgress(uploadId, percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            updateUploadProgress(uploadId, 100, "done");
+            setTimeout(() => removeUploadProgress(uploadId), 2000);
+            queryClient.invalidateQueries({ queryKey: ["files"] });
+            queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+            toast.success(`${fileArray.length} ${t.app.files} ${t.app.uploaded}`);
+          } else {
+            updateUploadProgress(uploadId, 0, "error");
+            setTimeout(() => removeUploadProgress(uploadId), 3000);
+            toast.error(t.app.upload + " failed");
+          }
+        };
+
+        xhr.onerror = () => {
+          updateUploadProgress(uploadId, 0, "error");
+          setTimeout(() => removeUploadProgress(uploadId), 3000);
+          toast.error(t.app.upload + " failed");
+        };
+
+        xhr.open("POST", "/api/files/upload");
+        xhr.send(formData);
+      } catch {
+        toast.error(t.app.upload + " failed");
+      }
     };
     input.click();
   };
@@ -381,6 +462,15 @@ export function FileToolbar() {
               >
                 <CloudUpload className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">{t.app.upload}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleFolderUploadClick}
+                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+              >
+                <FolderUp className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t.app.uploadFolder}</span>
               </Button>
               <Button
                 variant="outline"

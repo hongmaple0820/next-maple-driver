@@ -293,6 +293,45 @@ export function matchesTypeFilter(file: FileItem, filter: string): boolean {
   }
 }
 
+// Check if a file is an archive that can be extracted
+export function isArchiveFile(item: FileItem): boolean {
+  if (item.type === "folder") return false;
+
+  const mime = item.mimeType?.toLowerCase() || "";
+  const ext = getFileExtension(item.name);
+
+  // Only support .zip for now (adm-zip supported formats)
+  if (
+    mime.includes("zip") ||
+    ext === "zip"
+  ) {
+    return true;
+  }
+
+  // Show extract option for other archive types too (but they'll show a not-supported message)
+  if (
+    mime.includes("rar") ||
+    mime.includes("tar") ||
+    mime.includes("gzip") ||
+    mime.includes("7z") ||
+    ["rar", "tar", "gz", "bz2", "7z", "xz", "tgz"].includes(ext)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// Check if a file is a zip file (actually extractable)
+export function isZipFile(item: FileItem): boolean {
+  if (item.type === "folder") return false;
+
+  const mime = item.mimeType?.toLowerCase() || "";
+  const ext = getFileExtension(item.name);
+
+  return mime.includes("zip") || ext === "zip";
+}
+
 // Check if file is previewable
 export function isPreviewable(item: FileItem): boolean {
   if (item.type === "folder") return false;

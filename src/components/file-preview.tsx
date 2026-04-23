@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Download, X } from "lucide-react";
 import { FileTypeIconByProps } from "@/components/file-type-icon";
 import { TextPreviewContent } from "@/components/text-preview-content";
+import { VideoPlayer } from "@/components/video-player";
 import { getPreviewType, type FileItem, type PreviewType } from "@/lib/file-utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -50,13 +51,10 @@ export function FilePreview() {
       case "video":
         return (
           <div className="flex items-center justify-center p-4 min-h-[300px]">
-            <video
+            <VideoPlayer
               src={`/api/files/download?id=${previewFile.id}&mode=inline`}
-              controls
-              className="max-w-full max-h-[70vh] rounded-lg"
-            >
-              Your browser does not support video playback.
-            </video>
+              className="max-w-full max-h-[70vh]"
+            />
           </div>
         );
 

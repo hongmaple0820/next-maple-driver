@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { FileItem } from "@/lib/file-utils";
 
 export type ViewMode = "grid" | "list";
-export type Section = "files" | "starred" | "trash" | "recent";
+export type Section = "files" | "starred" | "trash" | "recent" | "transfer";
 export type SortField = "name" | "updatedAt" | "size" | "type";
 export type SortDirection = "asc" | "desc";
 export type FileTypeFilter = "all" | "images" | "videos" | "audio" | "documents" | "code" | "archives";
@@ -188,7 +188,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0 }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0, detailFile: null }),
 
   // View mode
   viewMode: "grid",

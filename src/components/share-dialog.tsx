@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { toast } from "sonner";
@@ -16,10 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound } from "lucide-react";
+import { Share2, Copy, Check, Link, QrCode, Clock, KeyRound, Download } from "lucide-react";
 import type { ShareInfo } from "@/lib/file-utils";
 import { showActionToast } from "@/lib/undo-toast";
 import { useI18n } from "@/lib/i18n";
+import QRCode from "qrcode";
 
 export function ShareDialog() {
   const { shareFile, setShareFile, addActivity } = useFileStore();
@@ -32,6 +33,47 @@ export function ShareDialog() {
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+  const [showQrCode, setShowQrCode] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const shareLink = shareInfo
+    ? `${window.location.origin}/share/${shareInfo.token}`
+    : "";
+
+  // Generate QR code when share link is available and QR is shown
+  const generateQrCode = useCallback(async (link: string) => {
+    try {
+      const dataUrl = await QRCode.toDataURL(link, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: "#059669", // emerald-600
+          light: "#ffffff",
+        },
+        errorCorrectionLevel: "M",
+      });
+      setQrCodeDataUrl(dataUrl);
+    } catch {
+      // Fallback: generate on canvas
+      try {
+        if (canvasRef.current) {
+          await QRCode.toCanvas(canvasRef.current, link, {
+            width: 256,
+            margin: 2,
+            color: {
+              dark: "#059669",
+              light: "#ffffff",
+            },
+            errorCorrectionLevel: "M",
+          });
+          setQrCodeDataUrl(canvasRef.current.toDataURL("image/png"));
+        }
+      } catch {
+        // QR generation failed silently
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!shareFile) {
@@ -41,8 +83,17 @@ export function ShareDialog() {
       setUsePassword(false);
       setUseExpiry(false);
       setCopied(false);
+      setShowQrCode(false);
+      setQrCodeDataUrl("");
     }
   }, [shareFile]);
+
+  // Auto-generate QR when share info is available
+  useEffect(() => {
+    if (shareInfo && shareLink) {
+      generateQrCode(shareLink);
+    }
+  }, [shareInfo, shareLink, generateQrCode]);
 
   const handleCreateShare = async () => {
     if (!shareFile) return;
@@ -62,7 +113,6 @@ export function ShareDialog() {
         setShareInfo(data);
         queryClient.invalidateQueries({ queryKey: ["files"] });
         addActivity({ action: "share", fileName: shareFile.name });
-        // Show share link created toast with Copy Link action
         const link = `${window.location.origin}/share/${data.token}`;
         showActionToast(
           t.app.shareLinkCreated,
@@ -84,10 +134,6 @@ export function ShareDialog() {
     }
   };
 
-  const shareLink = shareInfo
-    ? `${window.location.origin}/share/${shareInfo.token}`
-    : "";
-
   const handleCopy = async () => {
     if (!shareLink) return;
     try {
@@ -97,6 +143,14 @@ export function ShareDialog() {
     } catch {
       // Fallback
     }
+  };
+
+  const handleDownloadQrCode = () => {
+    if (!qrCodeDataUrl) return;
+    const link = document.createElement("a");
+    link.download = `share-qr-${shareInfo?.token || "code"}.png`;
+    link.href = qrCodeDataUrl;
+    link.click();
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -115,6 +169,9 @@ export function ShareDialog() {
             {t.app.shareDesc} &quot;{shareFile?.name}&quot;
           </DialogDescription>
         </DialogHeader>
+
+        {/* Hidden canvas for QR fallback */}
+        <canvas ref={canvasRef} className="hidden" />
 
         {!shareInfo ? (
           <div className="space-y-4 py-2">
@@ -163,7 +220,7 @@ export function ShareDialog() {
           <div className="space-y-4 py-2">
             {/* Share link */}
             <div className="space-y-2">
-              <Label>Share Link</Label>
+              <Label>{t.app.shareLink}</Label>
               <div className="flex gap-2">
                 <Input value={shareLink} readOnly className="text-sm font-mono" />
                 <Button
@@ -183,21 +240,43 @@ export function ShareDialog() {
                   variant="outline"
                   size="icon"
                   className="shrink-0"
-                  title="Show QR code"
-                  onClick={() => {
-                    // Open share link in new tab as a simple way to view the link
-                    // In a full implementation, this would generate a QR code
-                    handleCopy();
-                  }}
+                  title={t.app.qrCode}
+                  onClick={() => setShowQrCode(!showQrCode)}
                 >
                   <QrCode className="w-4 h-4" />
                 </Button>
               </div>
             </div>
 
+            {/* QR Code Section */}
+            {showQrCode && qrCodeDataUrl && (
+              <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-background border border-emerald-200/50 dark:border-emerald-800/30">
+                <p className="text-xs text-muted-foreground font-medium">
+                  {t.app.scanQrToAccess}
+                </p>
+                <div className="p-3 bg-white rounded-lg shadow-sm border border-emerald-100 dark:border-emerald-900/50">
+                  { }
+                  <img
+                    src={qrCodeDataUrl}
+                    alt="Share QR Code"
+                    className="w-48 h-48"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadQrCode}
+                  className="gap-1.5 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {t.app.downloadQrCode}
+                </Button>
+              </div>
+            )}
+
             {/* Share ID */}
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Share ID</Label>
+              <Label className="text-xs text-muted-foreground">{t.app.shareId}</Label>
               <p className="text-xs font-mono bg-muted p-2 rounded break-all">
                 {shareInfo.token}
               </p>
@@ -208,7 +287,7 @@ export function ShareDialog() {
               <div className="space-y-1">
                 <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <KeyRound className="w-3 h-3" />
-                  Password
+                  {t.app.password}
                 </Label>
                 <p className="text-sm font-mono bg-muted p-2 rounded">
                   {shareInfo.password}
@@ -221,7 +300,7 @@ export function ShareDialog() {
               <div className="space-y-1">
                 <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="w-3 h-3" />
-                  Expires
+                  {t.app.expires}
                 </Label>
                 <p className="text-sm">
                   {new Date(shareInfo.expiresAt).toLocaleString()}
@@ -232,7 +311,7 @@ export function ShareDialog() {
             {/* Download count */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Link className="w-4 h-4" />
-              {shareInfo.downloadCount} download{shareInfo.downloadCount !== 1 ? "s" : ""}
+              {shareInfo.downloadCount} {t.app.downloads}
             </div>
           </div>
         )}
@@ -241,7 +320,7 @@ export function ShareDialog() {
           {!shareInfo ? (
             <>
               <Button variant="outline" onClick={() => setShareFile(null)}>
-                Cancel
+                {t.app.cancel}
               </Button>
               <Button
                 onClick={handleCreateShare}
@@ -252,7 +331,7 @@ export function ShareDialog() {
               </Button>
             </>
           ) : (
-            <Button onClick={() => setShareFile(null)}>Done</Button>
+            <Button onClick={() => setShareFile(null)}>{t.app.done}</Button>
           )}
         </DialogFooter>
       </DialogContent>

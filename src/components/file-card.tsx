@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileTypeIcon } from "@/components/file-type-icon";
-import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, type FileItem } from "@/lib/file-utils";
+import { formatFileSize, formatDate, formatRelativeTime, getFileTypeLabel, getFileExtension, getFileNameWithoutExtension, getColorLabelStyle, COLOR_LABELS, isArchiveFile, type FileItem } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
@@ -357,6 +357,29 @@ export function FileCard({ file }: FileCardProps) {
     }
   }, [file, queryClient, addActivity]);
 
+  const handleExtract = useCallback(async () => {
+    try {
+      toast.loading(`${t.app.extracting} "${file.name}"...`, { id: "extract" });
+      const res = await fetch("/api/files/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`${t.app.extractionComplete} "${data.folderName}" (${data.extractedCount} ${t.app.items})`, { id: "extract" });
+        queryClient.invalidateQueries({ queryKey: ["files"] });
+        queryClient.invalidateQueries({ queryKey: ["storage-stats"] });
+        addActivity({ action: "created", fileName: data.folderName });
+      } else {
+        const data = await res.json().catch(() => ({ error: "Extraction failed" }));
+        toast.error(data.error || t.app.extractionFailed, { id: "extract" });
+      }
+    } catch {
+      toast.error(t.app.extractionFailed, { id: "extract" });
+    }
+  }, [file, queryClient, addActivity, t]);
+
   const actionItems = (
     <>
       {section !== "trash" && (
@@ -375,6 +398,11 @@ export function FileCard({ file }: FileCardProps) {
           {file.type === "folder" && (
             <DropdownMenuItem onClick={handleDownloadZip}>
               <Archive className="w-4 h-4" /> Download as ZIP
+            </DropdownMenuItem>
+          )}
+          {file.type === "file" && isArchiveFile(file) && (
+            <DropdownMenuItem onClick={handleExtract}>
+              <FileArchive className="w-4 h-4" /> {t.app.extract}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
@@ -455,6 +483,11 @@ export function FileCard({ file }: FileCardProps) {
           {file.type === "folder" && (
             <ContextMenuItem onClick={handleDownloadZip}>
               <Archive className="w-4 h-4" /> Download as ZIP
+            </ContextMenuItem>
+          )}
+          {file.type === "file" && isArchiveFile(file) && (
+            <ContextMenuItem onClick={handleExtract}>
+              <FileArchive className="w-4 h-4" /> {t.app.extract}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
