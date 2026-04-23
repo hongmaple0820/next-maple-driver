@@ -91,7 +91,7 @@ model FileVersion {
   @@index([fileId, version])
 }
 
-model StorageDriverConfig {
+model StorageDriver {
   id              String    @id @default(cuid())
   name            String
   type            String    @default("local") // "local", "webdav", "s3", "mount", "baidu", "aliyun", "onedrive", "google", "115", "quark"
@@ -116,6 +116,8 @@ model StorageDriverConfig {
   @@index([status])
   @@index([authType])
   @@index([authStatus])
+
+  @@map("StorageDriverConfig")
 }
 
 model TransferFile {
@@ -144,13 +146,51 @@ model QuickTransferSession {
   code        String   @unique  // 6-character code
   userId      String
   folderId    String?  // target folder (null = root)
+  folderName  String   @default("/") // display name of target folder
   isActive    Boolean  @default(true)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history     QuickTransferHistory[]
 
   @@index([code])
   @@index([userId])
   @@index([isActive])
+}
+
+model QuickTransferHistory {
+  id          String   @id @default(cuid())
+  sessionId   String
+  senderName  String   @default("Anonymous")
+  fileName    String
+  fileSize    Int      @default(0)
+  fileCount   Int      @default(1)
+  status      String   @default("completed") // "completed", "failed"
+  createdAt   DateTime @default(now())
+
+  session     QuickTransferSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model TransferHistory {
+  id            String    @id @default(cuid())
+  token         String    // transfer token
+  fileName      String
+  fileSize      Int       @default(0)
+  mimeType      String    @default("")
+  userId        String?   // null for anonymous
+  isAnonymous   Boolean   @default(false)
+  action        String    @default("upload") // "upload", "download", "delete"
+  recipientEmail String?  // email if sent via email
+  status        String    @default("active") // "active", "expired", "deleted"
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([createdAt])
+  @@index([status])
 }

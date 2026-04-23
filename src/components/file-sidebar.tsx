@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package, Server, Globe, Network } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,83 @@ function ChevronIcon({ className }: { className?: string }) {
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="m6 9 6 6 6-6" />
     </svg>
+  );
+}
+
+function DriverStatusSection() {
+  const { t } = useI18n();
+  const { data: driversData } = useQuery({
+    queryKey: ["sidebar-drivers"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/admin/drivers");
+        if (!res.ok) return null;
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 60000,
+  });
+
+  const drivers: { id: string; name: string; type: string; status: string; healthy?: boolean }[] = driversData?.drivers || [];
+
+  // Always show at least the local default driver
+  const displayDrivers = drivers.length > 0 ? drivers : [
+    { id: "default-local", name: "Local Storage", type: "local", status: "active", healthy: true },
+  ];
+
+  const getDriverIcon = (type: string) => {
+    switch (type) {
+      case "local": return Server;
+      case "webdav": return Globe;
+      case "s3": return Cloud;
+      case "mount": return Network;
+      default: return Cloud;
+    }
+  };
+
+  const getStatusColor = (driver: { status: string; healthy?: boolean }) => {
+    if (driver.status === "active" && driver.healthy !== false) return "bg-emerald-500";
+    if (driver.status === "error" || driver.healthy === false) return "bg-red-500";
+    return "bg-gray-400";
+  };
+
+  return (
+    <div className="border-t border-border/40 mx-3 pt-3 pb-1">
+      <div className="px-2 mb-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{t.app.drivers}</span>
+      </div>
+      <div className="space-y-0.5">
+        {displayDrivers.slice(0, 4).map((driver) => {
+          const Icon = getDriverIcon(driver.type);
+          return (
+            <div
+              key={driver.id}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] text-muted-foreground hover:bg-sidebar-accent/30 transition-colors"
+            >
+              <div className="relative">
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <div className={cn(
+                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
+                  getStatusColor(driver)
+                )} />
+              </div>
+              <span className="truncate flex-1">{driver.name}</span>
+              <span className={cn(
+                "text-[9px] font-medium",
+                driver.status === "active" && driver.healthy !== false ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+              )}>
+                {driver.status === "active" && driver.healthy !== false ? t.app.driverActive : driver.status === "error" ? t.app.driverError : t.app.driverInactive}
+              </span>
+            </div>
+          );
+        })}
+        {drivers.length > 4 && (
+          <p className="text-[10px] text-muted-foreground/60 px-2">+{drivers.length - 4} more</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -158,6 +235,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </button>
             </div>
           )}
+          {/* Storage Drivers Status */}
+          <DriverStatusSection />
+
           {/* Quick Stats */}
           <div className="px-5 py-2 border-t border-border/40 mx-3">
             <p className="text-[11px] text-muted-foreground/70">

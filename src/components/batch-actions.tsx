@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, Trash2, X, Archive, Pencil, Loader2 } from "lucide-react";
+import { Star, Trash2, X, Archive, Pencil, Loader2, HardDrive } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { showUndoToast, invalidateAfterUndo } from "@/lib/undo-toast";
 import { useI18n } from "@/lib/i18n";
 
 export function BatchActions() {
-  const { selectedFileIds, clearSelection, section, setBatchRenameOpen } = useFileStore();
+  const { selectedFileIds, clearSelection, section, setBatchRenameOpen, setCrossDriverMoveOpen, setCrossDriverMoveFileIds } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const count = selectedFileIds.size;
@@ -193,6 +193,20 @@ export function BatchActions() {
           >
             <Star className="w-4 h-4" />
             {t.app.star}
+          </Button>
+        )}
+        {section !== "trash" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setCrossDriverMoveFileIds(Array.from(selectedFileIds));
+              setCrossDriverMoveOpen(true);
+            }}
+            className="text-background hover:bg-background/20 gap-1.5"
+          >
+            <HardDrive className="w-4 h-4" />
+            {t.app.crossDriverTransfer}
           </Button>
         )}
         <Button

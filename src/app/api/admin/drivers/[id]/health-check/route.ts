@@ -37,7 +37,7 @@ export async function POST(
       });
     }
 
-    const driver = await db.storageDriverConfig.findUnique({ where: { id } });
+    const driver = await db.storageDriver.findUnique({ where: { id } });
     if (!driver) {
       return NextResponse.json({ error: "Driver not found" }, { status: 404 });
     }

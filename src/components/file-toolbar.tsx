@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home, FolderUp } from "lucide-react";
+import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home, FolderUp, HardDrive } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter, type ColorLabelFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -73,6 +73,9 @@ export function FileToolbar() {
     navigateForward,
     historyIndex,
     navigationHistory,
+    selectedFileIds,
+    setCrossDriverMoveOpen,
+    setCrossDriverMoveFileIds,
   } = useFileStore();
 
   const { t } = useI18n();
@@ -482,6 +485,27 @@ export function FileToolbar() {
                 <span className="hidden sm:inline">{t.app.newFolder}</span>
               </Button>
             </>
+          )}
+          {selectedFileIds.size > 0 && section === "files" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                  onClick={() => {
+                    setCrossDriverMoveFileIds(Array.from(selectedFileIds));
+                    setCrossDriverMoveOpen(true);
+                  }}
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t.app.transferToDriver}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {t.app.transferToDriver}
+              </TooltipContent>
+            </Tooltip>
           )}
           {section === "trash" && (stats?.trashedCount ?? 0) > 0 && (
             <AlertDialog>

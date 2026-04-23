@@ -20,7 +20,7 @@ import {
 import {
   HardDrive, Plus, Trash2, CheckCircle2, XCircle, Settings2,
   Cloud, Globe, Server, TestTube, Loader2, ShieldCheck, ShieldAlert,
-  ShieldX, Clock, Key, ExternalLink, RefreshCw, Smartphone,
+  ShieldX, Clock, Key, ExternalLink, RefreshCw, Smartphone, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -67,6 +67,7 @@ const driverTypeIcons: Record<string, typeof Server> = {
   local: Server,
   webdav: Globe,
   s3: Cloud,
+  mount: Network,
   baidu: Cloud,
   aliyun: Cloud,
   onedrive: Cloud,
@@ -138,6 +139,16 @@ const driverConfigFields: Record<string, {
     { key: "smsCode", label: "短信验证码（可选）", type: "text", placeholder: "123456", required: false, helpText: "短信验证码，点击「发送验证码」获取" },
     { key: "cookies", label: "Cookies（可选）", type: "password", placeholder: "已有的登录 cookies", required: false, helpText: "如已有 cookies 可直接填入，避免重复登录" },
   ],
+  mount: [
+    { key: "mountProtocol", label: "Mount Protocol", type: "text", placeholder: "webdav", required: true, helpText: "Protocol: webdav, nfs, or smb (select below)", defaultValue: "webdav" },
+    { key: "serverUrl", label: "Server URL / Host", type: "url", placeholder: "https://nextcloud.example.com/dav/ or 192.168.1.100", required: true, helpText: "WebDAV: full endpoint URL. NFS/SMB: server hostname or IP" },
+    { key: "username", label: "Username", type: "text", placeholder: "user", required: false, helpText: "Username for WebDAV or SMB authentication" },
+    { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: false, helpText: "Password for WebDAV or SMB authentication" },
+    { key: "mountPath", label: "Local Mount Point", type: "text", placeholder: "/mnt/nfs-share", required: false, helpText: "Local mount path for NFS/SMB. For WebDAV, used as path prefix." },
+    { key: "domain", label: "Domain (SMB)", type: "text", placeholder: "WORKGROUP", required: false, helpText: "Windows domain for SMB/CIFS (optional)" },
+    { key: "nfsExportPath", label: "NFS Export Path", type: "text", placeholder: "/export/data", required: false, helpText: "NFS export path on the server (NFS only)" },
+    { key: "pathPrefix", label: "Path Prefix", type: "text", placeholder: "clouddrive", required: false, helpText: "Optional subdirectory within mounted storage" },
+  ],
 };
 
 // Auth status badge component
@@ -188,6 +199,7 @@ export function AdminDriversTab() {
     local: t.admin.localStorage,
     webdav: t.admin.webdav,
     s3: t.admin.s3,
+    mount: t.admin.networkMount || "Network Mount",
     baidu: t.admin.baiduWangpan,
     aliyun: t.admin.aliyunDrive,
     onedrive: t.admin.oneDrive,
@@ -209,7 +221,7 @@ export function AdminDriversTab() {
   // Reset form when type changes
   const handleTypeChange = (type: string) => {
     setNewDriverType(type);
-    setNewDriverConfig({});
+    setNewDriverConfig(type === "mount" ? { mountProtocol: "webdav" } : {});
     setNewDriverBasePath(type === "local" ? "./storage" : "");
   };
 
@@ -410,6 +422,21 @@ export function AdminDriversTab() {
         return <div>URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.url}</code></div>;
       }
 
+      if (driver.type === "mount") {
+        const proto = config.mountProtocol || "webdav";
+        const protoLabel = proto === "webdav" ? (t.admin.webdavProtocol || "WebDAV") : proto === "nfs" ? (t.admin.nfsProtocol || "NFS") : (t.admin.smbProtocol || "SMB");
+        return (
+          <div className="space-y-0.5">
+            <div>{t.admin.mountProtocol || "Protocol"}: <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">{protoLabel}</Badge></div>
+            {config.serverUrl && <div>{t.admin.mountUrl || "Server"}: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.serverUrl}</code></div>}
+            {config.mountPath && <div>{t.admin.mountPath || "Mount Path"}: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.mountPath}</code></div>}
+            {config.nfsExportPath && proto === "nfs" && <div>NFS Export: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.nfsExportPath}</code></div>}
+            {config.domain && proto === "smb" && <div>Domain: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.domain}</code></div>}
+            {config.pathPrefix && <div>Prefix: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.pathPrefix}</code></div>}
+          </div>
+        );
+      }
+
       // Cloud drive drivers
       if (isCloudDriver(driver.type)) {
         return (
@@ -527,6 +554,15 @@ export function AdminDriversTab() {
                       <Globe className="w-4 h-4 mr-1.5" />
                       {t.admin.webdav}
                     </Button>
+                    <Button
+                      variant={newDriverType === "mount" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "mount" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("mount")}
+                    >
+                      <Network className="w-4 h-4 mr-1.5" />
+                      {t.admin.networkMount || "Network Mount"}
+                    </Button>
                   </div>
                 </div>
 
@@ -635,7 +671,70 @@ export function AdminDriversTab() {
                       </div>
                     </div>
                   )}
-                  {currentConfigFields.map((field) => (
+                  {/* Mount protocol selector */}
+                  {newDriverType === "mount" && (
+                    <div className="space-y-3">
+                      {/* Protocol notice */}
+                      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                        <Network className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                          {t.admin.networkMount || "Network Mount"}: Select the protocol for mounting remote storage.
+                          NFS and SMB require the share to be already mounted at a local path on the server.
+                        </div>
+                      </div>
+                      {/* Protocol selector */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">{t.admin.mountProtocol || "Protocol"}</Label>
+                        <div className="flex gap-2">
+                          {(["webdav", "nfs", "smb"] as const).map((proto) => {
+                            const protoIcons: Record<string, typeof Globe> = {
+                              webdav: Globe,
+                              nfs: Server,
+                              smb: HardDrive,
+                            };
+                            const protoLabels: Record<string, string> = {
+                              webdav: t.admin.webdavProtocol || "WebDAV",
+                              nfs: t.admin.nfsProtocol || "NFS",
+                              smb: t.admin.smbProtocol || "SMB",
+                            };
+                            const ProtoIcon = protoIcons[proto];
+                            const isSelected = (newDriverConfig.mountProtocol || "webdav") === proto;
+                            return (
+                              <Button
+                                key={proto}
+                                variant={isSelected ? "default" : "outline"}
+                                size="sm"
+                                className={cn(isSelected && "bg-emerald-600 hover:bg-emerald-700")}
+                                onClick={() => setNewDriverConfig({ ...newDriverConfig, mountProtocol: proto })}
+                              >
+                                <ProtoIcon className="w-4 h-4 mr-1.5" />
+                                {protoLabels[proto]}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {currentConfigFields
+                    .filter((field) => {
+                      // For mount type, conditionally show fields based on protocol
+                      if (newDriverType === "mount") {
+                        const proto = newDriverConfig.mountProtocol || "webdav";
+                        // mountProtocol is handled by the selector above, skip it
+                        if (field.key === "mountProtocol") return false;
+                        // NFS-specific fields
+                        if (field.key === "nfsExportPath" && proto !== "nfs") return false;
+                        // SMB-specific fields
+                        if (field.key === "domain" && proto !== "smb") return false;
+                        // Username/password needed for webdav and smb, not nfs
+                        if ((field.key === "username" || field.key === "password") && proto === "nfs") return false;
+                        // mountPath needed for nfs and smb, not webdav (webdav uses pathPrefix)
+                        if (field.key === "mountPath" && proto === "webdav") return false;
+                      }
+                      return true;
+                    })
+                    .map((field) => (
                     <div key={field.key} className="space-y-1.5">
                       <Label htmlFor={`config-${field.key}`} className="text-xs">
                         {field.label}
@@ -644,7 +743,7 @@ export function AdminDriversTab() {
                       <Input
                         id={`config-${field.key}`}
                         type={field.type === "password" ? "password" : "text"}
-                        value={newDriverConfig[field.key] || ""}
+                        value={newDriverConfig[field.key] || (field.key === "mountProtocol" ? newDriverConfig.mountProtocol || field.defaultValue || "" : "")}
                         onChange={(e) =>
                           setNewDriverConfig({ ...newDriverConfig, [field.key]: e.target.value })
                         }
@@ -684,7 +783,7 @@ export function AdminDriversTab() {
               </div>
 
               {/* Test Connection Button */}
-              {(newDriverType === "s3" || newDriverType === "webdav") && (
+              {(newDriverType === "s3" || newDriverType === "webdav" || newDriverType === "mount") && (
                 <Button
                   variant="outline"
                   size="sm"

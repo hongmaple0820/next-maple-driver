@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
 
     // Get driver-based storage paths
     try {
-      const drivers = await db.storageDriverConfig.findMany({
+      const drivers = await db.storageDriver.findMany({
         where: { status: "active" },
       });
 
@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a storage driver for this path
-    const driver = await db.storageDriverConfig.create({
+    const driver = await db.storageDriver.create({
       data: {
         name,
         type: "local",

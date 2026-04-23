@@ -2,6 +2,7 @@ import type { StorageDriver, StorageDriverConfig, StorageDriverFactory } from ".
 import { localDriverFactory } from "./local-driver";
 import { s3DriverFactory } from "./s3-driver";
 import { webdavDriverFactory } from "./webdav-driver";
+import { mountDriverFactory } from "./mount-driver";
 import { baiduDriverFactory } from "./baidu-driver";
 import { aliyunDriverFactory } from "./aliyun-driver";
 import { onedriveDriverFactory } from "./onedrive-driver";
@@ -27,6 +28,7 @@ export function registerDriverFactory(factory: StorageDriverFactory) {
 registerDriverFactory(localDriverFactory);
 registerDriverFactory(s3DriverFactory);
 registerDriverFactory(webdavDriverFactory);
+registerDriverFactory(mountDriverFactory);
 registerDriverFactory(baiduDriverFactory);
 registerDriverFactory(aliyunDriverFactory);
 registerDriverFactory(onedriveDriverFactory);

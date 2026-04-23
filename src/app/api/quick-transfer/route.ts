@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const folderId = body.folderId || null; // null = root
+    const folderName = body.folderName || '/';
 
     // Deactivate any existing active sessions for this user
     await db.quickTransferSession.updateMany({
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
         code,
         userId,
         folderId,
+        folderName,
         isActive: true,
         expiresAt,
       },
@@ -57,6 +59,7 @@ export async function POST(request: NextRequest) {
       id: session.id,
       code: session.code,
       folderId: session.folderId,
+      folderName: session.folderName,
       isActive: session.isActive,
       expiresAt: session.expiresAt.toISOString(),
       createdAt: session.createdAt.toISOString(),
@@ -95,6 +98,7 @@ export async function GET() {
         id: s.id,
         code: s.code,
         folderId: s.folderId,
+        folderName: s.folderName,
         isActive: s.isActive,
         expiresAt: s.expiresAt.toISOString(),
         createdAt: s.createdAt.toISOString(),

@@ -224,7 +224,7 @@ export async function GET() {
     }> = [];
 
     try {
-      mountConfigs = await db.storageDriverConfig.findMany({
+      mountConfigs = await db.storageDriver.findMany({
         where: { type: "mount" },
         select: {
           id: true,

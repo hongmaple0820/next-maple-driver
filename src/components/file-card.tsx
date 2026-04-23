@@ -419,11 +419,11 @@ export function FileCard({ file }: FileCardProps) {
           <DropdownMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
-            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Color Label submenu */}
@@ -507,11 +507,11 @@ export function FileCard({ file }: FileCardProps) {
           <ContextMenuItem onClick={() => setMoveFile({ id: file.id, name: file.name, parentId: file.parentId })}>
             <FolderInput className="w-4 h-4" /> Move to...
           </ContextMenuItem>
+          <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
+          </ContextMenuItem>
           <ContextMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
-            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
           </ContextMenuItem>
           <ContextMenuSeparator />
           {/* Color Label submenu */}

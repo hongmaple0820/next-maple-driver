@@ -29,6 +29,7 @@ export function FileGrid() {
     selectedFileIds, selectAll, clearSelection, setCurrentFolderId, setRenameFile, setPreviewFile,
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard, setSearchResultCount,
     compactMode, showExtensions, setBatchRenameOpen, colorLabelFilter,
+    setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -255,6 +256,11 @@ export function FileGrid() {
           {selectedFileIds.size > 1 && section !== "trash" && (
             <ContextMenuItem onClick={() => setBatchRenameOpen(true)}>
               <Pencil className="w-4 h-4" /> {t.app.batchRename}
+            </ContextMenuItem>
+          )}
+          {selectedFileIds.size > 0 && section !== "trash" && (
+            <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds(Array.from(selectedFileIds)); setCrossDriverMoveOpen(true); }}>
+              <HardDrive className="w-4 h-4" /> {t.app.crossDriverTransfer}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />

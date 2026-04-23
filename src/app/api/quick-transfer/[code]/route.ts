@@ -40,6 +40,7 @@ export async function GET(
         isActive: false,
         isExpired: true,
         recipientName: session.user.name,
+        folderName: session.folderName,
       });
     }
 
@@ -48,6 +49,7 @@ export async function GET(
       isActive: session.isActive,
       isExpired: false,
       recipientName: session.user.name,
+      folderName: session.folderName,
       expiresAt: session.expiresAt.toISOString(),
     });
   } catch (error) {
@@ -70,6 +72,7 @@ export async function POST(
   try {
     const user = await getAuthUser();
     const senderId = user ? (user as Record<string, unknown>).id as string : null;
+    const senderName = user ? (user as Record<string, unknown>).name as string : 'Anonymous';
     const isAuth = !!senderId;
 
     const { code } = await params;
@@ -235,6 +238,22 @@ export async function POST(
       });
 
       uploadedFiles.push({ id: fileId, name: fileName, size: file.size });
+    }
+
+    // Record transfer history
+    try {
+      await db.quickTransferHistory.create({
+        data: {
+          sessionId: session.id,
+          senderName,
+          fileName: uploadedFiles.length === 1 ? uploadedFiles[0].name : `${uploadedFiles.length} files`,
+          fileSize: totalSize,
+          fileCount: uploadedFiles.length,
+          status: 'completed',
+        },
+      });
+    } catch {
+      // History recording is non-critical
     }
 
     return NextResponse.json({
