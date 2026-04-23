@@ -23,7 +23,7 @@ export function AdminPanel() {
             <div className="p-1.5 rounded-lg bg-emerald-500/10">
               <Shield className="w-5 h-5 text-emerald-600" />
             </div>
-            Admin Panel
+            {t.app.adminPanel}
           </DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="system" className="flex-1 min-h-0">
@@ -34,21 +34,21 @@ export function AdminPanel() {
                 className="data-[state=active]:bg-emerald-600/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 rounded-md px-3 h-8 gap-1.5 text-sm"
               >
                 <Activity className="w-3.5 h-3.5" />
-                System
+                {t.admin.system}
               </TabsTrigger>
               <TabsTrigger
                 value="users"
                 className="data-[state=active]:bg-emerald-600/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 rounded-md px-3 h-8 gap-1.5 text-sm"
               >
                 <Users className="w-3.5 h-3.5" />
-                Users
+                {t.admin.users}
               </TabsTrigger>
               <TabsTrigger
                 value="drivers"
                 className="data-[state=active]:bg-emerald-600/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 rounded-md px-3 h-8 gap-1.5 text-sm"
               >
                 <HardDrive className="w-3.5 h-3.5" />
-                Storage
+                {t.admin.storage}
               </TabsTrigger>
             </TabsList>
           </div>

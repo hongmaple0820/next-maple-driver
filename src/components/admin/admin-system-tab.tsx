@@ -161,7 +161,7 @@ export function AdminSystemTab() {
           <CardContent className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span>Total Used</span>
+                <span>{t.admin.totalUsed}</span>
                 <span className="font-medium">{formatFileSize(totalUsed)} / {formatFileSize(totalStorage)}</span>
               </div>
               <Progress value={totalStorage > 0 ? (totalUsed / totalStorage) * 100 : 0} className="h-2" />
@@ -169,7 +169,7 @@ export function AdminSystemTab() {
 
             {/* By Type */}
             <div className="space-y-2">
-              <span className="text-xs font-medium text-muted-foreground">By Type</span>
+              <span className="text-xs font-medium text-muted-foreground">{t.admin.byType}</span>
               {Object.entries(stats.byType)
                 .sort(([, a], [, b]) => (b as number) - (a as number))
                 .map(([type, size]) => (
@@ -194,42 +194,42 @@ export function AdminSystemTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-600" />
-              System Health
+              {t.admin.systemHealth}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               <div className="flex-1">
-                <div className="text-sm font-medium">Database</div>
-                <div className="text-xs text-muted-foreground">SQLite — Operational</div>
+                <div className="text-sm font-medium">{t.admin.database}</div>
+                <div className="text-xs text-muted-foreground">{t.admin.databaseDesc}</div>
               </div>
-              <Badge className="bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20">Healthy</Badge>
+              <Badge className="bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20">{t.admin.healthy}</Badge>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               <div className="flex-1">
-                <div className="text-sm font-medium">File Storage</div>
-                <div className="text-xs text-muted-foreground">Local — Operational</div>
+                <div className="text-sm font-medium">{t.admin.fileStorage}</div>
+                <div className="text-xs text-muted-foreground">{t.admin.fileStorageDesc}</div>
               </div>
-              <Badge className="bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20">Healthy</Badge>
+              <Badge className="bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20">{t.admin.healthy}</Badge>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20">
               <Share2 className="w-5 h-5 text-sky-600" />
               <div className="flex-1">
-                <div className="text-sm font-medium">Share Links</div>
+                <div className="text-sm font-medium">{t.admin.shareLinks}</div>
                 <div className="text-xs text-muted-foreground">{stats.activeShares} active / {stats.totalShares} total</div>
               </div>
-              <Badge className="bg-sky-600/10 text-sky-700 dark:text-sky-400 border-sky-600/20">Active</Badge>
+              <Badge className="bg-sky-600/10 text-sky-700 dark:text-sky-400 border-sky-600/20">{t.admin.active}</Badge>
             </div>
             {totalUsed / totalStorage > 0.8 && (
               <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium">Storage Warning</div>
-                  <div className="text-xs text-muted-foreground">System storage is {((totalUsed / totalStorage) * 100).toFixed(0)}% full</div>
+                  <div className="text-sm font-medium">{t.admin.storageWarning}</div>
+                  <div className="text-xs text-muted-foreground">{t.admin.storageWarningDesc} {((totalUsed / totalStorage) * 100).toFixed(0)}%</div>
                 </div>
-                <Badge className="bg-amber-600/10 text-amber-700 dark:text-amber-400 border-amber-600/20">Warning</Badge>
+                <Badge className="bg-amber-600/10 text-amber-700 dark:text-amber-400 border-amber-600/20">{t.admin.warning}</Badge>
               </div>
             )}
           </CardContent>
@@ -243,13 +243,13 @@ export function AdminSystemTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-emerald-600" />
-              Storage by User
+              {t.admin.storageByUser}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-[300px] overflow-y-auto">
               {stats.storageByUser.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">No users</div>
+                <div className="text-center py-8 text-muted-foreground text-sm">{t.admin.noUsers}</div>
               ) : (
                 stats.storageByUser
                   .sort((a, b) => b.usedBytes - a.usedBytes)
@@ -277,13 +277,13 @@ export function AdminSystemTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Clock className="w-4 h-4 text-emerald-600" />
-              Recent Activity
+              {t.admin.recentActivity}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {stats.recentActivity.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">No recent activity</div>
+                <div className="text-center py-8 text-muted-foreground text-sm">{t.admin.noRecentActivity}</div>
               ) : (
                 stats.recentActivity.map((activity) => {
                   const Icon = actionIcons[activity.action] || Activity;

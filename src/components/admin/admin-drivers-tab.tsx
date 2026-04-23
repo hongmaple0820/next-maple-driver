@@ -44,17 +44,17 @@ const driverTypeIcons: Record<string, typeof Server> = {
   s3: Cloud,
 };
 
-const driverTypeLabels: Record<string, string> = {
-  local: t.admin.localStorage,
-  webdav: t.admin.webdav,
-  s3: "Amazon S3",
-};
-
 const comingSoonTypes = ["webdav", "s3"];
 
 export function AdminDriversTab() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
+
+  const driverTypeLabels: Record<string, string> = {
+    local: t.admin.localStorage,
+    webdav: t.admin.webdav,
+    s3: "Amazon S3",
+  };
   const [addDriverOpen, setAddDriverOpen] = useState(false);
   const [newDriver, setNewDriver] = useState({
     name: "",
@@ -159,32 +159,32 @@ export function AdminDriversTab() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Manage storage backends for your CloudDrive instance
+            {t.admin.manageStorageBackends}
           </h3>
         </div>
         <Dialog open={addDriverOpen} onOpenChange={setAddDriverOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700">
               <Plus className="w-4 h-4" />
-              Add Driver
+              {t.admin.addDriver}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Storage Driver</DialogTitle>
+              <DialogTitle>{t.admin.addStorageDriver}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="driver-name">Driver Name</Label>
+                <Label htmlFor="driver-name">{t.admin.driverName}</Label>
                 <Input
                   id="driver-name"
                   value={newDriver.name}
                   onChange={(e) => setNewDriver({ ...newDriver, name: e.target.value })}
-                  placeholder="e.g., Primary Storage"
+                  placeholder={t.admin.primaryStorage}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="driver-type">Type</Label>
+                <Label htmlFor="driver-type">{t.admin.type}</Label>
                 <div className="flex gap-2">
                   <Button
                     variant={newDriver.type === "local" ? "default" : "outline"}
@@ -193,22 +193,22 @@ export function AdminDriversTab() {
                     onClick={() => setNewDriver({ ...newDriver, type: "local" })}
                   >
                     <Server className="w-4 h-4 mr-1.5" />
-                    Local
+                    {t.admin.local}
                   </Button>
                   <Button variant="outline" size="sm" disabled className="opacity-50">
                     <Globe className="w-4 h-4 mr-1.5" />
-                    WebDAV
-                    <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">Soon</Badge>
+                    {t.admin.webdav}
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">{t.admin.comingSoon}</Badge>
                   </Button>
                   <Button variant="outline" size="sm" disabled className="opacity-50">
                     <Cloud className="w-4 h-4 mr-1.5" />
-                    S3
-                    <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">Soon</Badge>
+                    {t.admin.s3}
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">{t.admin.comingSoon}</Badge>
                   </Button>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="driver-path">Base Path</Label>
+                <Label htmlFor="driver-path">{t.admin.basePath}</Label>
                 <Input
                   id="driver-path"
                   value={newDriver.basePath}
@@ -218,7 +218,7 @@ export function AdminDriversTab() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="driver-priority">Priority</Label>
+                  <Label htmlFor="driver-priority">{t.admin.priority}</Label>
                   <Input
                     id="driver-priority"
                     type="number"
@@ -227,14 +227,14 @@ export function AdminDriversTab() {
                   />
                 </div>
                 <div className="space-y-2 flex flex-col">
-                  <Label>Default Driver</Label>
+                  <Label>{t.admin.defaultDriver}</Label>
                   <div className="flex items-center gap-2 mt-2">
                     <Switch
                       checked={newDriver.isDefault}
                       onCheckedChange={(checked) => setNewDriver({ ...newDriver, isDefault: checked })}
                     />
                     <span className="text-sm text-muted-foreground">
-                      {newDriver.isDefault ? "Yes" : "No"}
+                      {newDriver.isDefault ? t.admin.yes : t.admin.no}
                     </span>
                   </div>
                 </div>
@@ -242,7 +242,7 @@ export function AdminDriversTab() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline">{t.app.cancel}</Button>
               </DialogClose>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700"
@@ -295,7 +295,7 @@ export function AdminDriversTab() {
                         <span className="font-semibold">{driver.name}</span>
                         {driver.isDefault && (
                           <Badge className="bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/20 text-[10px]">
-                            Default
+                            {t.admin.default}
                           </Badge>
                         )}
                         <Badge variant={isActive ? "default" : "secondary"} className={cn(
@@ -310,7 +310,7 @@ export function AdminDriversTab() {
                             driver.healthy ? "text-emerald-600 border-emerald-600/30" : "text-destructive border-destructive/30",
                           )}>
                             {driver.healthy ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                            {driver.healthy ? "Healthy" : "Unhealthy"}
+                            {driver.healthy ? t.admin.healthyStatus : t.admin.unhealthy}
                           </Badge>
                         )}
                       </div>
@@ -327,7 +327,7 @@ export function AdminDriversTab() {
                         onClick={() => handleHealthCheck(driver)}
                       >
                         <TestTube className="w-3.5 h-3.5" />
-                        Test
+                        {t.admin.test}
                       </Button>
                       <Button
                         variant="outline"
@@ -348,7 +348,7 @@ export function AdminDriversTab() {
                           onClick={() => updateDriver.mutate({ id: driver.id, isDefault: true })}
                         >
                           <Settings2 className="w-3.5 h-3.5" />
-                          Set Default
+                          {t.admin.setDefault}
                         </Button>
                       )}
                       {!driver.isDefault && driver.id !== "default-local" && (
@@ -360,19 +360,18 @@ export function AdminDriversTab() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Driver</AlertDialogTitle>
+                              <AlertDialogTitle>{t.admin.deleteDriver}</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete the <strong>{driver.name}</strong> driver?
-                                This action cannot be undone.
+                                {t.admin.deleteDriverConfirm} <strong>{driver.name}</strong> {t.admin.deleteDriverWarning}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel>{t.app.cancel}</AlertDialogCancel>
                               <AlertDialogAction
                                 className="bg-destructive hover:bg-destructive/90"
                                 onClick={() => deleteDriver.mutate(driver.id)}
                               >
-                                Delete
+                                {t.app.delete}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -394,12 +393,12 @@ export function AdminDriversTab() {
                     <Globe className="w-5 h-5 text-muted-foreground" />
                   </div>
                   <div>
-                    <div className="font-semibold">WebDAV</div>
-                    <Badge variant="secondary" className="text-[10px]">Coming Soon</Badge>
+                    <div className="font-semibold">{t.admin.webdav}</div>
+                    <Badge variant="secondary" className="text-[10px]">{t.admin.comingSoon}</Badge>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect to WebDAV servers like Nextcloud, ownCloud, or any WebDAV-compatible service.
+                  {t.admin.webdavDesc}
                 </p>
               </CardContent>
             </Card>
@@ -410,12 +409,12 @@ export function AdminDriversTab() {
                     <Cloud className="w-5 h-5 text-muted-foreground" />
                   </div>
                   <div>
-                    <div className="font-semibold">Amazon S3</div>
-                    <Badge variant="secondary" className="text-[10px]">Coming Soon</Badge>
+                    <div className="font-semibold">{t.admin.s3}</div>
+                    <Badge variant="secondary" className="text-[10px]">{t.admin.comingSoon}</Badge>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Use Amazon S3 or compatible services (MinIO, DigitalOcean Spaces) as storage backend.
+                  {t.admin.s3Desc}
                 </p>
               </CardContent>
             </Card>

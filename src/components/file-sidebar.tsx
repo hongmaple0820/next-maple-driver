@@ -141,21 +141,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               );
             })}
           </nav>
-          {/* Admin Panel Button */}
-          {isAdmin && (
-            <div className="mt-3 px-2">
-              <button
-                onClick={() => {
-                  setAdminPanelOpen(true);
-                  onNavigate?.();
-                }}
-                className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
-              >
-                <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                {t.app.adminPanel}
-              </button>
-            </div>
-          )}
           {/* Quick Stats */}
           <div className="px-5 py-2 border-t border-border/40">
             <p className="text-[11px] text-muted-foreground/70">
@@ -166,6 +151,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {/* Gradient overlay at bottom of navigation */}
         <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-sidebar to-transparent pointer-events-none" />
       </div>
+
+      {/* Admin Panel Button - outside ScrollArea to avoid overlap */}
+      {isAdmin && (
+        <div className="px-4 py-1.5 border-t border-border/40">
+          <button
+            onClick={() => {
+              setAdminPanelOpen(true);
+              onNavigate?.();
+            }}
+            className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
+          >
+            <Shield className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
+            {t.app.adminPanel}
+          </button>
+        </div>
+      )}
 
       {/* User Profile Area */}
       <div className="border-t border-border/40 px-3 py-3">

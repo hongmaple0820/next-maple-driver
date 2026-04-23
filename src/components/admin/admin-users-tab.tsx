@@ -137,7 +137,7 @@ export function AdminUsersTab() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search users..."
+            placeholder={t.admin.searchUsers}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -147,25 +147,25 @@ export function AdminUsersTab() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700">
               <UserPlus className="w-4 h-4" />
-              Add User
+              {t.admin.addUser}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New User</DialogTitle>
+              <DialogTitle>{t.admin.createNewUser}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="new-name">Name</Label>
+                <Label htmlFor="new-name">{t.admin.name}</Label>
                 <Input
                   id="new-name"
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  placeholder="Full name"
+                  placeholder={t.admin.fullName}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-email">Email</Label>
+                <Label htmlFor="new-email">{t.admin.email}</Label>
                 <Input
                   id="new-email"
                   type="email"
@@ -175,18 +175,18 @@ export function AdminUsersTab() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-password">Password</Label>
+                <Label htmlFor="new-password">{t.admin.password}</Label>
                 <Input
                   id="new-password"
                   type="password"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="Min 6 characters"
+                  placeholder={t.admin.minChars}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-role">Role</Label>
+                  <Label htmlFor="new-role">{t.admin.role}</Label>
                   <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -198,7 +198,7 @@ export function AdminUsersTab() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="new-storage">Storage (GB)</Label>
+                  <Label htmlFor="new-storage">{t.admin.storageGb}</Label>
                   <Input
                     id="new-storage"
                     type="number"
@@ -212,7 +212,7 @@ export function AdminUsersTab() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline">{t.app.cancel}</Button>
               </DialogClose>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700"
@@ -252,12 +252,12 @@ export function AdminUsersTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Storage</TableHead>
-                    <TableHead>Files</TableHead>
-                    <TableHead>Joined</TableHead>
+                    <TableHead>{t.admin.name}</TableHead>
+                    <TableHead>{t.admin.email}</TableHead>
+                    <TableHead>{t.admin.role}</TableHead>
+                    <TableHead>{t.admin.storageLimit}</TableHead>
+                    <TableHead>{t.admin.files}</TableHead>
+                    <TableHead>{t.admin.joined}</TableHead>
                     <TableHead className="w-[50px]" />
                   </TableRow>
                 </TableHeader>
@@ -265,7 +265,7 @@ export function AdminUsersTab() {
                   {users.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        No users found
+                        {t.admin.noUsersFound}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -339,7 +339,7 @@ export function AdminUsersTab() {
                                   }}
                                 >
                                   <HardDrive className="w-4 h-4 mr-2" />
-                                  Change Storage Limit
+                                  {t.admin.changeStorageLimit}
                                 </DropdownMenuItem>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
@@ -348,25 +348,23 @@ export function AdminUsersTab() {
                                       onSelect={(e) => e.preventDefault()}
                                     >
                                       <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete User
+                                      {t.admin.deleteUser}
                                     </DropdownMenuItem>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                      <AlertDialogTitle>{t.admin.deleteUser}</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Are you sure you want to delete <strong>{user.name}</strong>?
-                                        This will permanently delete all their files, shares, and data.
-                                        This action cannot be undone.
+                                        {t.admin.deleteUserConfirm} <strong>{user.name}</strong>{t.admin.deleteUserWarning}
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogCancel>{t.app.cancel}</AlertDialogCancel>
                                       <AlertDialogAction
                                         className="bg-destructive hover:bg-destructive/90"
                                         onClick={() => deleteUser.mutate(user.id)}
                                       >
-                                        Delete
+                                        {t.app.delete}
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>

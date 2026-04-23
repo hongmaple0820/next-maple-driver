@@ -30,6 +30,7 @@ import {
   FileSearch,
   ArrowUpDown,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface PreferencesDialogProps {
   open: boolean;
@@ -40,6 +41,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
   const prefs = useUserPreferences();
   const { setViewMode, setSortBy, setSortDirection, setCompactMode, setShowExtensions } = useFileStore();
   const { setTheme, theme: currentTheme } = useTheme();
+  const { t } = useI18n();
 
   const handleViewModeChange = (value: DefaultViewMode) => {
     prefs.setPreference("defaultViewMode", value);
@@ -92,10 +94,10 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-emerald-600" />
-            Preferences
+            {t.prefs.preferences}
           </DialogTitle>
           <DialogDescription>
-            Customize your CloudDrive experience
+            {t.prefs.customizeExperience}
           </DialogDescription>
         </DialogHeader>
 
@@ -103,15 +105,15 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
           <TabsList className="w-full">
             <TabsTrigger value="general" className="flex-1 gap-1.5">
               <LayoutGrid className="w-3.5 h-3.5" />
-              General
+              {t.prefs.general}
             </TabsTrigger>
             <TabsTrigger value="appearance" className="flex-1 gap-1.5">
               <Sun className="w-3.5 h-3.5" />
-              Appearance
+              {t.prefs.appearance}
             </TabsTrigger>
             <TabsTrigger value="advanced" className="flex-1 gap-1.5">
               <Eye className="w-3.5 h-3.5" />
-              Advanced
+              {t.prefs.advanced}
             </TabsTrigger>
           </TabsList>
 
@@ -121,7 +123,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
             <div className="space-y-3">
               <Label className="text-sm font-medium flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-muted-foreground" />
-                Default View Mode
+                {t.prefs.defaultViewMode}
               </Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -133,7 +135,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   }`}
                 >
                   <LayoutGrid className="w-6 h-6" />
-                  <span className="text-xs font-medium">Grid</span>
+                  <span className="text-xs font-medium">{t.prefs.gridLabel}</span>
                 </button>
                 <button
                   onClick={() => handleViewModeChange("list")}
@@ -144,7 +146,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   }`}
                 >
                   <List className="w-6 h-6" />
-                  <span className="text-xs font-medium">List</span>
+                  <span className="text-xs font-medium">{t.prefs.listLabel}</span>
                 </button>
               </div>
             </div>
@@ -155,11 +157,11 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
             <div className="space-y-3">
               <Label className="text-sm font-medium flex items-center gap-2">
                 <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
-                Default Sort Order
+                {t.prefs.defaultSortOrder}
               </Label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Sort by</Label>
+                  <Label className="text-xs text-muted-foreground">{t.prefs.sortBy}</Label>
                   <Select
                     value={prefs.defaultSortField}
                     onValueChange={(v) => handleSortFieldChange(v as DefaultSortField)}
@@ -168,15 +170,15 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="updatedAt">Modified</SelectItem>
-                      <SelectItem value="size">Size</SelectItem>
-                      <SelectItem value="type">Type</SelectItem>
+                      <SelectItem value="name">{t.app.name}</SelectItem>
+                      <SelectItem value="updatedAt">{t.app.modified}</SelectItem>
+                      <SelectItem value="size">{t.app.size}</SelectItem>
+                      <SelectItem value="type">{t.app.type}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Direction</Label>
+                  <Label className="text-xs text-muted-foreground">{t.prefs.direction}</Label>
                   <Select
                     value={prefs.defaultSortDirection}
                     onValueChange={(v) => handleSortDirectionChange(v as DefaultSortDirection)}
@@ -185,8 +187,8 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="asc">Ascending</SelectItem>
-                      <SelectItem value="desc">Descending</SelectItem>
+                      <SelectItem value="asc">{t.prefs.ascending}</SelectItem>
+                      <SelectItem value="desc">{t.prefs.descending}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -200,7 +202,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
             <div className="space-y-3">
               <Label className="text-sm font-medium flex items-center gap-2">
                 <Sun className="w-4 h-4 text-muted-foreground" />
-                Theme
+                {t.prefs.theme}
               </Label>
               <div className="grid grid-cols-3 gap-3">
                 <button
@@ -212,7 +214,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   }`}
                 >
                   <Sun className="w-6 h-6" />
-                  <span className="text-xs font-medium">Light</span>
+                  <span className="text-xs font-medium">{t.prefs.light}</span>
                 </button>
                 <button
                   onClick={() => handleThemeChange("dark")}
@@ -223,7 +225,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   }`}
                 >
                   <Moon className="w-6 h-6" />
-                  <span className="text-xs font-medium">Dark</span>
+                  <span className="text-xs font-medium">{t.prefs.dark}</span>
                 </button>
                 <button
                   onClick={() => handleThemeChange("system")}
@@ -234,7 +236,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   }`}
                 >
                   <Monitor className="w-6 h-6" />
-                  <span className="text-xs font-medium">System</span>
+                  <span className="text-xs font-medium">{t.prefs.system}</span>
                 </button>
               </div>
             </div>
@@ -246,10 +248,10 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
               <div className="space-y-0.5">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Minimize2 className="w-4 h-4 text-muted-foreground" />
-                  Compact Mode
+                  {t.prefs.compactMode}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Reduce card sizes and spacing for power users
+                  {t.prefs.compactModeDesc}
                 </p>
               </div>
               <Switch
@@ -265,10 +267,10 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
               <div className="space-y-0.5">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <FileSearch className="w-4 h-4 text-muted-foreground" />
-                  Show File Extensions
+                  {t.prefs.showFileExtensions}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Display extension badges on file cards
+                  {t.prefs.showFileExtensionsDesc}
                 </p>
               </div>
               <Switch
@@ -289,10 +291,10 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                   ) : (
                     <EyeOff className="w-4 h-4 text-muted-foreground" />
                   )}
-                  Show Hidden Files
+                  {t.prefs.showHiddenFiles}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Display files and folders that start with a dot (coming soon)
+                  {t.prefs.showHiddenFilesDesc}
                 </p>
               </div>
               <Switch
@@ -306,9 +308,9 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
             {/* Reset Preferences */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Reset to Defaults</Label>
+                <Label className="text-sm font-medium">{t.prefs.resetToDefaults}</Label>
                 <p className="text-xs text-muted-foreground">
-                  Restore all preferences to their default values
+                  {t.prefs.resetToDefaultsDesc}
                 </p>
               </div>
               <Button
@@ -318,7 +320,7 @@ export function UserPreferencesDialog({ open, onOpenChange }: PreferencesDialogP
                 className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Reset
+                {t.prefs.reset}
               </Button>
             </div>
           </TabsContent>
