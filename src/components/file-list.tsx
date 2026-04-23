@@ -182,6 +182,7 @@ export function FileList() {
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard,
     setPropertiesFile, setSearchResultCount, compactMode, showExtensions, setBatchRenameOpen,
     colorLabelFilter,
+    setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -531,6 +532,9 @@ export function FileList() {
           <DropdownMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
+          </DropdownMenuItem>
           {file.type === "file" && isArchiveFile(file) && (
             <DropdownMenuItem onClick={() => handleExtract(file)}>
               <FileArchive className="w-4 h-4" /> {t.app.extract}
@@ -611,6 +615,9 @@ export function FileList() {
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleCopy(file)}>
             <Copy className="w-4 h-4" /> Copy
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
           </ContextMenuItem>
           {file.type === "file" && isArchiveFile(file) && (
             <ContextMenuItem onClick={() => handleExtract(file)}>

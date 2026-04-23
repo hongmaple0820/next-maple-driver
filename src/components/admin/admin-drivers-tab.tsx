@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   HardDrive, Plus, Trash2, CheckCircle2, XCircle, Settings2,
-  Cloud, Globe, Server, TestTube, Loader2,
+  Cloud, Globe, Server, TestTube, Loader2, ShieldCheck, ShieldAlert,
+  ShieldX, Clock, Key, ExternalLink, RefreshCw, Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -37,12 +38,41 @@ interface DriverInfo {
   healthy?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  // Cloud driver auth fields
+  authType?: string;
+  authStatus?: string;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  tokenExpiresAt?: string | null;
+  lastSyncAt?: string | null;
+}
+
+// Cloud drive type definitions for categorization
+const OAUTH_DRIVER_TYPES = ["baidu", "aliyun", "onedrive", "google"] as const;
+const PASSWORD_DRIVER_TYPES = ["115", "quark"] as const;
+
+function isOAuthDriver(type: string): boolean {
+  return (OAUTH_DRIVER_TYPES as readonly string[]).includes(type);
+}
+
+function isPasswordDriver(type: string): boolean {
+  return (PASSWORD_DRIVER_TYPES as readonly string[]).includes(type);
+}
+
+function isCloudDriver(type: string): boolean {
+  return isOAuthDriver(type) || isPasswordDriver(type);
 }
 
 const driverTypeIcons: Record<string, typeof Server> = {
   local: Server,
   webdav: Globe,
   s3: Cloud,
+  baidu: Cloud,
+  aliyun: Cloud,
+  onedrive: Cloud,
+  google: Cloud,
+  "115": HardDrive,
+  quark: HardDrive,
 };
 
 // Config field definitions per driver type
@@ -72,7 +102,83 @@ const driverConfigFields: Record<string, {
     { key: "password", label: "Password / App Password", type: "password", placeholder: "••••••••", required: true, helpText: "Use app-specific password if 2FA enabled" },
     { key: "pathPrefix", label: "Path Prefix", type: "text", placeholder: "clouddrive", required: false, helpText: "Optional subdirectory within WebDAV root" },
   ],
+  baidu: [
+    { key: "clientId", label: "Client ID (App Key)", type: "text", placeholder: "GyGxV3bWrAFn4WSy", required: true, helpText: "百度开放平台应用的 App Key" },
+    { key: "clientSecret", label: "Client Secret (Secret Key)", type: "password", placeholder: "••••••••", required: true, helpText: "百度开放平台应用的 Secret Key" },
+    { key: "redirectUri", label: "Redirect URI", type: "url", placeholder: "https://your-domain.com/api/auth/cloud-oauth/callback", required: false, helpText: "OAuth 回调地址（留空使用默认值）" },
+    { key: "refreshToken", label: "Refresh Token", type: "password", placeholder: "已授权的 refresh token", required: false, helpText: "如已有 refresh token 可直接填入，否则通过 OAuth 授权获取" },
+  ],
+  aliyun: [
+    { key: "clientId", label: "Client ID", type: "text", placeholder: "your-client-id", required: true, helpText: "阿里云盘开放平台应用的 Client ID" },
+    { key: "clientSecret", label: "Client Secret", type: "password", placeholder: "••••••••", required: true, helpText: "阿里云盘开放平台应用的 Client Secret" },
+    { key: "redirectUri", label: "Redirect URI", type: "url", placeholder: "https://your-domain.com/api/auth/cloud-oauth/callback", required: false, helpText: "OAuth 回调地址（留空使用默认值）" },
+    { key: "refreshToken", label: "Refresh Token", type: "password", placeholder: "已授权的 refresh token", required: false, helpText: "如已有 refresh token 可直接填入" },
+  ],
+  onedrive: [
+    { key: "clientId", label: "Client ID (Application ID)", type: "text", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", required: true, helpText: "Azure AD application's Application (client) ID" },
+    { key: "clientSecret", label: "Client Secret", type: "password", placeholder: "••••••••", required: true, helpText: "Azure AD application's client secret value" },
+    { key: "tenantId", label: "Tenant ID", type: "text", placeholder: "common", required: false, helpText: "Use 'common' for all account types, 'consumers' for personal, 'organizations' for work/school, or a specific tenant GUID" },
+    { key: "redirectUri", label: "Redirect URI", type: "url", placeholder: "https://your-domain.com/api/auth/cloud-oauth/callback", required: false, helpText: "OAuth callback URL (leave empty for default)" },
+    { key: "refreshToken", label: "Refresh Token", type: "password", placeholder: "Existing refresh token", required: false, helpText: "If you already have a refresh token, enter it here" },
+  ],
+  google: [
+    { key: "clientId", label: "Client ID", type: "text", placeholder: "xxxxxxxxxxxx.apps.googleusercontent.com", required: true, helpText: "Google Cloud Console OAuth 2.0 Client ID" },
+    { key: "clientSecret", label: "Client Secret", type: "password", placeholder: "GOCSPX-xxxxxxxxxxxx", required: true, helpText: "Google Cloud Console OAuth 2.0 Client Secret" },
+    { key: "redirectUri", label: "Redirect URI", type: "url", placeholder: "https://your-domain.com/api/auth/cloud-oauth/callback", required: false, helpText: "OAuth callback URL (leave empty for default)" },
+    { key: "refreshToken", label: "Refresh Token", type: "password", placeholder: "Existing refresh token", required: false, helpText: "If you already have a refresh token, enter it here" },
+  ],
+  "115": [
+    { key: "username", label: "账号", type: "text", placeholder: "手机号或邮箱", required: true, helpText: "115网盘登录账号" },
+    { key: "password", label: "密码", type: "password", placeholder: "••••••••", required: true, helpText: "115网盘登录密码" },
+    { key: "cookies", label: "Cookies（可选）", type: "password", placeholder: "已有的登录 cookies", required: false, helpText: "如已有 cookies 可直接填入，避免重复登录" },
+  ],
+  quark: [
+    { key: "phone", label: "手机号", type: "text", placeholder: "13800138000", required: true, helpText: "夸克网盘注册手机号" },
+    { key: "password", label: "密码（可选）", type: "password", placeholder: "••••••••", required: false, helpText: "夸克网盘登录密码，如使用短信验证码登录可不填" },
+    { key: "smsCode", label: "短信验证码（可选）", type: "text", placeholder: "123456", required: false, helpText: "短信验证码，点击「发送验证码」获取" },
+    { key: "cookies", label: "Cookies（可选）", type: "password", placeholder: "已有的登录 cookies", required: false, helpText: "如已有 cookies 可直接填入，避免重复登录" },
+  ],
 };
+
+// Auth status badge component
+function AuthStatusBadge({ status, t }: { status: string; t: Record<string, string> }) {
+  const config: Record<string, { color: string; icon: typeof CheckCircle2; label: string }> = {
+    pending: { color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30", icon: Clock, label: t.pending || "Pending" },
+    authorized: { color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", icon: ShieldCheck, label: t.authorized || "Authorized" },
+    expired: { color: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30", icon: ShieldAlert, label: t.expired || "Expired" },
+    error: { color: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30", icon: ShieldX, label: t.authError || "Error" },
+  };
+
+  const c = config[status] || config.error;
+  const Icon = c.icon;
+
+  return (
+    <Badge variant="outline" className={cn("text-[10px] gap-1", c.color)}>
+      <Icon className="w-3 h-3" />
+      {c.label}
+    </Badge>
+  );
+}
+
+// Auth type badge component
+function AuthTypeBadge({ authType, t }: { authType: string; t: Record<string, string> }) {
+  const config: Record<string, { color: string; icon: typeof Key; label: string }> = {
+    oauth: { color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30", icon: Key, label: t.oauth || "OAuth" },
+    password: { color: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30", icon: ShieldCheck, label: t.password || "Password" },
+    sms: { color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30", icon: Smartphone, label: t.sms || "SMS" },
+    none: { color: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30", icon: Globe, label: t.none || "None" },
+  };
+
+  const c = config[authType] || config.none;
+  const Icon = c.icon;
+
+  return (
+    <Badge variant="outline" className={cn("text-[10px] gap-1", c.color)}>
+      <Icon className="w-3 h-3" />
+      {c.label}
+    </Badge>
+  );
+}
 
 export function AdminDriversTab() {
   const queryClient = useQueryClient();
@@ -81,8 +187,15 @@ export function AdminDriversTab() {
   const driverTypeLabels: Record<string, string> = {
     local: t.admin.localStorage,
     webdav: t.admin.webdav,
-    s3: "Amazon S3",
+    s3: t.admin.s3,
+    baidu: t.admin.baiduWangpan,
+    aliyun: t.admin.aliyunDrive,
+    onedrive: t.admin.oneDrive,
+    google: t.admin.googleDrive,
+    "115": t.admin.drive115,
+    quark: t.admin.quarkDrive,
   };
+
   const [addDriverOpen, setAddDriverOpen] = useState(false);
   const [newDriverType, setNewDriverType] = useState("local");
   const [newDriverName, setNewDriverName] = useState("");
@@ -91,6 +204,7 @@ export function AdminDriversTab() {
   const [newDriverIsDefault, setNewDriverIsDefault] = useState(false);
   const [newDriverConfig, setNewDriverConfig] = useState<Record<string, string>>({});
   const [testingDriverId, setTestingDriverId] = useState<string | null>(null);
+  const [authorizingDriverId, setAuthorizingDriverId] = useState<string | null>(null);
 
   // Reset form when type changes
   const handleTypeChange = (type: string) => {
@@ -204,8 +318,33 @@ export function AdminDriversTab() {
   };
 
   const handleTestConnection = async () => {
-    // Test connection for the new driver being configured
     toast.info("Test connection will be available after driver creation");
+  };
+
+  const handleOAuthAuthorize = async (driver: DriverInfo) => {
+    setAuthorizingDriverId(driver.id);
+    try {
+      const res = await fetch("/api/auth/cloud-oauth/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId: driver.id }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to initiate OAuth");
+      }
+
+      const result = await res.json();
+      if (result.authorizationUrl) {
+        window.open(result.authorizationUrl, "_blank", "width=600,height=700");
+        toast.info(t.admin.oauthAuthorize + " — " + t.admin.authPending);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.admin.authFailed);
+    } finally {
+      setAuthorizingDriverId(null);
+    }
   };
 
   // Combine existing drivers with default driver info
@@ -216,6 +355,108 @@ export function AdminDriversTab() {
       : [];
 
   const currentConfigFields = driverConfigFields[newDriverType] || [];
+
+  // Cloud driver type info for info cards
+  const cloudDriverCards = [
+    { type: "baidu", icon: Cloud, labelKey: "baiduWangpan" as const, descKey: "baiduWangpanDesc" as const, authType: "oauth" },
+    { type: "aliyun", icon: Cloud, labelKey: "aliyunDrive" as const, descKey: "aliyunDriveDesc" as const, authType: "oauth" },
+    { type: "onedrive", icon: Cloud, labelKey: "oneDrive" as const, descKey: "oneDriveDesc" as const, authType: "oauth" },
+    { type: "google", icon: Cloud, labelKey: "googleDrive" as const, descKey: "googleDriveDesc" as const, authType: "oauth" },
+    { type: "115", icon: HardDrive, labelKey: "drive115" as const, descKey: "drive115Desc" as const, authType: "password" },
+    { type: "quark", icon: HardDrive, labelKey: "quarkDrive" as const, descKey: "quarkDriveDesc" as const, authType: "sms" },
+  ];
+
+  // Format relative time
+  const formatRelativeTime = (isoString: string | null | undefined) => {
+    if (!isoString) return null;
+    try {
+      const date = new Date(isoString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return t.app.justNow;
+      if (diffMins < 60) return `${diffMins}${t.app.minAgo}`;
+      const diffHrs = Math.floor(diffMins / 60);
+      if (diffHrs < 24) return `${diffHrs}${t.app.hrAgo}`;
+      const diffDays = Math.floor(diffHrs / 24);
+      return `${diffDays}${t.app.dayAgo}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // Render driver-specific config info
+  const renderDriverConfigInfo = (driver: DriverInfo) => {
+    if (driver.type === "local") {
+      if (driver.basePath) {
+        return <div>{t.admin.basePath}: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{driver.basePath}</code></div>;
+      }
+      return null;
+    }
+
+    try {
+      const config = JSON.parse(driver.config || "{}");
+
+      if (driver.type === "s3") {
+        return (
+          <div className="space-y-0.5">
+            {config.endpoint && <div>Endpoint: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.endpoint}</code></div>}
+            <div>Bucket: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.bucket}</code> · Region: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.region}</code></div>
+          </div>
+        );
+      }
+
+      if (driver.type === "webdav") {
+        return <div>URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.url}</code></div>;
+      }
+
+      // Cloud drive drivers
+      if (isCloudDriver(driver.type)) {
+        return (
+          <div className="space-y-0.5">
+            {/* Auth type and status */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground">{t.admin.authType}:</span>
+              <AuthTypeBadge authType={driver.authType || "none"} t={t.admin} />
+              <span className="text-xs text-muted-foreground">{t.admin.authStatus}:</span>
+              <AuthStatusBadge status={driver.authStatus || "pending"} t={t.admin} />
+            </div>
+            {/* OAuth driver info */}
+            {isOAuthDriver(driver.type) && (
+              <>
+                {config.clientId && (
+                  <div>{t.admin.clientId}: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.clientId.substring(0, 8)}...</code></div>
+                )}
+                {driver.accessToken && (
+                  <div>Access Token: <code className="text-xs bg-muted px-1 py-0.5 rounded">{driver.accessToken}</code></div>
+                )}
+                {driver.refreshToken && (
+                  <div>Refresh Token: <code className="text-xs bg-muted px-1 py-0.5 rounded">{driver.refreshToken}</code></div>
+                )}
+                {driver.tokenExpiresAt && (
+                  <div>{t.admin.tokenExpiresAt}: {new Date(driver.tokenExpiresAt).toLocaleString()}</div>
+                )}
+              </>
+            )}
+            {/* Password driver info */}
+            {driver.type === "115" && config.username && (
+              <div>{t.admin.username}: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.username}</code></div>
+            )}
+            {/* SMS driver info */}
+            {driver.type === "quark" && config.phone && (
+              <div>{t.admin.username}: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.phone}</code></div>
+            )}
+            {/* Last sync */}
+            {driver.lastSyncAt && (() => {
+              const relTime = formatRelativeTime(driver.lastSyncAt);
+              return relTime ? <div>{t.admin.lastSyncAt}: {relTime}</div> : null;
+            })()}
+          </div>
+        );
+      }
+    } catch { /* ignore parse error */ }
+    return null;
+  };
 
   return (
     <div className="space-y-4">
@@ -249,37 +490,118 @@ export function AdminDriversTab() {
                 />
               </div>
 
-              {/* Driver Type */}
-              <div className="space-y-2">
+              {/* Driver Type - Categorized Layout */}
+              <div className="space-y-3">
                 <Label>{t.admin.type}</Label>
-                <div className="flex gap-2 flex-wrap">
-                  <Button
-                    variant={newDriverType === "local" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(newDriverType === "local" && "bg-emerald-600 hover:bg-emerald-700")}
-                    onClick={() => handleTypeChange("local")}
-                  >
-                    <Server className="w-4 h-4 mr-1.5" />
-                    {t.admin.local}
-                  </Button>
-                  <Button
-                    variant={newDriverType === "s3" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(newDriverType === "s3" && "bg-emerald-600 hover:bg-emerald-700")}
-                    onClick={() => handleTypeChange("s3")}
-                  >
-                    <Cloud className="w-4 h-4 mr-1.5" />
-                    Amazon S3
-                  </Button>
-                  <Button
-                    variant={newDriverType === "webdav" ? "default" : "outline"}
-                    size="sm"
-                    className={cn(newDriverType === "webdav" && "bg-emerald-600 hover:bg-emerald-700")}
-                    onClick={() => handleTypeChange("webdav")}
-                  >
-                    <Globe className="w-4 h-4 mr-1.5" />
-                    {t.admin.webdav}
-                  </Button>
+
+                {/* Storage Protocols */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Storage Protocols
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant={newDriverType === "local" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "local" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("local")}
+                    >
+                      <Server className="w-4 h-4 mr-1.5" />
+                      {t.admin.local}
+                    </Button>
+                    <Button
+                      variant={newDriverType === "s3" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "s3" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("s3")}
+                    >
+                      <Cloud className="w-4 h-4 mr-1.5" />
+                      Amazon S3
+                    </Button>
+                    <Button
+                      variant={newDriverType === "webdav" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "webdav" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("webdav")}
+                    >
+                      <Globe className="w-4 h-4 mr-1.5" />
+                      {t.admin.webdav}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Third-Party Cloud Drives - OAuth */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Key className="w-3 h-3" />
+                    {t.admin.thirdPartyCloud} — OAuth
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant={newDriverType === "baidu" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "baidu" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("baidu")}
+                    >
+                      <Cloud className="w-4 h-4 mr-1.5" />
+                      {t.admin.baiduWangpan}
+                    </Button>
+                    <Button
+                      variant={newDriverType === "aliyun" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "aliyun" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("aliyun")}
+                    >
+                      <Cloud className="w-4 h-4 mr-1.5" />
+                      {t.admin.aliyunDrive}
+                    </Button>
+                    <Button
+                      variant={newDriverType === "onedrive" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "onedrive" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("onedrive")}
+                    >
+                      <Cloud className="w-4 h-4 mr-1.5" />
+                      {t.admin.oneDrive}
+                    </Button>
+                    <Button
+                      variant={newDriverType === "google" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "google" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("google")}
+                    >
+                      <Cloud className="w-4 h-4 mr-1.5" />
+                      {t.admin.googleDrive}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Third-Party Cloud Drives - Account */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <ShieldCheck className="w-3 h-3" />
+                    {t.admin.thirdPartyCloud} — {t.admin.loginWithPassword}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant={newDriverType === "115" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "115" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("115")}
+                    >
+                      <HardDrive className="w-4 h-4 mr-1.5" />
+                      {t.admin.drive115}
+                    </Button>
+                    <Button
+                      variant={newDriverType === "quark" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(newDriverType === "quark" && "bg-emerald-600 hover:bg-emerald-700")}
+                      onClick={() => handleTypeChange("quark")}
+                    >
+                      <HardDrive className="w-4 h-4 mr-1.5" />
+                      {t.admin.quarkDrive}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -293,6 +615,26 @@ export function AdminDriversTab() {
                   transition={{ duration: 0.15 }}
                   className="space-y-3"
                 >
+                  {/* OAuth auth notice */}
+                  {isOAuthDriver(newDriverType) && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                      <Key className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                      <div className="text-xs text-blue-700 dark:text-blue-400">
+                        {t.admin.oauthAuthorize}: {t.admin.authRequired}. {t.admin.startOAuth} {t.admin.authorize.toLowerCase()}.
+                      </div>
+                    </div>
+                  )}
+                  {/* Password auth notice */}
+                  {isPasswordDriver(newDriverType) && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-violet-500/5 border border-violet-500/20">
+                      <ShieldCheck className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
+                      <div className="text-xs text-violet-700 dark:text-violet-400">
+                        {newDriverType === "quark"
+                          ? t.admin.loginWithSms
+                          : t.admin.loginWithPassword}
+                      </div>
+                    </div>
+                  )}
                   {currentConfigFields.map((field) => (
                     <div key={field.key} className="space-y-1.5">
                       <Label htmlFor={`config-${field.key}`} className="text-xs">
@@ -350,7 +692,7 @@ export function AdminDriversTab() {
                   onClick={handleTestConnection}
                 >
                   <TestTube className="w-4 h-4" />
-                  Test Connection
+                  {t.admin.testConnection}
                 </Button>
               )}
             </div>
@@ -387,6 +729,10 @@ export function AdminDriversTab() {
           {allDrivers.map((driver, idx) => {
             const Icon = driverTypeIcons[driver.type] || Server;
             const isActive = driver.status === "active";
+            const isCloud = isCloudDriver(driver.type);
+            const isOAuth = isOAuthDriver(driver.type);
+            const isExpired = driver.authStatus === "expired";
+
             return (
               <motion.div
                 key={driver.id}
@@ -432,34 +778,42 @@ export function AdminDriversTab() {
                               {driver.healthy ? t.admin.healthyStatus : t.admin.unhealthy}
                             </Badge>
                           )}
+                          {/* Cloud driver auth badges */}
+                          {isCloud && driver.authType && (
+                            <AuthTypeBadge authType={driver.authType} t={t.admin} />
+                          )}
+                          {isCloud && driver.authStatus && (
+                            <AuthStatusBadge status={driver.authStatus} t={t.admin} />
+                          )}
                         </div>
                         <div className="text-sm text-muted-foreground space-y-0.5">
                           <div>{t.admin.type}: {driverTypeLabels[driver.type] || driver.type} · {t.admin.priority}: {driver.priority}</div>
-                          {driver.type === "local" && driver.basePath && (
-                            <div>{t.admin.basePath}: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{driver.basePath}</code></div>
-                          )}
-                          {(driver.type === "s3" || driver.type === "webdav") && (() => {
-                            try {
-                              const config = JSON.parse(driver.config || "{}");
-                              if (driver.type === "s3") {
-                                return (
-                                  <div className="space-y-0.5">
-                                    {config.endpoint && <div>Endpoint: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.endpoint}</code></div>}
-                                    <div>Bucket: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.bucket}</code> · Region: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.region}</code></div>
-                                  </div>
-                                );
-                              }
-                              if (driver.type === "webdav") {
-                                return (
-                                  <div>URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{config.url}</code></div>
-                                );
-                              }
-                            } catch { /* ignore parse error */ }
-                            return null;
-                          })()}
+                          {renderDriverConfigInfo(driver)}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
+                        {/* OAuth Authorize / Re-authorize button */}
+                        {isOAuth && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "gap-1.5",
+                              isExpired ? "border-amber-500/50 text-amber-700 hover:text-amber-800 dark:text-amber-400" : "border-blue-500/50 text-blue-700 hover:text-blue-800 dark:text-blue-400",
+                            )}
+                            onClick={() => handleOAuthAuthorize(driver)}
+                            disabled={authorizingDriverId === driver.id}
+                          >
+                            {authorizingDriverId === driver.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : isExpired ? (
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            ) : (
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            )}
+                            {isExpired ? t.admin.reauthorize : t.admin.authorize}
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
@@ -530,7 +884,7 @@ export function AdminDriversTab() {
             );
           })}
 
-          {/* Driver Type Info Cards */}
+          {/* Driver Type Info Cards - Storage Protocols */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
             <Card className={cn(
               "transition-all duration-200",
@@ -615,6 +969,64 @@ export function AdminDriversTab() {
                 </p>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Driver Type Info Cards - Third-Party Cloud Drives */}
+          <div className="mt-2 mb-2">
+            <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Cloud className="w-3.5 h-3.5" />
+              {t.admin.thirdPartyCloud}
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cloudDriverCards.map((card) => {
+              const CardIcon = card.icon;
+              const hasDriver = allDrivers.some(d => d.type === card.type);
+              return (
+                <Card key={card.type} className={cn(
+                  "transition-all duration-200",
+                  hasDriver ? "border-emerald-500/20" : "border-dashed opacity-70"
+                )}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={cn(
+                        "p-2.5 rounded-xl",
+                        hasDriver ? "bg-emerald-500/10" : "bg-muted"
+                      )}>
+                        <CardIcon className={cn(
+                          "w-5 h-5",
+                          hasDriver ? "text-emerald-600" : "text-muted-foreground"
+                        )} />
+                      </div>
+                      <div>
+                        <div className="font-semibold">{t.admin[card.labelKey]}</div>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant={hasDriver ? "default" : "secondary"} className={cn(
+                            "text-[10px]",
+                            hasDriver && "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                          )}>
+                            {hasDriver ? "Active" : "Available"}
+                          </Badge>
+                          <Badge variant="outline" className={cn(
+                            "text-[10px]",
+                            card.authType === "oauth"
+                              ? "text-blue-600 border-blue-500/30"
+                              : card.authType === "sms"
+                                ? "text-orange-600 border-orange-500/30"
+                                : "text-violet-600 border-violet-500/30"
+                          )}>
+                            {card.authType === "oauth" ? "OAuth" : card.authType === "sms" ? "SMS" : "Password"}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t.admin[card.descKey]}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

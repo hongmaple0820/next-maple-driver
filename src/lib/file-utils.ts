@@ -27,6 +27,7 @@ export interface FileItem {
   childrenCount?: number;
   description?: string;
   colorLabel?: string;
+  driverId?: string | null;
 }
 
 // Color label definitions

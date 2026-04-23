@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     const files = formData.getAll('files') as File[];
     const parentIdParam = (formData.get('parentId') as string) || 'root';
     const parentId = parentIdParam === 'root' ? null : parentIdParam;
+    const driverId = (formData.get('driverId') as string) || null;
 
     // Folder upload support: paths JSON maps file index to relative path
     // e.g. {"0": "MyFolder/sub/file.txt", "1": "MyFolder/other.txt"}
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         // The last part is the file name, everything else is folder path
         if (pathParts.length < 2) {
           // File is at root of the folder - just use regular upload
-          const result = await uploadSingleFile(file, parentId, userId, STORAGE_PATH);
+          const result = await uploadSingleFile(file, parentId, userId, STORAGE_PATH, driverId);
           results.push(result);
           continue;
         }
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
                 mimeType: '',
                 parentId: currentParentId,
                 userId,
+                driverId,
               },
             });
             folderCache.set(cacheKey, folderId);
@@ -116,11 +118,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Upload the file to the deepest folder
-        const result = await uploadSingleFile(file, currentParentId, userId, STORAGE_PATH);
+        const result = await uploadSingleFile(file, currentParentId, userId, STORAGE_PATH, driverId);
         results.push(result);
       } else {
         // Regular single file upload
-        const result = await uploadSingleFile(file, parentId, userId, STORAGE_PATH);
+        const result = await uploadSingleFile(file, parentId, userId, STORAGE_PATH, driverId);
         results.push(result);
       }
     }
@@ -142,7 +144,8 @@ async function uploadSingleFile(
   file: File,
   parentId: string | null,
   userId: string,
-  storagePath: string
+  storagePath: string,
+  driverId: string | null = null
 ) {
   // Generate unique storage name
   const fileId = crypto.randomUUID();
@@ -197,6 +200,7 @@ async function uploadSingleFile(
       parentId,
       storagePath: storageName,
       userId,
+      driverId,
     },
   });
 
@@ -209,6 +213,7 @@ async function uploadSingleFile(
     parentId: fileItem.parentId ?? 'root',
     starred: fileItem.isStarred,
     trashed: fileItem.isTrashed,
+    driverId: fileItem.driverId,
     createdAt: fileItem.createdAt.toISOString(),
     updatedAt: fileItem.updatedAt.toISOString(),
   };

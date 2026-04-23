@@ -15,6 +15,8 @@ import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
 import { AdminPanel } from "@/components/admin-panel";
 import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
 import { TransferPanel } from "@/components/transfer-panel";
+import { QuickTransferPanel } from "@/components/quick-transfer-panel";
+import { TransferStationPanel } from "@/components/transfer-station-panel";
 import { useFileStore } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
 import { toast } from "sonner";
@@ -234,12 +236,14 @@ export default function CloudDriveApp() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar - hide for transfer section */}
-        {section !== "transfer" && <FileToolbar />}
+        {/* Toolbar - hide for transfer sections */}
+        {section !== "quick-transfer" && section !== "transfer-station" && <FileToolbar />}
 
-        {/* Transfer Panel */}
-        {section === "transfer" ? (
-          <TransferPanel />
+        {/* Quick Transfer Panel */}
+        {section === "quick-transfer" ? (
+          <QuickTransferPanel />
+        ) : section === "transfer-station" ? (
+          <TransferStationPanel />
         ) : (
           /* File area with upload zone */
           <UploadZone>

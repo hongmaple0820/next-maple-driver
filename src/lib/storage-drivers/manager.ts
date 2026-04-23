@@ -2,6 +2,12 @@ import type { StorageDriver, StorageDriverConfig, StorageDriverFactory } from ".
 import { localDriverFactory } from "./local-driver";
 import { s3DriverFactory } from "./s3-driver";
 import { webdavDriverFactory } from "./webdav-driver";
+import { baiduDriverFactory } from "./baidu-driver";
+import { aliyunDriverFactory } from "./aliyun-driver";
+import { onedriveDriverFactory } from "./onedrive-driver";
+import { googleDriverFactory } from "./google-driver";
+import { drive115DriverFactory } from "./115-driver";
+import { quarkDriverFactory } from "./quark-driver";
 
 // Registry of all available driver factories
 const driverFactories: Map<string, StorageDriverFactory> = new Map();
@@ -21,6 +27,12 @@ export function registerDriverFactory(factory: StorageDriverFactory) {
 registerDriverFactory(localDriverFactory);
 registerDriverFactory(s3DriverFactory);
 registerDriverFactory(webdavDriverFactory);
+registerDriverFactory(baiduDriverFactory);
+registerDriverFactory(aliyunDriverFactory);
+registerDriverFactory(onedriveDriverFactory);
+registerDriverFactory(googleDriverFactory);
+registerDriverFactory(drive115DriverFactory);
+registerDriverFactory(quarkDriverFactory);
 
 export function getDriverFactory(type: string): StorageDriverFactory | undefined {
   return driverFactories.get(type);
@@ -84,4 +96,25 @@ export function invalidateDriver(id: string) {
 // Invalidate all cached driver instances
 export function invalidateAllDrivers() {
   driverInstances.clear();
+}
+
+// Cloud driver types (for UI filtering)
+export const CLOUD_DRIVER_TYPES = ["baidu", "aliyun", "onedrive", "google", "115", "quark"] as const;
+
+export function isCloudDriver(type: string): boolean {
+  return CLOUD_DRIVER_TYPES.includes(type as typeof CLOUD_DRIVER_TYPES[number]);
+}
+
+// OAuth driver types
+export const OAUTH_DRIVER_TYPES = ["baidu", "aliyun", "onedrive", "google"] as const;
+
+export function isOAuthDriver(type: string): boolean {
+  return OAUTH_DRIVER_TYPES.includes(type as typeof OAUTH_DRIVER_TYPES[number]);
+}
+
+// Password-based driver types
+export const PASSWORD_DRIVER_TYPES = ["115", "quark"] as const;
+
+export function isPasswordDriver(type: string): boolean {
+  return PASSWORD_DRIVER_TYPES.includes(type as typeof PASSWORD_DRIVER_TYPES[number]);
 }

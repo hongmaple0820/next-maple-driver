@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Send } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     { id: "files", label: t.app.allFiles, icon: Folder },
     { id: "recent", label: t.app.recent, icon: Clock },
     { id: "starred", label: t.app.starred, icon: Star },
-    { id: "transfer", label: t.app.quickTransfer, icon: Send },
+    { id: "quick-transfer", label: t.app.quickTransfer, icon: Zap },
+    { id: "transfer-station", label: t.app.transferStation, icon: Package },
     { id: "trash", label: t.app.trash, icon: Trash2 },
   ];
 

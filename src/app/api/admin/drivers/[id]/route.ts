@@ -25,7 +25,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, status, priority, isDefault, basePath, config } = body;
+    const { name, status, priority, isDefault, basePath, config, authType, authStatus } = body;
 
     const existing = await db.storageDriver.findUnique({ where: { id } });
     if (!existing) {
@@ -47,6 +47,8 @@ export async function PUT(
     if (isDefault !== undefined) updateData.isDefault = isDefault;
     if (basePath !== undefined) updateData.basePath = basePath;
     if (config !== undefined) updateData.config = JSON.stringify(config);
+    if (authType !== undefined) updateData.authType = authType;
+    if (authStatus !== undefined) updateData.authStatus = authStatus;
 
     const driver = await db.storageDriver.update({
       where: { id },
@@ -62,6 +64,10 @@ export async function PUT(
       isDefault: driver.isDefault,
       basePath: driver.basePath,
       config: driver.config,
+      authType: driver.authType,
+      authStatus: driver.authStatus,
+      tokenExpiresAt: driver.tokenExpiresAt?.toISOString() || null,
+      lastSyncAt: driver.lastSyncAt?.toISOString() || null,
       createdAt: driver.createdAt.toISOString(),
       updatedAt: driver.updatedAt.toISOString(),
       healthy: driver.type === 'local' ? existsSync(driver.basePath || './storage') : false,

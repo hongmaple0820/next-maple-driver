@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       trashed: file.isTrashed,
       description: file.description,
       colorLabel: file.colorLabel || "",
+      driverId: file.driverId,
       createdAt: file.createdAt.toISOString(),
       updatedAt: file.updatedAt.toISOString(),
       childrenCount: file._count.children,
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     const userId = (user as Record<string, unknown>).id as string;
 
     const body = await request.json();
-    const { name, parentId: parentIdParam = 'root' } = body;
+    const { name, parentId: parentIdParam = 'root', driverId = null } = body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return NextResponse.json(
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
         type: 'folder',
         parentId,
         userId,
+        driverId,
       },
     });
 
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
       parentId: folder.parentId ?? 'root',
       starred: folder.isStarred,
       trashed: folder.isTrashed,
+      driverId: folder.driverId,
       createdAt: folder.createdAt.toISOString(),
       updatedAt: folder.updatedAt.toISOString(),
     }, { status: 201 });

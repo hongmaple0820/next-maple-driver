@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { FileItem } from "@/lib/file-utils";
 
 export type ViewMode = "grid" | "list";
-export type Section = "files" | "starred" | "trash" | "recent" | "transfer";
+export type Section = "files" | "starred" | "trash" | "recent" | "quick-transfer" | "transfer-station";
 export type SortField = "name" | "updatedAt" | "size" | "type";
 export type SortDirection = "asc" | "desc";
 export type FileTypeFilter = "all" | "images" | "videos" | "audio" | "documents" | "code" | "archives";
@@ -115,6 +115,12 @@ interface FileStore {
   // Admin panel
   adminPanelOpen: boolean;
   setAdminPanelOpen: (open: boolean) => void;
+
+  // Cross-driver move dialog
+  crossDriverMoveOpen: boolean;
+  setCrossDriverMoveOpen: (open: boolean) => void;
+  crossDriverMoveFileIds: string[];
+  setCrossDriverMoveFileIds: (ids: string[]) => void;
 
   // Dialogs
   createFolderOpen: boolean;
@@ -291,6 +297,12 @@ export const useFileStore = create<FileStore>((set) => ({
   // Admin panel
   adminPanelOpen: false,
   setAdminPanelOpen: (open) => set({ adminPanelOpen: open }),
+
+  // Cross-driver move dialog
+  crossDriverMoveOpen: false,
+  setCrossDriverMoveOpen: (open) => set({ crossDriverMoveOpen: open }),
+  crossDriverMoveFileIds: [],
+  setCrossDriverMoveFileIds: (ids) => set({ crossDriverMoveFileIds: ids }),
 
   // Detail panel
   detailFile: null,

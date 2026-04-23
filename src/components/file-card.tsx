@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive, HardDrive } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -191,6 +191,8 @@ export function FileCard({ file }: FileCardProps) {
     addActivity,
     compactMode,
     showExtensions,
+    setCrossDriverMoveOpen,
+    setCrossDriverMoveFileIds,
   } = useFileStore();
 
   const queryClient = useQueryClient();
@@ -420,6 +422,9 @@ export function FileCard({ file }: FileCardProps) {
           <DropdownMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Color Label submenu */}
           <DropdownMenuSub>
@@ -504,6 +509,9 @@ export function FileCard({ file }: FileCardProps) {
           </ContextMenuItem>
           <ContextMenuItem onClick={handleCopy}>
             <Copy className="w-4 h-4" /> Copy
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => { setCrossDriverMoveFileIds([file.id]); setCrossDriverMoveOpen(true); }}>
+            <HardDrive className="w-4 h-4" /> {t.app.moveToDrive}
           </ContextMenuItem>
           <ContextMenuSeparator />
           {/* Color Label submenu */}

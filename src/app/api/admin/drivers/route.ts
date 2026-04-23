@@ -34,6 +34,12 @@ export async function GET() {
       isDefault: driver.isDefault,
       config: driver.config,
       basePath: driver.basePath,
+      authType: driver.authType,
+      authStatus: driver.authStatus,
+      accessToken: driver.accessToken ? '••••••••' : null, // Mask in listing
+      refreshToken: driver.refreshToken ? '••••••••' : null,
+      tokenExpiresAt: driver.tokenExpiresAt?.toISOString() || null,
+      lastSyncAt: driver.lastSyncAt?.toISOString() || null,
       createdAt: driver.createdAt.toISOString(),
       updatedAt: driver.updatedAt.toISOString(),
       healthy: driver.type === 'local' ? existsSync(driver.basePath || './storage') : false,
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest) {
     const factory = getDriverFactory(type);
     if (!factory) {
       return NextResponse.json(
-        { error: `Unsupported driver type: ${type}. Supported: local, s3, webdav` },
+        { error: `Unsupported driver type: ${type}. Supported: local, s3, webdav, baidu, aliyun, onedrive, google, 115, quark` },
         { status: 400 }
       );
     }
@@ -124,6 +130,8 @@ export async function POST(request: NextRequest) {
         isDefault: isDefault || false,
         config: safeConfig ? JSON.stringify(safeConfig) : '{}',
         status: 'active',
+        authType: factory.authType || 'none',
+        authStatus: factory.authType ? 'pending' : 'none',
       },
     });
 
@@ -136,6 +144,8 @@ export async function POST(request: NextRequest) {
       isDefault: driver.isDefault,
       basePath: driver.basePath,
       config: driver.config,
+      authType: driver.authType,
+      authStatus: driver.authStatus,
       createdAt: driver.createdAt.toISOString(),
     }, { status: 201 });
   } catch (error) {

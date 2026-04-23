@@ -8,6 +8,7 @@ import { FilePreview } from "@/components/file-preview";
 import { FileDetailPanel } from "@/components/file-detail-panel";
 import { FilePropertiesDialog } from "@/components/file-properties-dialog";
 import { BatchRenameDialog } from "@/components/batch-rename-dialog";
+import { CrossDriverMoveDialog } from "@/components/cross-driver-move-dialog";
 
 export function FileActions() {
   return (
@@ -20,6 +21,7 @@ export function FileActions() {
       <FileDetailPanel />
       <FilePropertiesDialog />
       <BatchRenameDialog />
+      <CrossDriverMoveDialog />
     </>
   );
 }
