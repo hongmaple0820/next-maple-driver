@@ -91,12 +91,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <div className="relative flex-1 min-h-0">
-        <ScrollArea className="h-full px-3 py-3">
-          <div className="px-2 mb-2">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="px-5 py-3">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{t.app.navigation}</span>
           </div>
-          <nav className="space-y-0.5">
+          <nav className="space-y-0.5 px-3">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = section === item.id;
@@ -143,32 +143,29 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               );
             })}
           </nav>
+          {/* Admin Panel Button inside scroll area - clearly separated */}
+          {isAdmin && (
+            <div className="border-t border-border/60 px-4 py-3 mt-3 mx-1">
+              <button
+                onClick={() => {
+                  setAdminPanelOpen(true);
+                  onNavigate?.();
+                }}
+                className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
+              >
+                <Shield className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
+                {t.app.adminPanel}
+              </button>
+            </div>
+          )}
           {/* Quick Stats */}
-          <div className="px-5 py-2 border-t border-border/40">
+          <div className="px-5 py-2 border-t border-border/40 mx-3">
             <p className="text-[11px] text-muted-foreground/70">
               {stats?.totalFiles ?? 0} {t.app.files} · {stats?.totalFolders ?? 0} {t.app.folders}
             </p>
           </div>
         </ScrollArea>
-        {/* Gradient overlay at bottom of navigation */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-sidebar to-transparent pointer-events-none" />
       </div>
-
-      {/* Admin Panel Button - outside ScrollArea to avoid overlap */}
-      {isAdmin && (
-        <div className="px-4 py-1.5 border-t border-border/40">
-          <button
-            onClick={() => {
-              setAdminPanelOpen(true);
-              onNavigate?.();
-            }}
-            className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
-          >
-            <Shield className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
-            {t.app.adminPanel}
-          </button>
-        </div>
-      )}
 
       {/* User Profile Area */}
       <div className="border-t border-border/40 px-3 py-3">

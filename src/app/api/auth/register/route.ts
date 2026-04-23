@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json();
+    const body = await request.json();
+    const { email, password, name } = body;
 
+    // Validate required fields
     if (!email || !password || !name) {
       return NextResponse.json(
         { error: "Email, password, and name are required" },
@@ -13,16 +17,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 6) {
+    // Validate email format
+    if (!EMAIL_REGEX.test(email)) {
+      return NextResponse.json(
+        { error: "Please provide a valid email address" },
+        { status: 400 }
+      );
+    }
+
+    // Validate name length
+    if (typeof name !== "string" || name.trim().length < 1) {
+      return NextResponse.json(
+        { error: "Name must be at least 1 character" },
+        { status: 400 }
+      );
+    }
+
+    // Validate password length
+    if (typeof password !== "string" || password.length < 6) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters" },
         { status: 400 }
       );
     }
 
+    // Normalize email to lowercase
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if user already exists
     const existing = await db.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existing) {
@@ -38,8 +62,8 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await db.user.create({
       data: {
-        email,
-        name,
+        email: normalizedEmail,
+        name: name.trim(),
         passwordHash,
         role: "user",
       },

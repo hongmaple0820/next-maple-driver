@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Cloud, Shield, Zap, Globe, Eye, EyeOff, Loader2, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,23 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
+
+function getPasswordStrength(password: string): { level: number; color: string } {
+  if (password.length === 0) return { level: 0, color: "" };
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { level: 1, color: "bg-red-400" };
+  if (score === 2) return { level: 2, color: "bg-amber-400" };
+  if (score === 3) return { level: 3, color: "bg-emerald-400" };
+  return { level: 4, color: "bg-emerald-500" };
+}
 
 export function RegisterPage() {
   const { data: session, status } = useSession();
@@ -74,6 +90,10 @@ export function RegisterPage() {
       if (!res.ok) {
         if (data.error?.includes("already") || data.error?.includes("exists")) {
           setError(t.auth.emailExists);
+        } else if (data.error?.includes("valid email")) {
+          setError(t.auth.invalidEmail);
+        } else if (data.error?.includes("6 characters") || data.error?.includes("at least 6")) {
+          setError(t.auth.passwordTooShort);
         } else {
           setError(data.error || t.auth.registrationFailed);
         }
@@ -81,19 +101,26 @@ export function RegisterPage() {
       }
 
       // Auto sign in after successful registration
-      await signIn("credentials", {
+      const signInResult = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
 
-      router.push("/");
+      if (signInResult?.error) {
+        // If auto sign-in fails, redirect to login with a hint
+        router.push("/login");
+      } else {
+        router.push("/");
+      }
     } catch {
       setError(t.auth.unexpectedError);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const passwordStrength = getPasswordStrength(password);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -199,16 +226,25 @@ export function RegisterPage() {
                 <p className="text-muted-foreground text-sm mt-1.5">{t.auth.getStarted}</p>
               </div>
 
-              {/* Error message */}
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mb-4 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-                >
-                  {error}
-                </motion.div>
-              )}
+              {/* Error message with animation */}
+              <AnimatePresence mode="wait">
+                {error && (
+                  <motion.div
+                    key="register-error"
+                    initial={{ opacity: 0, y: -8, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: "auto" }}
+                    exit={{ opacity: 0, y: -8, height: 0 }}
+                    className="mb-4 overflow-hidden"
+                  >
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.75 4a.75.75 0 011.5 0v3a.75.75 0 01-1.5 0V5zM8 11a1 1 0 100-2 1 1 0 000 2z"/>
+                      </svg>
+                      {error}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
@@ -262,25 +298,43 @@ export function RegisterPage() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  {/* Password strength indicator */}
-                  {password.length > 0 && (
-                    <div className="flex gap-1 mt-1.5">
-                      {[1, 2, 3, 4].map((level) => (
-                        <div
-                          key={level}
-                          className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
-                            password.length >= 12
-                              ? "bg-emerald-500"
-                              : password.length >= 8
-                                ? "bg-emerald-400"
-                                : password.length >= 6
-                                  ? "bg-amber-400"
-                                  : "bg-red-400"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  {/* Password strength indicator with animation */}
+                  <AnimatePresence>
+                    {password.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex gap-1 mt-1.5">
+                          {[1, 2, 3, 4].map((level) => (
+                            <div
+                              key={level}
+                              className={cn(
+                                "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                                level <= passwordStrength.level
+                                  ? passwordStrength.color
+                                  : "bg-muted"
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <p className={cn(
+                          "text-xs mt-1 font-medium",
+                          passwordStrength.level <= 1 && "text-red-500",
+                          passwordStrength.level === 2 && "text-amber-500",
+                          passwordStrength.level === 3 && "text-emerald-500",
+                          passwordStrength.level >= 4 && "text-emerald-600",
+                        )}>
+                          {passwordStrength.level <= 1 && t.auth.passwordWeak}
+                          {passwordStrength.level === 2 && t.auth.passwordFair}
+                          {passwordStrength.level === 3 && t.auth.passwordGood}
+                          {passwordStrength.level >= 4 && t.auth.passwordStrong}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">{t.auth.confirmPassword}</Label>
@@ -306,10 +360,14 @@ export function RegisterPage() {
                     </button>
                   </div>
                   {confirmPassword.length > 0 && password === confirmPassword && (
-                    <div className="flex items-center gap-1.5 mt-1.5 text-emerald-600 dark:text-emerald-400">
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-1.5 mt-1.5 text-emerald-600 dark:text-emerald-400"
+                    >
                       <Check className="w-3.5 h-3.5" />
                       <span className="text-xs font-medium">{t.auth.passwordsMatch}</span>
-                    </div>
+                    </motion.div>
                   )}
                 </div>
                 <Button

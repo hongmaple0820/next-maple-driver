@@ -18,6 +18,7 @@ export async function GET(
 
     return NextResponse.json({
       status: session.status,
+      token: session.status === "confirmed" ? session.token : null,
       user: session.status === "confirmed" ? {
         id: session.userId,
         email: session.userEmail,

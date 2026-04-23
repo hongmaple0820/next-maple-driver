@@ -53,15 +53,19 @@ export function AdminPanel() {
             </TabsList>
           </div>
           <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-130px)]">
-            <TabsContent value="system" className="mt-0">
-              <AdminSystemTab />
-            </TabsContent>
-            <TabsContent value="users" className="mt-0">
-              <AdminUsersTab />
-            </TabsContent>
-            <TabsContent value="drivers" className="mt-0">
-              <AdminDriversTab />
-            </TabsContent>
+            {adminPanelOpen && (
+              <>
+                <TabsContent value="system" className="mt-0">
+                  <AdminSystemTab />
+                </TabsContent>
+                <TabsContent value="users" className="mt-0">
+                  <AdminUsersTab />
+                </TabsContent>
+                <TabsContent value="drivers" className="mt-0">
+                  <AdminDriversTab />
+                </TabsContent>
+              </>
+            )}
           </div>
         </Tabs>
       </DialogContent>

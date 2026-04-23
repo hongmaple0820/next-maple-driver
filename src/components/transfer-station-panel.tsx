@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { toast } from "sonner";
@@ -23,6 +23,17 @@ import {
   FolderOpen,
   Shield,
   Timer,
+  Search,
+  ArrowUpDown,
+  Image,
+  Film,
+  Music,
+  FileText,
+  FileCode,
+  Archive,
+  Table2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +43,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "next-auth/react";
@@ -52,12 +65,55 @@ interface TransferItem {
   shareUrl: string;
   isExpired: boolean;
   isFolder?: boolean;
+  storagePath?: string;
 }
 
 interface QrSessionInfo {
   sessionId: string;
   expiresAt: number;
   qrData: string;
+}
+
+type SortField = "name" | "date" | "size" | "expiry";
+type SortDirection = "asc" | "desc";
+
+// File type icon helper
+function getFileTypeIcon(fileName: string, mimeType?: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const mime = mimeType?.toLowerCase() || "";
+
+  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"].includes(ext)) {
+    return { icon: Image, color: "text-emerald-500" };
+  }
+  if (mime.startsWith("video/") || ["mp4", "webm", "avi", "mov", "mkv", "flv"].includes(ext)) {
+    return { icon: Film, color: "text-rose-500" };
+  }
+  if (mime.startsWith("audio/") || ["mp3", "wav", "ogg", "flac", "aac", "m4a"].includes(ext)) {
+    return { icon: Music, color: "text-purple-500" };
+  }
+  if (mime === "application/pdf" || ext === "pdf") {
+    return { icon: FileText, color: "text-red-500" };
+  }
+  if (mime.includes("spreadsheet") || ["xls", "xlsx", "csv"].includes(ext)) {
+    return { icon: Table2, color: "text-emerald-600" };
+  }
+  if (["js", "ts", "tsx", "jsx", "py", "rb", "go", "rs", "java", "html", "css", "json", "md"].includes(ext)) {
+    return { icon: FileCode, color: "text-sky-500" };
+  }
+  if (["zip", "rar", "tar", "gz", "7z"].includes(ext)) {
+    return { icon: Archive, color: "text-orange-500" };
+  }
+  if (mime.includes("document") || ["doc", "docx", "txt", "rtf"].includes(ext)) {
+    return { icon: FileText, color: "text-blue-500" };
+  }
+  return { icon: File, color: "text-amber-500" };
+}
+
+// Check if file is image for thumbnail
+function isImageFile(fileName: string, mimeType?: string): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const mime = mimeType?.toLowerCase() || "";
+  return mime.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext);
 }
 
 export function TransferStationPanel() {
@@ -95,6 +151,15 @@ export function TransferStationPanel() {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showQrUpload, setShowQrUpload] = useState(false);
 
+  // Transfer list state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
   // Capacity limits
   const ANON_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   const AUTH_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
@@ -119,6 +184,44 @@ export function TransferStationPanel() {
     const total = selectedFiles.reduce((sum, f) => sum + f.size, 0);
     setTotalSelectedSize(total);
   }, [selectedFiles]);
+
+  // Filter and sort transfers
+  const filteredAndSortedTransfers = useMemo(() => {
+    let result = [...transfers];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t =>
+        t.fileName.toLowerCase().includes(query) ||
+        t.token.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.fileName.localeCompare(b.fileName);
+          break;
+        case "date":
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case "size":
+          cmp = a.fileSize - b.fileSize;
+          break;
+        case "expiry":
+          const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+          const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+          cmp = aExpiry - bExpiry;
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+
+    return result;
+  }, [transfers, searchQuery, sortField, sortDirection]);
 
   // Handle file selection
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,7 +258,6 @@ export function TransferStationPanel() {
         }
         formData.append("maxDownloads", maxDownloads);
 
-        // Use XMLHttpRequest for progress
         const result = await new Promise<{ token: string; shareUrl: string; fileName: string } | null>(
           (resolve) => {
             const xhr = new XMLHttpRequest();
@@ -202,7 +304,6 @@ export function TransferStationPanel() {
         toast.success(`${results.length} ${t.app.filesUploaded}`);
         queryClient.invalidateQueries({ queryKey: ["transfer-list"] });
 
-        // Generate QR for first result
         try {
           const qr = await QRCode.toDataURL(results[0].shareUrl, {
             width: 200,
@@ -257,6 +358,104 @@ export function TransferStationPanel() {
       toast.error("Delete failed");
     }
   };
+
+  // Batch delete selected transfers
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    const tokensToDelete = transfers
+      .filter(t => selectedIds.has(t.id))
+      .map(t => t.token);
+
+    let successCount = 0;
+    for (const token of tokensToDelete) {
+      try {
+        const res = await fetch(`/api/transfer/${token}`, { method: "DELETE" });
+        if (res.ok) successCount++;
+      } catch {
+        // Continue with next
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} ${t.app.transfersDeleted}`);
+      queryClient.invalidateQueries({ queryKey: ["transfer-list"] });
+    }
+    setSelectedIds(new Set());
+    setDeleting(false);
+  }, [selectedIds, transfers, t, queryClient]);
+
+  // Toggle select transfer
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  // Select all / deselect all
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === filteredAndSortedTransfers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAndSortedTransfers.map(t => t.id)));
+    }
+  }, [selectedIds.size, filteredAndSortedTransfers]);
+
+  // Download with progress
+  const handleDownload = useCallback(async (transfer: TransferItem) => {
+    setDownloadingId(transfer.id);
+    setDownloadProgress(0);
+
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/transfer/${transfer.token}/download`, true);
+      xhr.responseType = "blob";
+      xhr.setRequestHeader("Content-Type", "application/json");
+
+      xhr.onprogress = (e) => {
+        if (e.lengthComputable) {
+          setDownloadProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const blob = xhr.response;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = transfer.fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          toast.success(t.app.downloadComplete);
+        } else {
+          toast.error(t.app.downloadFailed);
+        }
+        setDownloadingId(null);
+        setDownloadProgress(0);
+      };
+
+      xhr.onerror = () => {
+        toast.error(t.app.downloadFailed);
+        setDownloadingId(null);
+        setDownloadProgress(0);
+      };
+
+      xhr.send(JSON.stringify({}));
+    } catch {
+      toast.error(t.app.downloadFailed);
+      setDownloadingId(null);
+      setDownloadProgress(0);
+    }
+  }, [t]);
 
   const handleCreateQrSession = async () => {
     try {
@@ -324,9 +523,14 @@ export function TransferStationPanel() {
   // Total transfer size used
   const totalTransferSize = transfers.reduce((sum, t) => sum + t.fileSize, 0);
 
+  // Capacity progress bars
+  const fileSizeProgress = isAuth
+    ? Math.min(100, (totalTransferSize / AUTH_MAX_FILE_SIZE) * 100)
+    : Math.min(100, (totalTransferSize / ANON_MAX_FILE_SIZE) * 100);
+
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -353,15 +557,15 @@ export function TransferStationPanel() {
           </Button>
         </motion.div>
 
-        {/* Capacity Info */}
+        {/* Capacity Info with Progress Bars */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
         >
           <Card className="border-amber-200/50 dark:border-amber-800/30">
-            <CardContent className="py-4">
-              <div className="flex items-center justify-between mb-2">
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   {isAuth ? (
                     <Shield className="w-4 h-4 text-emerald-600" />
@@ -378,18 +582,38 @@ export function TransferStationPanel() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <Upload className="w-3 h-3" />
-                  <span>{t.app.maxFileSize}: {isAuth ? "500MB" : "50MB"}</span>
+
+              {/* File Size Progress Bar */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Upload className="w-3 h-3" />
+                    <span>{t.app.maxFileSize}: {isAuth ? "500MB" : "50MB"}</span>
+                  </div>
+                  <span>{Math.round(fileSizeProgress)}%</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Timer className="w-3 h-3" />
-                  <span>{t.app.maxExpiry}: {isAuth ? "30" : "7"} {t.app.days}</span>
+                <Progress value={fileSizeProgress} className="h-1.5" />
+              </div>
+
+              {/* Expiry Progress Bar */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Timer className="w-3 h-3" />
+                    <span>{t.app.maxExpiry}: {isAuth ? "30" : "7"} {t.app.days}</span>
+                  </div>
+                  <span className="text-xs">{t.app.maxExpiryHint}</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500 rounded-full transition-all"
+                    style={{ width: "100%" }}
+                  />
                 </div>
               </div>
+
               {!isAuth && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   {t.app.anonymousUploadNote}
                 </p>
@@ -509,33 +733,39 @@ export function TransferStationPanel() {
                       </div>
                       <ScrollArea className="max-h-40">
                         <div className="space-y-1">
-                          {selectedFiles.slice(0, 20).map((file, idx) => (
-                            <div
-                              key={`${file.name}-${idx}`}
-                              className="flex items-center gap-2 p-2 rounded-lg border border-border/50 text-sm"
-                            >
-                              {(file as File & { webkitRelativePath?: string }).webkitRelativePath ? (
-                                <Folder className="w-4 h-4 text-amber-500 shrink-0" />
-                              ) : (
-                                <File className="w-4 h-4 text-amber-500 shrink-0" />
-                              )}
-                              <span className="flex-1 min-w-0 truncate">
-                                {(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                {formatFileSize(file.size)}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0"
-                                onClick={() => handleRemoveFile(idx)}
-                                disabled={uploading}
+                          {selectedFiles.slice(0, 20).map((file, idx) => {
+                            const { icon: FileIcon, color } = getFileTypeIcon(file.name, file.type);
+                            return (
+                              <motion.div
+                                key={`${file.name}-${idx}`}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: idx * 0.03 }}
+                                className="flex items-center gap-2 p-2 rounded-lg border border-border/50 text-sm"
                               >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          ))}
+                                {(file as File & { webkitRelativePath?: string }).webkitRelativePath ? (
+                                  <Folder className="w-4 h-4 text-amber-500 shrink-0" />
+                                ) : (
+                                  <FileIcon className={`w-4 h-4 ${color} shrink-0`} />
+                                )}
+                                <span className="flex-1 min-w-0 truncate">
+                                  {(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}
+                                </span>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {formatFileSize(file.size)}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  onClick={() => handleRemoveFile(idx)}
+                                  disabled={uploading}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </motion.div>
+                            );
+                          })}
                           {selectedFiles.length > 20 && (
                             <p className="text-xs text-muted-foreground text-center">
                               +{selectedFiles.length - 20} {t.app.moreFiles}
@@ -545,13 +775,11 @@ export function TransferStationPanel() {
                       </ScrollArea>
 
                       {/* Size warning */}
-                      {totalSelectedSize > maxFileSize * selectedFiles.length ? null : (
-                        selectedFiles.some(f => f.size > maxFileSize) && (
-                          <p className="text-xs text-destructive flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {t.app.fileExceedsLimit} ({isAuth ? "500MB" : "50MB"})
-                          </p>
-                        )
+                      {selectedFiles.some(f => f.size > maxFileSize) && (
+                        <p className="text-xs text-destructive flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {t.app.fileExceedsLimit} ({isAuth ? "500MB" : "50MB"})
+                        </p>
                       )}
 
                       <Button
@@ -670,7 +898,13 @@ export function TransferStationPanel() {
                       </div>
                       <div className="flex-1 space-y-2">
                         {uploadResults.map((result, idx) => (
-                          <div key={result.token} className="space-y-1">
+                          <motion.div
+                            key={result.token}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className="space-y-1"
+                          >
                             <p className="text-sm font-medium truncate">{result.fileName}</p>
                             <div className="flex gap-2">
                               <Input
@@ -694,7 +928,7 @@ export function TransferStationPanel() {
                             <Badge variant="outline" className="font-mono text-xs">
                               {t.app.transferToken}: {result.token}
                             </Badge>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     </div>
@@ -759,105 +993,248 @@ export function TransferStationPanel() {
           >
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Package className="w-4 h-4 text-amber-600" />
-                  {t.app.transferList}
-                </CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="w-4 h-4 text-amber-600" />
+                    {t.app.transferList}
+                  </CardTitle>
+
+                  {/* Search & Sort */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={t.app.searchTransfers}
+                        className="pl-8 h-8 text-sm w-40 sm:w-52"
+                      />
+                    </div>
+                    <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+                      <SelectTrigger className="h-8 text-sm w-28">
+                        <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">{t.app.name}</SelectItem>
+                        <SelectItem value="date">{t.app.modified}</SelectItem>
+                        <SelectItem value="size">{t.app.size}</SelectItem>
+                        <SelectItem value="expiry">{t.app.expiry}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setSortDirection(d => d === "asc" ? "desc" : "asc")}
+                      title={sortDirection === "asc" ? t.app.ascending : t.app.descending}
+                    >
+                      <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortDirection === "desc" ? "rotate-180" : ""}`} />
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {transfersLoading ? (
                   <div className="space-y-2">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 bg-muted/50 rounded-lg animate-pulse" />
+                      <div key={i} className="flex items-center gap-3 p-3">
+                        <Skeleton className="w-8 h-8 rounded" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-4 w-48 rounded" />
+                          <Skeleton className="h-3 w-32 rounded" />
+                        </div>
+                        <Skeleton className="h-4 w-12 rounded" />
+                      </div>
                     ))}
                   </div>
-                ) : transfers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                    <Package className="w-10 h-10 mb-2 opacity-30" />
-                    <p className="text-sm">{t.app.noItemsHere}</p>
-                  </div>
+                ) : filteredAndSortedTransfers.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col items-center justify-center py-8 text-muted-foreground"
+                  >
+                    <motion.div
+                      animate={{ y: [0, -8, 0] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      <Package className="w-12 h-12 mb-2 opacity-30" />
+                    </motion.div>
+                    <p className="text-sm font-medium">{t.app.noTransfersYet}</p>
+                    <p className="text-xs mt-1">{t.app.transfersWillAppearHere}</p>
+                  </motion.div>
                 ) : (
-                  <ScrollArea className="max-h-96">
-                    <div className="space-y-2">
-                      {transfers.map((transfer, idx) => {
-                        const countdown = getExpiryCountdown(transfer.expiresAt);
-                        return (
-                          <motion.div
-                            key={transfer.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.03 }}
-                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-muted/50 ${
-                              transfer.isExpired
-                                ? "opacity-50 border-muted"
-                                : "border-border/50"
-                            }`}
-                          >
-                            {transfer.isFolder ? (
-                              <Folder className="w-8 h-8 text-amber-500 shrink-0" />
-                            ) : (
-                              <File className="w-8 h-8 text-amber-500 shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{transfer.fileName}</p>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="text-xs text-muted-foreground">
-                                  {formatFileSize(transfer.fileSize)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">·</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {formatRelativeTime(transfer.createdAt)}
-                                </span>
-                                {transfer.hasPassword && (
-                                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">
-                                    <KeyRound className="w-2.5 h-2.5 mr-0.5" />
-                                    {t.app.transferPassword}
-                                  </Badge>
+                  <>
+                    {/* Batch actions bar */}
+                    {selectedIds.size > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-2 mb-3 p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200/50 dark:border-amber-800/30"
+                      >
+                        <span className="text-sm font-medium">{selectedIds.size} {t.app.selected}</span>
+                        <div className="flex-1" />
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1 h-7 text-xs"
+                          onClick={handleBatchDelete}
+                          disabled={deleting}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {deleting ? t.app.deleting : t.app.batchDelete}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setSelectedIds(new Set())}
+                        >
+                          {t.app.cancel}
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <ScrollArea className="max-h-96">
+                      <div className="space-y-0.5">
+                        {/* Select all row */}
+                        {filteredAndSortedTransfers.length > 1 && (
+                          <div className="flex items-center gap-3 p-2 text-xs text-muted-foreground border-b border-border/30 mb-1">
+                            <Checkbox
+                              checked={selectedIds.size === filteredAndSortedTransfers.length}
+                              onCheckedChange={toggleSelectAll}
+                              className="shrink-0"
+                            />
+                            <span>{t.app.selectAll}</span>
+                          </div>
+                        )}
+                        {filteredAndSortedTransfers.map((transfer, idx) => {
+                          const countdown = getExpiryCountdown(transfer.expiresAt);
+                          const { icon: FileIcon, color } = getFileTypeIcon(transfer.fileName, transfer.mimeType);
+                          const hasImage = isImageFile(transfer.fileName, transfer.mimeType);
+                          const isDownloading = downloadingId === transfer.id;
+                          return (
+                            <motion.div
+                              key={transfer.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.03 }}
+                              className={`flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-muted/50 group ${
+                                selectedIds.has(transfer.id)
+                                  ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/10"
+                                  : transfer.isExpired
+                                    ? "opacity-50 border-muted"
+                                    : "border-border/50"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={selectedIds.has(transfer.id)}
+                                onCheckedChange={() => toggleSelect(transfer.id)}
+                                className="shrink-0"
+                              />
+                              {/* Thumbnail or icon */}
+                              {hasImage ? (
+                                <div className="w-10 h-10 rounded-md overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                                  <img
+                                    src={`${transfer.shareUrl}/download?mode=inline`}
+                                    alt={transfer.fileName}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = "none";
+                                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                                    }}
+                                  />
+                                  <FileIcon className={`w-5 h-5 ${color} hidden`} />
+                                </div>
+                              ) : transfer.isFolder ? (
+                                <Folder className="w-8 h-8 text-amber-500 shrink-0" />
+                              ) : (
+                                <FileIcon className={`w-8 h-8 ${color} shrink-0`} />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{transfer.fileName}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatFileSize(transfer.fileSize)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatRelativeTime(transfer.createdAt)}
+                                  </span>
+                                  {transfer.hasPassword && (
+                                    <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                                      <KeyRound className="w-2.5 h-2.5 mr-0.5" />
+                                      {t.app.transferPassword}
+                                    </Badge>
+                                  )}
+                                  {transfer.isExpired ? (
+                                    <Badge variant="destructive" className="h-4 px-1 text-[9px]">
+                                      {t.app.transferExpired}
+                                    </Badge>
+                                  ) : countdown ? (
+                                    <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                                      <Clock className="w-2.5 h-2.5 mr-0.5" />
+                                      {countdown}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Download progress or count */}
+                                {isDownloading ? (
+                                  <div className="flex flex-col items-center gap-0.5 w-16">
+                                    <Progress value={downloadProgress} className="h-1 w-full" />
+                                    <span className="text-[10px] text-muted-foreground">{downloadProgress}%</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-right">
+                                    <p className="text-xs font-medium">
+                                      {transfer.downloadCount}
+                                      {transfer.maxDownloads > 0 ? `/${transfer.maxDownloads}` : ""}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">{t.app.downloads}</p>
+                                  </div>
                                 )}
-                                {transfer.isExpired ? (
-                                  <Badge variant="destructive" className="h-4 px-1 text-[9px]">
-                                    {t.app.transferExpired}
-                                  </Badge>
-                                ) : countdown ? (
-                                  <Badge variant="outline" className="h-4 px-1 text-[9px]">
-                                    <Clock className="w-2.5 h-2.5 mr-0.5" />
-                                    {countdown}
-                                  </Badge>
-                                ) : null}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => handleDownload(transfer)}
+                                  title={t.app.download}
+                                  disabled={isDownloading}
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => handleCopyLink(`${window.location.origin}${transfer.shareUrl}`, transfer.id)}
+                                  title={t.app.copyTransferLink}
+                                >
+                                  {copiedLink === transfer.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => handleDeleteTransfer(transfer.token)}
+                                  title={t.app.deleteTransfer}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <div className="text-right">
-                                <p className="text-xs font-medium">
-                                  {transfer.downloadCount}
-                                  {transfer.maxDownloads > 0 ? `/${transfer.maxDownloads}` : ""}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">{t.app.downloads}</p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleCopyLink(`${window.location.origin}${transfer.shareUrl}`, transfer.id)}
-                                title={t.app.copyTransferLink}
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={() => handleDeleteTransfer(transfer.token)}
-                                title={t.app.deleteTransfer}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </>
                 )}
               </CardContent>
             </Card>

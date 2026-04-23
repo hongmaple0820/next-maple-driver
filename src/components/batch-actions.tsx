@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, Trash2, X, Archive, Pencil } from "lucide-react";
+import { Star, Trash2, X, Archive, Pencil, Loader2 } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ export function BatchActions() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const count = selectedFileIds.size;
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
 
   if (count === 0) return null;
 
@@ -78,33 +80,66 @@ export function BatchActions() {
     }
   };
 
-  const handleBatchDownloadZip = async () => {
-    try {
-      const fileIds = Array.from(selectedFileIds);
-      const res = await fetch("/api/files/download-zip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileIds }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: t.app.download + " failed" }));
-        toast.error(data.error || "Failed to download ZIP");
-        return;
+  const handleBatchDownloadZip = () => {
+    const fileIds = Array.from(selectedFileIds);
+    setDownloadProgress(0);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/files/download-zip", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.responseType = "blob";
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 50);
+        setDownloadProgress(percent);
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cloudrive-download.zip";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      toast.success(`Downloaded ${fileIds.length} item${fileIds.length > 1 ? "s" : ""} as ZIP`);
-      clearSelection();
-    } catch {
-      toast.error("Failed to download ZIP");
-    }
+    };
+
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = 50 + Math.round((event.loaded / event.total) * 50);
+        setDownloadProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      setDownloadProgress(null);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const blob = xhr.response as Blob;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cloudrive-download.zip";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success(`Downloaded ${fileIds.length} item${fileIds.length > 1 ? "s" : ""} as ZIP`);
+        clearSelection();
+      } else {
+        try {
+          const errorBlob = xhr.response as Blob;
+          void errorBlob.text().then((text) => {
+            try {
+              const errorData = JSON.parse(text);
+              toast.error(errorData.error || t.app.zipDownloadFailed);
+            } catch {
+              toast.error(t.app.zipDownloadFailed);
+            }
+          });
+        } catch {
+          toast.error(t.app.zipDownloadFailed);
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      setDownloadProgress(null);
+      toast.error(t.app.zipDownloadFailed);
+    };
+
+    xhr.send(JSON.stringify({ fileIds }));
   };
 
   return (
@@ -123,9 +158,19 @@ export function BatchActions() {
             size="sm"
             onClick={handleBatchDownloadZip}
             className="text-background hover:bg-background/20 gap-1.5"
+            disabled={downloadProgress !== null}
           >
-            <Archive className="w-4 h-4" />
-            {t.app.downloadZip}
+            {downloadProgress !== null ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t.app.downloadingZip} {downloadProgress}%
+              </>
+            ) : (
+              <>
+                <Archive className="w-4 h-4" />
+                {t.app.downloadZip}
+              </>
+            )}
           </Button>
         )}
         {section !== "trash" && (

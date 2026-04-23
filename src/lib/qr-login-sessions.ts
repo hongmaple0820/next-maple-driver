@@ -8,6 +8,7 @@ export interface QrLoginSession {
   userEmail: string | null;
   userName: string | null;
   userRole: string | null;
+  token: string | null;
   createdAt: number;
   expiresAt: number;
 }
@@ -37,6 +38,7 @@ export function createQrLoginSession(ttlMs: number = 5 * 60 * 1000): QrLoginSess
     userEmail: null,
     userName: null,
     userRole: null,
+    token: null,
     createdAt: now,
     expiresAt: now + ttlMs,
   };

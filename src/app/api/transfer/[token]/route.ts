@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth-helpers';
 
 // GET /api/transfer/[token] - Get transfer file info (public, no auth needed)
 export async function GET(

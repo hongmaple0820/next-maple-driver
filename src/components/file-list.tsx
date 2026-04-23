@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight, FileArchive } from "lucide-react";
+import { FolderOpen, SearchX, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, ArrowUpDown, Clock, Copy, FolderPlus, Upload, Clipboard, ArrowDownAZ, Clock4, HardDrive, FileType2, Info, Palette, ChevronRight, FileArchive, Archive } from "lucide-react";
 import { useFileStore, type SortField } from "@/store/file-store";
 import {
   Table,
@@ -369,6 +369,33 @@ export function FileList() {
     window.open(`/api/files/download?id=${file.id}`, "_blank");
   }, []);
 
+  const handleDownloadZip = useCallback(async (file: FileItem) => {
+    try {
+      const res = await fetch("/api/files/download-zip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileIds: [file.id] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: t.app.download + " failed" }));
+        toast.error(data.error || "Failed to download ZIP");
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${file.name}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded "${file.name}" as ZIP`);
+    } catch {
+      toast.error("Failed to download ZIP");
+    }
+  }, [t]);
+
   const handleRowClick = useCallback((file: FileItem) => {
     if (file.type === "folder") {
       setCurrentFolderId(file.id);
@@ -517,6 +544,11 @@ export function FileList() {
               <Download className="w-4 h-4" /> Download
             </DropdownMenuItem>
           )}
+          {file.type === "folder" && (
+            <DropdownMenuItem onClick={() => handleDownloadZip(file)}>
+              <Archive className="w-4 h-4" /> {t.app.downloadAsZip}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           {/* Edit group */}
           <DropdownMenuItem onClick={() => setRenameFile({ id: file.id, name: file.name })}>
@@ -599,6 +631,11 @@ export function FileList() {
           {file.type === "file" && (
             <ContextMenuItem onClick={() => handleDownload(file)}>
               <Download className="w-4 h-4" /> Download
+            </ContextMenuItem>
+          )}
+          {file.type === "folder" && (
+            <ContextMenuItem onClick={() => handleDownloadZip(file)}>
+              <Archive className="w-4 h-4" /> {t.app.downloadAsZip}
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />

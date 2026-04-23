@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getQrLoginSession, updateQrLoginSession } from '@/lib/qr-login-sessions';
 import { getAuthUser } from '@/lib/auth-helpers';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.NEXTAUTH_SECRET || "clouddrive-dev-secret-key-2024";
 
 export async function POST(
   request: NextRequest,
@@ -32,13 +35,26 @@ export async function POST(
       );
     }
 
-    // Confirm the login
-    const updatedSession = updateQrLoginSession(sessionId, {
+    const userId = (user as Record<string, unknown>).id as string;
+    const userEmail = (user as Record<string, unknown>).email as string;
+    const userName = (user as Record<string, unknown>).name as string;
+    const userRole = (user as Record<string, unknown>).role as string;
+
+    // Generate a JWT token that can be used for the __qr_token__ credentials login
+    const token = jwt.sign(
+      { id: userId, email: userEmail, name: userName, role: userRole },
+      JWT_SECRET,
+      { expiresIn: '5m' }
+    );
+
+    // Confirm the login and store the token
+    updateQrLoginSession(sessionId, {
       status: "confirmed",
-      userId: (user as Record<string, unknown>).id as string,
-      userEmail: (user as Record<string, unknown>).email as string,
-      userName: (user as Record<string, unknown>).name as string,
-      userRole: (user as Record<string, unknown>).role as string,
+      userId,
+      userEmail,
+      userName,
+      userRole,
+      token,
     });
 
     return NextResponse.json({

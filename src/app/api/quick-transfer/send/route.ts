@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
+import { getAuthUser } from '@/lib/auth-helpers';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { createId } from '@paralleldrive/cuid2';
 
-const STORAGE_PATH = join(process.cwd(), 'storage', 'uploads');
+const STORAGE_PATH = join(process.cwd(), 'storage');
+const ANON_MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB for anonymous
+const AUTH_MAX_TOTAL_SIZE = 500 * 1024 * 1024; // 500MB for authenticated
 
-// POST /api/quick-transfer/send - Send files to a transfer code recipient
+// POST /api/quick-transfer/send - Send files to a transfer code recipient (supports anonymous)
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user) {
-      return unauthorizedResponse();
-    }
-    const senderId = (user as Record<string, unknown>).id as string;
+    const senderId = user ? (user as Record<string, unknown>).id as string : null;
+    const isAuth = !!senderId;
 
     const formData = await request.formData();
     const code = formData.get('code') as string;
@@ -50,6 +50,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Don't allow sending to yourself
+    if (senderId && session.userId === senderId) {
+      return NextResponse.json(
+        { error: 'Cannot send files to yourself' },
+        { status: 400 }
+      );
+    }
+
     // Get files from form data
     const files: File[] = [];
     const folderPaths: string[] = [];
@@ -76,6 +84,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'No files provided' },
         { status: 400 }
+      );
+    }
+
+    // Validate total file size based on auth status
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    const maxTotalSize = isAuth ? AUTH_MAX_TOTAL_SIZE : ANON_MAX_TOTAL_SIZE;
+    if (totalSize > maxTotalSize) {
+      return NextResponse.json(
+        { error: `Total file size exceeds ${isAuth ? '500MB' : '50MB'} limit for ${isAuth ? 'authenticated' : 'anonymous'} users` },
+        { status: 413 }
       );
     }
 
@@ -154,10 +172,10 @@ export async function POST(request: NextRequest) {
       const fileId = createId();
       const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
       const storageName = `${fileId}${ext}`;
-      const storagePath = join(STORAGE_PATH, storageName);
+      const filePath = join(STORAGE_PATH, storageName);
 
       const buffer = Buffer.from(await file.arrayBuffer());
-      await writeFile(storagePath, buffer);
+      await writeFile(filePath, buffer);
 
       // Create file record in target user's directory
       await db.fileItem.create({
@@ -168,7 +186,7 @@ export async function POST(request: NextRequest) {
           size: file.size,
           mimeType: file.type || 'application/octet-stream',
           parentId: currentParentId,
-          storagePath,
+          storagePath: storageName,
           userId: targetUserId,
         },
       });

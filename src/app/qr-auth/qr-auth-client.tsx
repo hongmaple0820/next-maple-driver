@@ -57,8 +57,8 @@ export function QrAuthClient() {
         <Card className="w-full max-w-md border-border/50 shadow-xl">
           <CardContent className="p-8 flex flex-col items-center gap-4">
             <AlertCircle className="w-12 h-12 text-destructive" />
-            <h2 className="text-lg font-bold">Invalid QR Code</h2>
-            <p className="text-sm text-muted-foreground">This QR code is invalid or has expired.</p>
+            <h2 className="text-lg font-bold">{t.auth.qrExpired}</h2>
+            <p className="text-sm text-muted-foreground">{t.auth.unexpectedError}</p>
           </CardContent>
         </Card>
       </div>
@@ -84,7 +84,7 @@ export function QrAuthClient() {
               </div>
               <h2 className="text-lg font-bold">{t.auth.loginSuccessful}</h2>
               <p className="text-sm text-muted-foreground text-center">
-                You have authorized the login. You can close this page.
+                {t.auth.authorizeLoginDesc}
               </p>
             </CardContent>
           </Card>
@@ -101,9 +101,9 @@ export function QrAuthClient() {
             <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
               <X className="w-8 h-8 text-red-600" />
             </div>
-            <h2 className="text-lg font-bold">Login Denied</h2>
+            <h2 className="text-lg font-bold">{t.auth.deny}</h2>
             <p className="text-sm text-muted-foreground text-center">
-              You have denied the login request. You can close this page.
+              {t.auth.authorizeLoginDesc}
             </p>
           </CardContent>
         </Card>

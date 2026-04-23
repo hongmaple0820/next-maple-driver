@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const password = (formData.get('password') as string) || '';
-    const expiresHours = parseInt(formData.get('expiresHours') as string) || '0';
-    const maxDownloads = parseInt(formData.get('maxDownloads') as string) || '-1';
+    const expiresHours = parseInt(formData.get('expiresHours') as string) || 0;
+    const maxDownloads = parseInt(formData.get('maxDownloads') as string) || -1;
 
     if (!file) {
       return NextResponse.json(
@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+    } else if (!isAuth) {
+      // Anonymous users must set an expiry
+      return NextResponse.json(
+        { error: 'Anonymous uploads must have an expiry time' },
+        { status: 400 }
+      );
     }
 
     // Ensure transfer storage directory exists
@@ -86,7 +92,7 @@ export async function POST(request: NextRequest) {
         storagePath: storageName,
         password: password || null,
         expiresAt,
-        maxDownloads: parseInt(maxDownloads as string) || -1,
+        maxDownloads,
         userId,
         isAnonymous: !isAuth,
       },

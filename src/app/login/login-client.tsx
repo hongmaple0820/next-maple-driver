@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
 
   // QR login state
   const [qrLoginState, setQrLoginState] = useState<QrLoginState>("idle");
@@ -329,16 +331,25 @@ export function LoginPage() {
 
                 {/* Password Login Tab */}
                 <TabsContent value="password" className="mt-0">
-                  {/* Error message */}
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mb-4 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-                    >
-                      {error}
-                    </motion.div>
-                  )}
+                  {/* Error message with animation */}
+                  <AnimatePresence mode="wait">
+                    {error && (
+                      <motion.div
+                        key="login-error"
+                        initial={{ opacity: 0, y: -8, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: "auto" }}
+                        exit={{ opacity: 0, y: -8, height: 0 }}
+                        className="mb-4 overflow-hidden"
+                      >
+                        <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
+                          <svg className="w-4 h-4 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.75 4a.75.75 0 011.5 0v3a.75.75 0 01-1.5 0V5zM8 11a1 1 0 100-2 1 1 0 000 2z"/>
+                          </svg>
+                          {error}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
@@ -386,6 +397,18 @@ export function LoginPage() {
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                    </div>
+                    {/* Remember me checkbox */}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="remember-me"
+                        checked={rememberMe}
+                        onCheckedChange={(checked) => setRememberMe(checked === true)}
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                      />
+                      <Label htmlFor="remember-me" className="text-sm text-muted-foreground cursor-pointer select-none">
+                        {t.auth.rememberMe}
+                      </Label>
                     </div>
                     <Button
                       type="submit"

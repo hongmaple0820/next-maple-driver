@@ -9,12 +9,11 @@ import {
   KeyRound,
   Clock,
   AlertCircle,
-  ShieldCheck,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatFileSize, formatRelativeTime, getFileIcon, getFileIconColor } from "@/lib/file-utils";
+import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
 import { useI18n } from "@/lib/i18n";
 
 interface TransferInfo {
@@ -88,7 +87,12 @@ export default function TransferClient({ token }: { token: string }) {
       }
 
       if (res.status === 410) {
-        setState("expired");
+        try {
+          const errData = await res.json();
+          setState(errData.limitReached ? "limit-reached" : "expired");
+        } catch {
+          setState("expired");
+        }
         setDownloading(false);
         return;
       }
@@ -118,7 +122,7 @@ export default function TransferClient({ token }: { token: string }) {
     }
   };
 
-  const remainingDownloads = transferInfo?.maxDownloads
+  const remainingDownloads = transferInfo && transferInfo.maxDownloads > 0
     ? transferInfo.maxDownloads - transferInfo.downloadCount
     : -1;
 
@@ -174,7 +178,7 @@ export default function TransferClient({ token }: { token: string }) {
               <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center mb-4">
                 <Download className="w-8 h-8 text-amber-500" />
               </div>
-              <h2 className="text-lg font-semibold mb-1">{t.app.transferExpiredDesc}</h2>
+              <h2 className="text-lg font-semibold mb-1">{t.app.downloadLimitReached}</h2>
               <p className="text-sm text-muted-foreground">{t.app.downloadsRemaining}: 0</p>
             </div>
           )}
