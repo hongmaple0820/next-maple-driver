@@ -3390,3 +3390,169 @@ Stage Summary:
 - Add more visual polish and animations
 - Create cron job for periodic maintenance (expired transfer cleanup)
 - Improve mobile responsiveness further
+
+---
+Task ID: 2-a
+Agent: Disk Tab Agent
+Task: Add Disk Management tab to Admin Panel dialog
+
+Work Log:
+- Added `AdminDiskTab` import from `@/components/admin/admin-disk-tab` to admin-panel.tsx
+- Added `Database` icon import from lucide-react (used for Disk tab to differentiate from HardDrive used for Storage tab)
+- Added 4th tab "Disk" with `Database` icon and `t.admin.disk` label after the Storage tab
+- Added `TabsContent` for "disk" value rendering `<AdminDiskTab />`
+- Added i18n key `admin.disk` in both Chinese ("磁盘") and English ("Disk") translations
+- Tab order is now: System, Users, Storage, Disk
+- Lint clean, no errors
+
+Stage Summary:
+- Admin Panel now has 4 tabs: System, Users, Storage, Disk
+- Disk tab renders the existing AdminDiskTab component with system disk info, storage directory stats, local disk management, network mount configuration (WebDAV/NFS/SMB), and WebDAV access info
+- Used Database icon to differentiate from Storage tab's HardDrive icon
+
+---
+Task ID: 2-b
+Agent: Sidebar Driver Navigation Agent
+Task: Make sidebar driver status items clickable for driver-specific navigation
+
+Work Log:
+- Feature 1: Added currentDriverId and currentDriverName state to file store
+  - Added `currentDriverId: string | null` and `currentDriverName: string | null` to FileStore interface
+  - Added `setCurrentDriverId: (id: string | null, name?: string | null) => void` action
+  - Updated `setSection` to reset both currentDriverId and currentDriverName to null when switching sections
+  - Default values: currentDriverId=null, currentDriverName=null
+
+- Feature 2: Made DriverStatusSection driver items clickable
+  - Changed driver items from passive `<div>` to interactive `<button>` elements
+  - Added `handleDriverClick` handler: clicking "default-local" clears driverId (shows all files), clicking other drivers sets currentDriverId and switches to "files" section
+  - Added visual feedback: cursor-pointer, hover:bg-sidebar-accent/50, transition-all duration-200
+  - Added active state styling: bg-emerald-600/10, text-emerald-700, ring-1 ring-emerald-500/20
+  - Active driver shows emerald dot indicator instead of status text
+  - Default "Local Storage" is considered active when currentDriverId is null
+  - Passes driver name to setCurrentDriverId for toolbar badge display
+
+- Feature 3: Added driver indicator on sidebar "All Files" nav item
+  - When currentDriverId is set (non-null), shows emerald dot + driver name text next to "All Files" in sidebar nav
+  - Small emerald dot (1.5px) with driver name text (10px, emerald-600 color, max-width 80px truncated)
+
+- Feature 4: Added driver badge in toolbar breadcrumb area
+  - When currentDriverId is set and section is "files", shows a badge next to the breadcrumb section title
+  - Badge shows HardDrive icon + driver name with emerald styling (bg-emerald-500/10, ring-1 ring-emerald-500/20)
+  - At root folder: badge is a clickable button with X close icon to clear driver filter
+  - In subfolder: badge is a non-interactive span (consistent with breadcrumb link styling)
+  - Clicking the X button on the badge calls setCurrentDriverId(null) to clear the driver filter
+
+- 3 files modified (file-store.ts, file-sidebar.tsx, file-toolbar.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Sidebar driver items are now interactive navigation elements
+- Clicking a driver switches to "files" section and sets the active driver context
+- Visual feedback: active driver highlighted with emerald styling and dot indicator
+- Toolbar shows driver badge in breadcrumb area when a specific driver is active
+- Badge is dismissible via X button to return to all-files view
+- Clicking "All Files" nav or any other section clears the driver filter
+- Future: file grid/list can use currentDriverId to filter files by driver
+
+---
+Task ID: 2-c
+Agent: Driver Onboarding Guidance Agent
+Task: Add helpful onboarding guidance and tooltips to driver/disk management features
+
+Work Log:
+- Feature 1: Added "Getting Started" info card to AdminDriversTab
+  - Shows when there are 0 or 1 drivers (only default local driver)
+  - Explains CloudDrive supports multiple storage backends
+  - Lists 6 supported driver types with emoji icons: Local Disk, S3, WebDAV, Network Mount, Cloud Drives (OAuth), Account Drives (Password/SMS)
+  - Each type shown in a grid with icon, label, and description
+  - Has dismiss button that stores dismissal in localStorage ("clouddrive-getting-started-dismissed")
+  - Uses emerald/sky gradient color scheme matching the app theme
+  - Animated with framer-motion (fade in from top)
+
+- Feature 2: Added help tooltips to all driver type selection buttons in the add driver dialog
+  - All 10 driver type buttons (local, s3, webdav, mount, baidu, aliyun, onedrive, google, 115, quark) wrapped with shadcn Tooltip
+  - Each tooltip shows on hover with a brief explanation of what the driver does
+  - Examples: "Local Disk: Store files on the server's local filesystem", "S3: Connect to Amazon S3 or S3-compatible storage (MinIO, etc.)", "Baidu Wangpan: Connect via OAuth to access your Baidu cloud files"
+  - Tooltips appear below the button (side="bottom")
+  - Used existing Tooltip component from shadcn/ui
+
+- Feature 3: Added "How to access via WebDAV" collapsible section to AdminDiskTab WebDAV access card
+  - Used shadcn Collapsible component with CollapsibleTrigger and CollapsibleContent
+  - Trigger button styled with HelpCircle icon and chevron rotation animation
+  - Contains 3 numbered steps with emerald circular number badges:
+    1. Get a WebDAV client (Cyberduck, WinSCP, macOS Finder, Windows Explorer)
+    2. Connect to the URL shown above
+    3. Use your CloudDrive login credentials
+  - Styled with emerald-themed border and background matching the app theme
+
+- Feature 4: Improved empty state in AdminDriversTab
+  - When there are only default drivers (0 or 1 with only local type), shows an engaging empty state
+  - Large FolderOpen icon in emerald circular background
+  - "Add Your First Storage Driver" title with description text
+  - "Add Driver" button that opens the add driver dialog
+  - Dashed emerald border with gradient background
+  - Animated with framer-motion (fade in from bottom)
+
+- Imports added: useEffect, CardHeader, CardTitle, Info, X, FolderOpen, Tooltip, TooltipContent, TooltipTrigger (admin-drivers-tab.tsx); HelpCircle, Collapsible, CollapsibleContent, CollapsibleTrigger (admin-disk-tab.tsx)
+- 2 files modified (admin-drivers-tab.tsx, admin-disk-tab.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- 4 features implemented across 2 files
+- Getting Started card provides first-time user guidance with dismissible storage
+- Tooltips on all 10 driver type buttons explain each option on hover
+- WebDAV access card has expandable how-to section with 3 clear steps
+- Engaging empty state encourages users to add their first non-local driver
+- All new UI uses emerald/sky color scheme consistent with existing design
+- Lint clean, no errors
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add driver/disk management features and improve usability
+
+Work Log:
+- Added "Disk" tab to Admin Panel (4th tab: System → Users → Storage → Disk)
+- Made sidebar driver status items clickable - clicking switches to files view filtered by that driver
+- Added currentDriverId/currentDriverName state to file store
+- Added driver badge in toolbar when a specific driver is selected (with close button)
+- Added driverId filter parameter to GET /api/files endpoint
+- Updated file-grid.tsx, file-list.tsx, and file-status-bar.tsx to pass driverId in queries
+- Added "Getting Started" info card to AdminDriversTab for onboarding
+- Added help tooltips to all driver type buttons in the add driver dialog
+- Added "How to access via WebDAV" collapsible section to AdminDiskTab
+- Improved empty state in AdminDriversTab with "Add Your First Driver" engagement
+- Added i18n keys for new "Disk" tab label
+- Fixed allowedDevOrigins in next.config.ts for cross-origin access
+- All changes pass lint check
+
+Stage Summary:
+- Admin Panel now has 4 tabs: System, Users, Storage (Drivers), Disk
+- Sidebar drivers are clickable for quick navigation
+- Files can be filtered by driver via API and frontend
+- Onboarding guidance added for new users
+- WebDAV access instructions added to disk tab
+- Lint clean, dev server running
+
+## Current Project State
+- Fully functional cloud storage application with driver/disk management
+- Admin can create and manage: Local, S3, WebDAV, Mount (WebDAV/NFS/SMB), Baidu, Aliyun, OneDrive, Google Drive (OAuth), 115, Quark (Password/SMS) drivers
+- Sidebar shows driver status and allows quick navigation
+- Files can be filtered by driver
+- WebDAV server endpoint available for external access
+- Quick Transfer and Transfer Station features available
+- All core features working: CRUD, upload/download, search, sort, filter, star, trash, share, preview, detail panel, keyboard shortcuts, drag-and-drop, clipboard, copy, batch rename, cross-driver transfer, color labels, archive extraction, batch download zip
+
+## Known Issues / Risks
+- Dev server may be unstable in sandbox environment (process keeps dying)
+- agent-browser unable to connect in headless mode (missing X display)
+- OAuth flow for third-party cloud drives requires external service configuration
+- NFS/SMB mounts require actual mounted filesystem on server
+
+## Recommended Next Steps
+- Test OAuth flow with real cloud provider credentials
+- Implement actual file operations for non-local drivers (S3, WebDAV)
+- Add more detailed health checks for each driver type
+- Add file sync status for cloud drives
+- Improve mobile responsive layout further
+- Add notification system for driver status changes

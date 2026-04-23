@@ -37,6 +37,7 @@ function ChevronIcon({ className }: { className?: string }) {
 
 function DriverStatusSection() {
   const { t } = useI18n();
+  const { currentDriverId, setCurrentDriverId, setSection } = useFileStore();
   const { data: driversData } = useQuery({
     queryKey: ["sidebar-drivers"],
     queryFn: async () => {
@@ -74,6 +75,17 @@ function DriverStatusSection() {
     return "bg-gray-400";
   };
 
+  const handleDriverClick = (driver: { id: string; name: string }) => {
+    if (driver.id === "default-local") {
+      // Clicking the default local driver clears the driver filter and shows all files
+      setCurrentDriverId(null);
+    } else {
+      // Clicking a specific driver sets it as active filter
+      setCurrentDriverId(driver.id, driver.name);
+    }
+    setSection("files");
+  };
+
   return (
     <div className="border-t border-border/40 mx-3 pt-3 pb-1">
       <div className="px-2 mb-1.5">
@@ -82,26 +94,38 @@ function DriverStatusSection() {
       <div className="space-y-0.5">
         {displayDrivers.slice(0, 4).map((driver) => {
           const Icon = getDriverIcon(driver.type);
+          const isActive = currentDriverId === driver.id || (currentDriverId === null && driver.id === "default-local");
           return (
-            <div
+            <button
               key={driver.id}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] text-muted-foreground hover:bg-sidebar-accent/30 transition-colors"
+              onClick={() => handleDriverClick(driver)}
+              className={cn(
+                "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-all duration-200 cursor-pointer",
+                isActive
+                  ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
             >
               <div className="relative">
-                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive && "text-emerald-600 dark:text-emerald-400")} />
                 <div className={cn(
                   "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
                   getStatusColor(driver)
                 )} />
               </div>
-              <span className="truncate flex-1">{driver.name}</span>
-              <span className={cn(
-                "text-[9px] font-medium",
-                driver.status === "active" && driver.healthy !== false ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
-              )}>
-                {driver.status === "active" && driver.healthy !== false ? t.app.driverActive : driver.status === "error" ? t.app.driverError : t.app.driverInactive}
-              </span>
-            </div>
+              <span className="truncate flex-1 text-left">{driver.name}</span>
+              {isActive && (
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              )}
+              {!isActive && (
+                <span className={cn(
+                  "text-[9px] font-medium",
+                  driver.status === "active" && driver.healthy !== false ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+                )}>
+                  {driver.status === "active" && driver.healthy !== false ? t.app.driverActive : driver.status === "error" ? t.app.driverError : t.app.driverInactive}
+                </span>
+              )}
+            </button>
           );
         })}
         {drivers.length > 4 && (
@@ -169,7 +193,7 @@ function RecentActivityList() {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen } = useFileStore();
+  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen, currentDriverId, currentDriverName, setCurrentDriverId } = useFileStore();
   const { theme, setTheme } = useTheme();
   const { data: sessionData } = useSession();
   const isAdmin = (sessionData?.user as Record<string, unknown>)?.role === "admin";
@@ -263,6 +287,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     )}
                   />
                   {item.label}
+                  {/* Driver indicator on All Files nav item */}
+                  {item.id === "files" && currentDriverId && (
+                    <div className="ml-1 flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate max-w-[80px]">{currentDriverName}</span>
+                    </div>
+                  )}
                   {item.id === "starred" && (stats?.starredCount ?? 0) > 0 && (
                     <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
                       {stats.starredCount}

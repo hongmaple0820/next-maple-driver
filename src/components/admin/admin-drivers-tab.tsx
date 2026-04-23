@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,10 +21,12 @@ import {
   HardDrive, Plus, Trash2, CheckCircle2, XCircle, Settings2,
   Cloud, Globe, Server, TestTube, Loader2, ShieldCheck, ShieldAlert,
   ShieldX, Clock, Key, ExternalLink, RefreshCw, Smartphone, Network,
+  Info, X, FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { motion, AnimatePresence } from "framer-motion";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface DriverInfo {
   id: string;
@@ -217,6 +219,15 @@ export function AdminDriversTab() {
   const [newDriverConfig, setNewDriverConfig] = useState<Record<string, string>>({});
   const [testingDriverId, setTestingDriverId] = useState<string | null>(null);
   const [authorizingDriverId, setAuthorizingDriverId] = useState<string | null>(null);
+  const [gettingStartedDismissed, setGettingStartedDismissed] = useState(false);
+
+  // Check localStorage for dismissed state
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem("clouddrive-getting-started-dismissed");
+      if (dismissed === "true") setGettingStartedDismissed(true);
+    } catch { /* ignore */ }
+  }, []);
 
   // Reset form when type changes
   const handleTypeChange = (type: string) => {
@@ -485,8 +496,84 @@ export function AdminDriversTab() {
     return null;
   };
 
+  // Should show Getting Started card
+  const showGettingStarted = !gettingStartedDismissed && allDrivers.length <= 1 &&
+    (allDrivers.length === 0 || allDrivers[0]?.type === "local");
+
+  // Driver type tooltip descriptions
+  const driverTypeTooltips: Record<string, string> = {
+    local: "Local Disk: Store files on the server's local filesystem",
+    s3: "S3: Connect to Amazon S3 or S3-compatible storage (MinIO, etc.)",
+    webdav: "WebDAV: Connect to WebDAV servers like Nextcloud or ownCloud",
+    mount: "Network Mount: Mount NFS/SMB shared folders or WebDAV drives",
+    baidu: "Baidu Wangpan: Connect via OAuth to access your Baidu cloud files",
+    aliyun: "Aliyun Drive: Connect via OAuth to access your Aliyun cloud files",
+    onedrive: "OneDrive: Connect via OAuth to Microsoft OneDrive",
+    google: "Google Drive: Connect via OAuth to access your Google Drive files",
+    "115": "115 Network Disk: Login with account credentials to access 115 cloud files",
+    quark: "Quark Drive: Login via phone/SMS to access Quark cloud files",
+  };
+
   return (
     <div className="space-y-4">
+      {/* Getting Started Info Card */}
+      {showGettingStarted && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+        >
+          <Card className="border-emerald-200/50 dark:border-emerald-800/30 bg-gradient-to-br from-emerald-50/50 to-sky-50/50 dark:from-emerald-950/20 dark:to-sky-950/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Info className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Getting Started with Drivers</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      CloudDrive supports multiple storage backends. Add drivers to connect to cloud storage services, network drives, or local directories.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 shrink-0"
+                  onClick={() => {
+                    setGettingStartedDismissed(true);
+                    try { localStorage.setItem("clouddrive-getting-started-dismissed", "true"); } catch { /* ignore */ }
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { icon: "📁", label: "Local Disk", desc: "Mount local directories" },
+                  { icon: "☁️", label: "S3", desc: "Amazon S3 compatible storage" },
+                  { icon: "🌐", label: "WebDAV", desc: "Connect to WebDAV servers" },
+                  { icon: "🔗", label: "Network Mount", desc: "NFS/SMB shared folders" },
+                  { icon: "🔑", label: "Cloud Drives", desc: "Baidu, Aliyun, OneDrive, Google Drive (OAuth)" },
+                  { icon: "🔐", label: "Account Drives", desc: "115, Quark (Password/SMS)" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-start gap-2 rounded-lg bg-background/60 p-2 border border-border/50">
+                    <span className="text-base shrink-0 mt-0.5">{item.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium leading-tight">{item.label}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -527,42 +614,62 @@ export function AdminDriversTab() {
                     Storage Protocols
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant={newDriverType === "local" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "local" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("local")}
-                    >
-                      <Server className="w-4 h-4 mr-1.5" />
-                      {t.admin.local}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "s3" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "s3" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("s3")}
-                    >
-                      <Cloud className="w-4 h-4 mr-1.5" />
-                      Amazon S3
-                    </Button>
-                    <Button
-                      variant={newDriverType === "webdav" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "webdav" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("webdav")}
-                    >
-                      <Globe className="w-4 h-4 mr-1.5" />
-                      {t.admin.webdav}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "mount" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "mount" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("mount")}
-                    >
-                      <Network className="w-4 h-4 mr-1.5" />
-                      {t.admin.networkMount || "Network Mount"}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "local" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "local" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("local")}
+                        >
+                          <Server className="w-4 h-4 mr-1.5" />
+                          {t.admin.local}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.local}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "s3" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "s3" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("s3")}
+                        >
+                          <Cloud className="w-4 h-4 mr-1.5" />
+                          Amazon S3
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.s3}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "webdav" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "webdav" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("webdav")}
+                        >
+                          <Globe className="w-4 h-4 mr-1.5" />
+                          {t.admin.webdav}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.webdav}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "mount" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "mount" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("mount")}
+                        >
+                          <Network className="w-4 h-4 mr-1.5" />
+                          {t.admin.networkMount || "Network Mount"}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.mount}</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -573,42 +680,62 @@ export function AdminDriversTab() {
                     {t.admin.thirdPartyCloud} — OAuth
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant={newDriverType === "baidu" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "baidu" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("baidu")}
-                    >
-                      <Cloud className="w-4 h-4 mr-1.5" />
-                      {t.admin.baiduWangpan}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "aliyun" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "aliyun" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("aliyun")}
-                    >
-                      <Cloud className="w-4 h-4 mr-1.5" />
-                      {t.admin.aliyunDrive}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "onedrive" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "onedrive" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("onedrive")}
-                    >
-                      <Cloud className="w-4 h-4 mr-1.5" />
-                      {t.admin.oneDrive}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "google" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "google" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("google")}
-                    >
-                      <Cloud className="w-4 h-4 mr-1.5" />
-                      {t.admin.googleDrive}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "baidu" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "baidu" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("baidu")}
+                        >
+                          <Cloud className="w-4 h-4 mr-1.5" />
+                          {t.admin.baiduWangpan}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.baidu}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "aliyun" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "aliyun" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("aliyun")}
+                        >
+                          <Cloud className="w-4 h-4 mr-1.5" />
+                          {t.admin.aliyunDrive}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.aliyun}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "onedrive" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "onedrive" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("onedrive")}
+                        >
+                          <Cloud className="w-4 h-4 mr-1.5" />
+                          {t.admin.oneDrive}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.onedrive}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "google" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "google" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("google")}
+                        >
+                          <Cloud className="w-4 h-4 mr-1.5" />
+                          {t.admin.googleDrive}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.google}</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -619,24 +746,34 @@ export function AdminDriversTab() {
                     {t.admin.thirdPartyCloud} — {t.admin.loginWithPassword}
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant={newDriverType === "115" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "115" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("115")}
-                    >
-                      <HardDrive className="w-4 h-4 mr-1.5" />
-                      {t.admin.drive115}
-                    </Button>
-                    <Button
-                      variant={newDriverType === "quark" ? "default" : "outline"}
-                      size="sm"
-                      className={cn(newDriverType === "quark" && "bg-emerald-600 hover:bg-emerald-700")}
-                      onClick={() => handleTypeChange("quark")}
-                    >
-                      <HardDrive className="w-4 h-4 mr-1.5" />
-                      {t.admin.quarkDrive}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "115" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "115" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("115")}
+                        >
+                          <HardDrive className="w-4 h-4 mr-1.5" />
+                          {t.admin.drive115}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips["115"]}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "quark" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "quark" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("quark")}
+                        >
+                          <HardDrive className="w-4 h-4 mr-1.5" />
+                          {t.admin.quarkDrive}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.quark}</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </div>
@@ -982,6 +1119,33 @@ export function AdminDriversTab() {
               </motion.div>
             );
           })}
+
+          {/* Engaging empty state when only default local driver */}
+          {allDrivers.length <= 1 && (allDrivers.length === 0 || allDrivers[0]?.type === "local") && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border-2 border-dashed border-emerald-300/50 dark:border-emerald-700/50 bg-gradient-to-br from-emerald-50/30 to-sky-50/30 dark:from-emerald-950/10 dark:to-sky-950/10 p-8 text-center"
+            >
+              <div className="p-4 rounded-full bg-emerald-500/10 w-fit mx-auto mb-4">
+                <FolderOpen className="w-10 h-10 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Add Your First Storage Driver
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                You&apos;re using the local disk driver. Expand your storage by connecting cloud services, network drives, or additional local directories.
+              </p>
+              <Button
+                size="sm"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => setAddDriverOpen(true)}
+              >
+                <Plus className="w-4 h-4" />
+                Add Driver
+              </Button>
+            </motion.div>
+          )}
 
           {/* Driver Type Info Cards - Storage Protocols */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">

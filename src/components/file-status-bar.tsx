@@ -7,13 +7,13 @@ import { Folder, File, CheckCircle2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 export function FileStatusBar() {
-  const { currentFolderId, section, searchQuery, typeFilter, selectedFileIds } = useFileStore();
+  const { currentFolderId, section, searchQuery, typeFilter, selectedFileIds, currentDriverId } = useFileStore();
   const { t } = useI18n();
 
   const isSearch = searchQuery.trim().length > 0;
 
   const { data: files = [] } = useQuery<FileItem[]>({
-    queryKey: ["files", currentFolderId, section, searchQuery],
+    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId],
     queryFn: async () => {
       if (isSearch) {
         const res = await fetch(`/api/files/search?q=${encodeURIComponent(searchQuery)}`);
@@ -34,6 +34,9 @@ export function FileStatusBar() {
       params.set("trashed", String(trashed));
       if (starred) {
         params.set("starred", "true");
+      }
+      if (currentDriverId) {
+        params.set("driverId", currentDriverId);
       }
       const res = await fetch(`/api/files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch files");

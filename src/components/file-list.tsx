@@ -183,6 +183,7 @@ export function FileList() {
     setPropertiesFile, setSearchResultCount, compactMode, showExtensions, setBatchRenameOpen,
     colorLabelFilter,
     setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
+    currentDriverId,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -195,7 +196,7 @@ export function FileList() {
   const isSearch = searchQuery.trim().length > 0;
 
   const { data: files = [], isLoading } = useQuery<FileItem[]>({
-    queryKey: ["files", currentFolderId, section, searchQuery],
+    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId],
     queryFn: async () => {
       if (isSearch) {
         const res = await fetch(`/api/files/search?q=${encodeURIComponent(searchQuery)}`);
@@ -216,6 +217,9 @@ export function FileList() {
       params.set("trashed", String(trashed));
       if (starred) {
         params.set("starred", "true");
+      }
+      if (currentDriverId) {
+        params.set("driverId", currentDriverId);
       }
       const res = await fetch(`/api/files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch files");

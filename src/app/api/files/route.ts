@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
     const parentIdParam = searchParams.get('parentId') || 'root';
     const trashed = searchParams.get('trashed') === 'true';
     const starred = searchParams.get('starred') === 'true';
+    const driverId = searchParams.get('driverId') || null;
 
     // "root" means top-level (parentId is null)
     const parentId = parentIdParam === 'root' ? null : parentIdParam;
@@ -33,6 +34,16 @@ export async function GET(request: NextRequest) {
       // Don't filter by parentId for starred items - show all
     } else {
       where.parentId = parentId;
+    }
+
+    // Filter by driver if specified
+    if (driverId) {
+      // "default-local" means files without a driverId (local storage)
+      if (driverId === 'default-local') {
+        where.driverId = null;
+      } else {
+        where.driverId = driverId;
+      }
     }
 
     const files = await db.fileItem.findMany({

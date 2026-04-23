@@ -116,6 +116,11 @@ interface FileStore {
   adminPanelOpen: boolean;
   setAdminPanelOpen: (open: boolean) => void;
 
+  // Current driver selection
+  currentDriverId: string | null;
+  currentDriverName: string | null;
+  setCurrentDriverId: (id: string | null, name?: string | null) => void;
+
   // Cross-driver move dialog
   crossDriverMoveOpen: boolean;
   setCrossDriverMoveOpen: (open: boolean) => void;
@@ -194,7 +199,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0, detailFile: null }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0, detailFile: null, currentDriverId: null, currentDriverName: null }),
 
   // View mode
   viewMode: "grid",
@@ -297,6 +302,11 @@ export const useFileStore = create<FileStore>((set) => ({
   // Admin panel
   adminPanelOpen: false,
   setAdminPanelOpen: (open) => set({ adminPanelOpen: open }),
+
+  // Current driver selection
+  currentDriverId: null,
+  currentDriverName: null,
+  setCurrentDriverId: (id, name) => set({ currentDriverId: id, currentDriverName: name ?? null }),
 
   // Cross-driver move dialog
   crossDriverMoveOpen: false,

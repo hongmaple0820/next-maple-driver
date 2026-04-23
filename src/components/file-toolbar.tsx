@@ -76,6 +76,9 @@ export function FileToolbar() {
     selectedFileIds,
     setCrossDriverMoveOpen,
     setCrossDriverMoveFileIds,
+    currentDriverId,
+    currentDriverName,
+    setCurrentDriverId,
   } = useFileStore();
 
   const { t } = useI18n();
@@ -308,8 +311,18 @@ export function FileToolbar() {
             <BreadcrumbList>
               <BreadcrumbItem>
                 {currentFolderId === "root" ? (
-                  <BreadcrumbPage className="font-bold text-foreground">
+                  <BreadcrumbPage className="font-bold text-foreground flex items-center gap-2">
                     {sectionLabels[section]}
+                    {currentDriverId && section === "files" && (
+                      <button
+                        onClick={() => setCurrentDriverId(null)}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                      >
+                        <HardDrive className="w-3 h-3" />
+                        {currentDriverName}
+                        <X className="w-2.5 h-2.5 ml-0.5 opacity-60" />
+                      </button>
+                    )}
                   </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink
@@ -317,6 +330,12 @@ export function FileToolbar() {
                     onClick={() => setCurrentFolderId("root")}
                   >
                     {sectionLabels[section]}
+                    {currentDriverId && section === "files" && (
+                      <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+                        <HardDrive className="w-3 h-3" />
+                        {currentDriverName}
+                      </span>
+                    )}
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>

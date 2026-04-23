@@ -20,11 +20,13 @@ import {
   Folder, File, RefreshCw, Trash2, Shield, Wifi, Globe,
   HardDriveUpload, FileWarning, Link2, Send, ScanSearch,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { formatFileSize } from "@/lib/file-utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // --- Types ---
 
@@ -142,6 +144,7 @@ export function AdminDiskTab() {
   const [systemDiskExpanded, setSystemDiskExpanded] = useState(true);
   const [storageDirExpanded, setStorageDirExpanded] = useState(true);
   const [networkMountExpanded, setNetworkMountExpanded] = useState(false);
+  const [webdavHowToOpen, setWebdavHowToOpen] = useState(false);
 
   // --- Queries ---
 
@@ -1020,6 +1023,7 @@ export function AdminDiskTab() {
                 </Button>
               </div>
             </div>
+            {/* How to connect - Quick reference */}
             <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">How to connect:</p>
               <p>• <strong>Windows:</strong> Map Network Drive → {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"}</p>
@@ -1027,6 +1031,44 @@ export function AdminDiskTab() {
               <p>• <strong>Linux:</strong> mount -t davfs {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"} /mnt/clouddrive</p>
               <p className="pt-1 text-emerald-600 dark:text-emerald-400">{t.admin.webdavCredentials}</p>
             </div>
+
+            {/* How to access via WebDAV - Collapsible */}
+            <Collapsible open={webdavHowToOpen} onOpenChange={setWebdavHowToOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full gap-2 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/5 justify-start px-0">
+                  <HelpCircle className="w-4 h-4" />
+                  How to access via WebDAV
+                  <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", webdavHowToOpen && "rotate-180")} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="rounded-lg border border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/30 dark:bg-emerald-950/10 p-4 space-y-3">
+                  <ol className="space-y-2.5 text-sm">
+                    <li className="flex items-start gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-bold">1</span>
+                      <div>
+                        <p className="font-medium">Get a WebDAV client</p>
+                        <p className="text-xs text-muted-foreground">Use a client like <strong>Cyberduck</strong>, <strong>WinSCP</strong>, or the built-in <strong>macOS Finder</strong> / <strong>Windows Explorer</strong></p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-bold">2</span>
+                      <div>
+                        <p className="font-medium">Connect to the URL above</p>
+                        <p className="text-xs text-muted-foreground">Paste the WebDAV URL shown above into your client&apos;s server address field</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-bold">3</span>
+                      <div>
+                        <p className="font-medium">Use your CloudDrive login</p>
+                        <p className="text-xs text-muted-foreground">Enter your CloudDrive username and password when prompted for credentials</p>
+                      </div>
+                    </li>
+                  </ol>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </CardContent>
       </Card>
