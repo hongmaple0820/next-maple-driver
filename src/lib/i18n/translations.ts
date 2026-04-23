@@ -539,6 +539,16 @@ export const translations = {
       storageUsed: "存储使用",
       systemDiskUsage: "系统磁盘占比",
       mountComingSoon: "网络挂载功能即将推出",
+      // WebDAV access
+      webdavAccessInfo: "WebDAV 访问",
+      webdavUrl: "WebDAV 地址",
+      webdavCredentials: "使用您的 CloudDrive 邮箱和密码进行 Basic Auth 认证",
+      webdavCopyUrl: "复制 WebDAV 地址",
+      connectionSuccess: "连接成功",
+      connectionFailed: "连接失败",
+      driverAdded: "驱动已添加",
+      driverUpdated: "驱动已更新",
+      testConnection: "测试连接",
     },
   },
   en: {
@@ -1075,6 +1085,16 @@ export const translations = {
       storageUsed: "Storage Used",
       systemDiskUsage: "System Disk Usage",
       mountComingSoon: "Network mount feature coming soon",
+      // WebDAV access
+      webdavAccessInfo: "WebDAV Access",
+      webdavUrl: "WebDAV URL",
+      webdavCredentials: "Use your CloudDrive email and password for Basic Auth",
+      webdavCopyUrl: "Copy WebDAV URL",
+      connectionSuccess: "Connection successful",
+      connectionFailed: "Connection failed",
+      driverAdded: "Driver added",
+      driverUpdated: "Driver updated",
+      testConnection: "Test Connection",
     },
   },
 } as const;

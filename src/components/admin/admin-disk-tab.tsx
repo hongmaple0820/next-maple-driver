@@ -875,6 +875,55 @@ export function AdminDiskTab() {
         </AnimatePresence>
       </Card>
 
+      {/* WebDAV Access Info */}
+      <Card className="border-emerald-200/50 dark:border-emerald-800/30">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <Globe className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{t.admin.webdavAccessInfo}</CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Mount your CloudDrive via WebDAV protocol
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">{t.admin.webdavUrl}</Label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-sm bg-muted px-3 py-2 rounded-md font-mono break-all">
+                  {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={() => {
+                    const url = `${window.location.origin}/api/webdav/`;
+                    navigator.clipboard.writeText(url);
+                    toast.success(t.admin.webdavCopyUrl);
+                  }}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">How to connect:</p>
+              <p>• <strong>Windows:</strong> Map Network Drive → {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"}</p>
+              <p>• <strong>macOS:</strong> Finder → Go → Connect to Server → {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"}</p>
+              <p>• <strong>Linux:</strong> mount -t davfs {typeof window !== "undefined" ? `${window.location.origin}/api/webdav/` : "/api/webdav/"} /mnt/clouddrive</p>
+              <p className="pt-1 text-emerald-600 dark:text-emerald-400">{t.admin.webdavCredentials}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Network Mount Dialog */}
       <Dialog open={networkMountDialogOpen} onOpenChange={setNetworkMountDialogOpen}>
         <DialogContent>

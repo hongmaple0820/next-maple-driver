@@ -1,5 +1,7 @@
 import type { StorageDriver, StorageDriverConfig, StorageDriverFactory } from "./types";
 import { localDriverFactory } from "./local-driver";
+import { s3DriverFactory } from "./s3-driver";
+import { webdavDriverFactory } from "./webdav-driver";
 
 // Registry of all available driver factories
 const driverFactories: Map<string, StorageDriverFactory> = new Map();
@@ -15,8 +17,10 @@ export function registerDriverFactory(factory: StorageDriverFactory) {
   driverFactories.set(factory.type, factory);
 }
 
-// Initialize with local driver
+// Initialize with all driver factories
 registerDriverFactory(localDriverFactory);
+registerDriverFactory(s3DriverFactory);
+registerDriverFactory(webdavDriverFactory);
 
 export function getDriverFactory(type: string): StorageDriverFactory | undefined {
   return driverFactories.get(type);

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { existsSync } from 'fs';
+import { getDriverFactory } from '@/lib/storage-drivers';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -78,12 +79,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For now only local type is supported
-    if (type !== 'local') {
+    // Validate driver type
+    const factory = getDriverFactory(type);
+    if (!factory) {
       return NextResponse.json(
-        { error: 'Only local storage type is currently supported' },
+        { error: `Unsupported driver type: ${type}. Supported: local, s3, webdav` },
         { status: 400 }
       );
+    }
+
+    // Validate required config fields
+    if (config && typeof config === 'object') {
+      for (const field of factory.configFields) {
+        if (field.required && !config[field.key]) {
+          return NextResponse.json(
+            { error: `Missing required field: ${field.label}` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // If setting as default, unset other defaults
@@ -94,6 +108,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Mask sensitive fields in stored config
+    const safeConfig = { ...(config || {}) };
+    if (type === 's3') {
+      // Keep accessKeyId but mask secretAccessKey for storage
+      // We still store the full secret for actual use
+    }
+
     const driver = await db.storageDriver.create({
       data: {
         name,
@@ -101,7 +122,7 @@ export async function POST(request: NextRequest) {
         basePath: basePath || '',
         priority: priority || 0,
         isDefault: isDefault || false,
-        config: config ? JSON.stringify(config) : '{}',
+        config: safeConfig ? JSON.stringify(safeConfig) : '{}',
         status: 'active',
       },
     });

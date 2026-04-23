@@ -2383,3 +2383,72 @@ Stage Summary:
 - 60+ i18n translation keys added (zh + en)
 - Admin disk tab fully enhanced with 4 major sections
 - All changes pass lint check, dev server running without errors
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Implement WebDAV Server, S3/WebDAV Storage Drivers, Admin UI Enhancements
+
+Work Log:
+- Fixed WebDAV mini-service database connection: Changed `new Database(DB_PATH, { readonly: false, create: false })` to `new Database(DB_PATH)` to fix Bun SQLite API misuse error
+- Fixed `copyFileSync` require() lint error by importing directly from 'fs'
+- Started WebDAV service successfully on port 3002 (bun index.ts with nohup)
+- Created S3 Storage Driver (`/src/lib/storage-drivers/s3-driver.ts`):
+  - Full implementation of StorageDriver interface using @aws-sdk/client-s3
+  - Supports: writeFile, readFile, deleteFile, fileExists, getFileSize, createDir, deleteDir, dirExists, listDir
+  - Presigned URL generation via @aws-sdk/s3-request-presigner
+  - Health check via S3 ListObjectsV2
+  - Storage info calculation by listing all objects
+  - Support for custom endpoints (MinIO, DigitalOcean Spaces)
+  - forcePathStyle option for non-AWS S3 providers
+- Created WebDAV Client Driver (`/src/lib/storage-drivers/webdav-driver.ts`):
+  - Implementation of StorageDriver interface using 'webdav' npm client library
+  - Supports: writeFile, readFile, deleteFile, fileExists, getFileSize, createDir, deleteDir, dirExists, listDir
+  - Basic Auth support with username/password
+  - Health check via WebDAV PROPFIND
+  - URL generation for file access
+- Updated Storage Driver Manager (`/src/lib/storage-drivers/manager.ts`):
+  - Registered s3DriverFactory and webdavDriverFactory
+  - All three driver types now available: local, s3, webdav
+- Updated Storage Driver Index (`/src/lib/storage-drivers/index.ts`):
+  - Added exports for s3-driver and webdav-driver
+- Updated Admin Drivers API (`/src/app/api/admin/drivers/route.ts`):
+  - Removed "only local supported" restriction
+  - Added driver type validation using getDriverFactory()
+  - Added required config field validation
+  - Now supports creating S3 and WebDAV drivers
+- Completely rewrote Admin Drivers Tab (`/src/components/admin/admin-drivers-tab.tsx`):
+  - Added S3 and WebDAV type selection buttons (no longer "coming soon")
+  - Added dynamic config fields per driver type:
+    - S3: endpoint, region, bucket, accessKeyId, secretAccessKey, pathPrefix, forcePathStyle
+    - WebDAV: url, username, password, pathPrefix
+    - Local: path
+  - Added animated config field transitions
+  - Added "Test Connection" button for S3/WebDAV
+  - Added real health check via API with loading spinner
+  - Shows driver-specific info in driver cards (S3 endpoint/bucket/region, WebDAV URL)
+  - Updated info cards at bottom to show "Available" instead of "Coming Soon"
+  - Used framer-motion for card animations
+- Created WebDAV Proxy Route (`/src/app/api/webdav/route.ts`):
+  - Proxies all WebDAV methods (PROPFIND, GET, PUT, MKCOL, DELETE, COPY, MOVE, OPTIONS, HEAD, LOCK, UNLOCK)
+  - Forwards to WebDAV mini-service on port 3002
+  - Allows external WebDAV clients to access through the main app gateway
+- Added WebDAV Access Info Card to Admin Disk Tab:
+  - Shows WebDAV URL for connection
+  - Copy URL button
+  - Platform-specific connection instructions (Windows, macOS, Linux)
+  - Basic Auth credentials reminder
+- Added i18n translations for both zh and en:
+  - webdavAccessInfo, webdavUrl, webdavCredentials, webdavCopyUrl
+  - connectionSuccess, connectionFailed, driverAdded, driverUpdated, testConnection
+- Installed @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner packages
+- All lint checks pass
+
+Stage Summary:
+- WebDAV server running on port 3002, fully functional
+- S3 and WebDAV storage drivers implemented and registered
+- Admin UI supports creating/configuring all three driver types
+- WebDAV proxy route allows external access
+- Admin disk tab shows WebDAV connection info
+- Project now supports: local storage, Amazon S3/MinIO, WebDAV remote storage
+- Lint clean, no errors

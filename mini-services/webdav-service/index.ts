@@ -17,7 +17,7 @@ let db: Database;
 
 function initDb() {
   try {
-    db = new Database(DB_PATH, { readonly: false, create: false });
+    db = new Database(DB_PATH);
     db.exec('PRAGMA journal_mode=WAL');
     db.exec('PRAGMA foreign_keys=ON');
     console.log('[WebDAV] Database connected');
