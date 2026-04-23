@@ -7,7 +7,11 @@ import { createId } from '@paralleldrive/cuid2';
 import { getSession, deleteSession } from '@/lib/qr-sessions';
 
 const ANON_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const AUTH_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const AUTH_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+const ANON_MAX_EXPIRY_DAYS = 7;
+const AUTH_MAX_EXPIRY_DAYS = 30;
+const ANON_TOTAL_STORAGE_LIMIT = 500 * 1024 * 1024; // 500MB total for anonymous
+const AUTH_TOTAL_STORAGE_LIMIT = 5 * 1024 * 1024 * 1024; // 5GB total for authenticated
 const TRANSFER_STORAGE_PATH = join(process.cwd(), 'storage', 'transfers');
 
 function generateToken(): string {
@@ -37,7 +41,7 @@ export async function POST(
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const password = (formData.get('password') as string) || '';
-    const expiresHours = parseInt(formData.get('expiresHours') as string) || '24';
+    const expiresHours = parseInt(formData.get('expiresHours') as string) || 0;
 
     if (!file) {
       return NextResponse.json(
@@ -46,26 +50,51 @@ export async function POST(
       );
     }
 
-    // Validate file size
+    // Validate file size against per-file limit
     const maxSize = isAuth ? AUTH_MAX_FILE_SIZE : ANON_MAX_FILE_SIZE;
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: `File exceeds ${isAuth ? '100MB' : '50MB'} size limit` },
+        {
+          error: `File exceeds ${isAuth ? '500MB' : '50MB'} size limit for ${isAuth ? 'authenticated' : 'anonymous'} users`,
+          code: 'FILE_TOO_LARGE',
+        },
         { status: 413 }
       );
     }
 
+    // Check total storage capacity for the user
+    const storageLimit = isAuth ? AUTH_TOTAL_STORAGE_LIMIT : ANON_TOTAL_STORAGE_LIMIT;
+    const userTransfers = await db.transferFile.aggregate({
+      _sum: { fileSize: true },
+      where: isAuth
+        ? { userId, expiresAt: { gte: new Date() } }
+        : { isAnonymous: true, userId: null, expiresAt: { gte: new Date() } },
+    });
+    const usedStorage = userTransfers._sum.fileSize || 0;
+    if (usedStorage + file.size > storageLimit) {
+      return NextResponse.json(
+        {
+          error: `Storage limit exceeded. Used: ${Math.round(usedStorage / 1024 / 1024)}MB, Limit: ${Math.round(storageLimit / 1024 / 1024)}MB`,
+          code: 'STORAGE_LIMIT_EXCEEDED',
+          usedStorage,
+          storageLimit,
+        },
+        { status: 507 }
+      );
+    }
+
     // Validate expiry
-    const maxExpiryDays = isAuth ? 30 : 7;
+    const maxExpiryDays = isAuth ? AUTH_MAX_EXPIRY_DAYS : ANON_MAX_EXPIRY_DAYS;
     let expiresAt: Date | null = null;
     if (expiresHours > 0) {
       expiresAt = new Date(Date.now() + expiresHours * 3600000);
       const maxExpiryMs = maxExpiryDays * 24 * 3600000;
       if (expiresAt.getTime() - Date.now() > maxExpiryMs) {
+        // Cap to max instead of rejecting for QR uploads (more convenient)
         expiresAt = new Date(Date.now() + maxExpiryMs);
       }
-    } else {
-      // Default 24h for QR uploads
+    } else if (!isAuth) {
+      // Anonymous users must set an expiry; default to 24h for QR uploads
       expiresAt = new Date(Date.now() + 24 * 3600000);
     }
 
@@ -111,6 +140,7 @@ export async function POST(
       hasPassword: !!transferFile.password,
       shareUrl: `/transfer/${transferFile.token}`,
       createdAt: transferFile.createdAt.toISOString(),
+      isAnonymous: transferFile.isAnonymous,
     }, { status: 201 });
   } catch (error) {
     console.error('Error uploading via QR:', error);

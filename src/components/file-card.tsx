@@ -631,13 +631,13 @@ export function FileCard({ file }: FileCardProps) {
         >
           <Card
             className={cn(
-              "group relative cursor-pointer transition-all duration-300 border overflow-hidden hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2",
+              "group relative cursor-pointer transition-all duration-300 border overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2",
               "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-emerald-500/0 hover:after:bg-emerald-500/40 after:transition-colors after:duration-300",
               isSelected
-                ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 dark:bg-emerald-500/10"
+                ? "border-emerald-500/70 shadow-lg shadow-emerald-500/20 bg-emerald-500/[0.07] dark:bg-emerald-500/15 ring-1 ring-emerald-500/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/25"
                 : isDragOver && file.type === "folder"
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02]"
-                : "border-border/50 bg-card hover:border-border hover:bg-accent/20",
+                : "border-border/40 bg-card hover:border-emerald-500/30 hover:bg-accent/30 hover:shadow-md hover:shadow-emerald-500/[0.07] hover:-translate-y-1",
               colorStyle && !isSelected && !isDragOver && colorStyle.border
             )}
             onClick={handleClick}

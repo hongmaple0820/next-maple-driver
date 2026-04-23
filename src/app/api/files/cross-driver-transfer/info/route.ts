@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
+import { isLocalDefault, type TransferFileInfo } from '@/lib/transfer-types';
+
+// Helper: resolve a human-readable driver name from a driverId
+async function getDriverName(driverId: string | null): Promise<string> {
+  if (isLocalDefault(driverId)) {
+    return 'Local Storage (Default)';
+  }
+  const driver = await db.storageDriver.findUnique({
+    where: { id: driverId! },
+    select: { name: true },
+  });
+  return driver?.name ?? 'Unknown Driver';
+}
 
 // GET /api/files/cross-driver-transfer/info - Get file info for transfer dialog
 export async function GET(request: NextRequest) {
@@ -40,9 +53,11 @@ export async function GET(request: NextRequest) {
     });
 
     // Calculate total size including folder contents
-    const result = [];
+    const result: TransferFileInfo[] = [];
     for (const file of files) {
       if (file.isTrashed) continue;
+
+      const driverName = await getDriverName(file.driverId);
 
       if (file.type === 'folder') {
         const folderSize = await calculateFolderSize(file.id);
@@ -52,6 +67,7 @@ export async function GET(request: NextRequest) {
           type: file.type,
           size: folderSize,
           driverId: file.driverId,
+          driverName,
           mimeType: file.mimeType,
         });
       } else {
@@ -61,6 +77,7 @@ export async function GET(request: NextRequest) {
           type: file.type,
           size: file.size,
           driverId: file.driverId,
+          driverName,
           mimeType: file.mimeType,
         });
       }

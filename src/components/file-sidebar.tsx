@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package, Server, Globe, Network } from "lucide-react";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package, Server, Globe, Network, Upload, Download, Pencil, Share2, FolderInput, Copy, FolderPlus } from "lucide-react";
 import { useFileStore, type Section } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useI18n } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
+
 
 function ChevronIcon({ className }: { className?: string }) {
   return (
@@ -106,6 +107,62 @@ function DriverStatusSection() {
         {drivers.length > 4 && (
           <p className="text-[10px] text-muted-foreground/60 px-2">+{drivers.length - 4} more</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Recent Activity mini-list component
+const activityIconConfig: Record<string, { icon: typeof Upload; color: string }> = {
+  upload: { icon: Upload, color: "text-emerald-500" },
+  download: { icon: Download, color: "text-sky-500" },
+  rename: { icon: Pencil, color: "text-amber-500" },
+  delete: { icon: Trash2, color: "text-destructive" },
+  star: { icon: Star, color: "text-yellow-500" },
+  share: { icon: Share2, color: "text-purple-500" },
+  move: { icon: FolderInput, color: "text-blue-500" },
+  copy: { icon: Copy, color: "text-teal-500" },
+  create: { icon: FolderPlus, color: "text-emerald-500" },
+};
+
+function formatTimeAgoMini(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function RecentActivityList() {
+  const { activities } = useFileStore();
+  const recentActivities = activities.slice(0, 3);
+
+  if (recentActivities.length === 0) return null;
+
+  return (
+    <div className="border-t border-border/40 mx-3 pt-2 pb-1">
+      <div className="px-2 mb-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Recent</span>
+      </div>
+      <div className="space-y-0.5">
+        {recentActivities.map((activity) => {
+          const config = activityIconConfig[activity.action] || { icon: Upload, color: "text-muted-foreground" };
+          const Icon = config.icon;
+          return (
+            <div
+              key={activity.id}
+              className="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:bg-sidebar-accent/30 transition-colors"
+            >
+              <Icon className={cn("w-3 h-3 shrink-0", config.color)} />
+              <span className="truncate flex-1">{activity.fileName}</span>
+              <span className="text-[9px] text-muted-foreground/60 shrink-0">{formatTimeAgoMini(activity.timestamp)}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -244,6 +301,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {stats?.totalFiles ?? 0} {t.app.files} · {stats?.totalFolders ?? 0} {t.app.folders}
             </p>
           </div>
+
+          {/* Recent Activity Mini-list */}
+          <RecentActivityList />
         </ScrollArea>
       </div>
 

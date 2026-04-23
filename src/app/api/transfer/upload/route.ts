@@ -7,9 +7,11 @@ import { getAuthUser } from '@/lib/auth-helpers';
 import { createId } from '@paralleldrive/cuid2';
 
 const ANON_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const AUTH_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const AUTH_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 const ANON_MAX_EXPIRY_DAYS = 7;
 const AUTH_MAX_EXPIRY_DAYS = 30;
+const ANON_TOTAL_STORAGE_LIMIT = 500 * 1024 * 1024; // 500MB total for anonymous
+const AUTH_TOTAL_STORAGE_LIMIT = 5 * 1024 * 1024 * 1024; // 5GB total for authenticated
 const TRANSFER_STORAGE_PATH = join(process.cwd(), 'storage', 'transfers');
 
 function generateToken(): string {
@@ -19,8 +21,16 @@ function generateToken(): string {
 // POST /api/transfer/upload - Upload file to transfer service (supports anonymous)
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    const userId = user ? (user as Record<string, unknown>).id as string : null;
+    // Get auth user - returns null for anonymous, never throws
+    let userId: string | null = null;
+    try {
+      const user = await getAuthUser();
+      if (user) {
+        userId = (user as Record<string, unknown>).id as string;
+      }
+    } catch {
+      // Anonymous is ok
+    }
     const isAuth = !!userId;
 
     const formData = await request.formData();
@@ -36,12 +46,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size
+    // Validate file size against per-file limit
     const maxSize = isAuth ? AUTH_MAX_FILE_SIZE : ANON_MAX_FILE_SIZE;
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: `File exceeds ${isAuth ? '100MB' : '50MB'} size limit` },
+        {
+          error: `File exceeds ${isAuth ? '500MB' : '50MB'} size limit for ${isAuth ? 'authenticated' : 'anonymous'} users`,
+          code: 'FILE_TOO_LARGE',
+        },
         { status: 413 }
+      );
+    }
+
+    // Check total storage capacity for the user
+    const storageLimit = isAuth ? AUTH_TOTAL_STORAGE_LIMIT : ANON_TOTAL_STORAGE_LIMIT;
+    const userTransfers = await db.transferFile.aggregate({
+      _sum: { fileSize: true },
+      where: isAuth
+        ? { userId, expiresAt: { gte: new Date() } }
+        : { isAnonymous: true, userId: null, expiresAt: { gte: new Date() } },
+    });
+    const usedStorage = userTransfers._sum.fileSize || 0;
+    if (usedStorage + file.size > storageLimit) {
+      return NextResponse.json(
+        {
+          error: `Storage limit exceeded. Used: ${Math.round(usedStorage / 1024 / 1024)}MB, Limit: ${Math.round(storageLimit / 1024 / 1024)}MB`,
+          code: 'STORAGE_LIMIT_EXCEEDED',
+          usedStorage,
+          storageLimit,
+        },
+        { status: 507 }
       );
     }
 
@@ -53,14 +87,20 @@ export async function POST(request: NextRequest) {
       const maxExpiryMs = maxExpiryDays * 24 * 3600000;
       if (expiresAt.getTime() - Date.now() > maxExpiryMs) {
         return NextResponse.json(
-          { error: `Expiry cannot exceed ${maxExpiryDays} days` },
+          {
+            error: `Expiry cannot exceed ${maxExpiryDays} days for ${isAuth ? 'authenticated' : 'anonymous'} users`,
+            code: 'EXPIRY_TOO_LONG',
+          },
           { status: 400 }
         );
       }
     } else if (!isAuth) {
       // Anonymous users must set an expiry
       return NextResponse.json(
-        { error: 'Anonymous uploads must have an expiry time' },
+        {
+          error: 'Anonymous uploads must have an expiry time',
+          code: 'EXPIRY_REQUIRED',
+        },
         { status: 400 }
       );
     }
@@ -107,6 +147,7 @@ export async function POST(request: NextRequest) {
       hasPassword: !!transferFile.password,
       shareUrl: `/transfer/${transferFile.token}`,
       createdAt: transferFile.createdAt.toISOString(),
+      isAnonymous: transferFile.isAnonymous,
     }, { status: 201 });
   } catch (error) {
     console.error('Error uploading transfer file:', error);

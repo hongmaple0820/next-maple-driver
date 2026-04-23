@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     ".space.z.ai",
     ".z.ai",
+    "preview-chat-0ac4acf7-8835-4d4b-a280-d5212a915c.space.z.ai",
   ],
 };
 

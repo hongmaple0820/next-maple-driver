@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "clouddrive-dev-secret-key-2024";
 
 export const authOptions: NextAuthOptions = {
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -75,6 +76,17 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+  },
+  cookies: {
+    sessionToken: {
+      name: "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: false,
+      },
+    },
   },
   callbacks: {
     async jwt({ token, user }) {

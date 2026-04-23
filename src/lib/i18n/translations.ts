@@ -651,6 +651,10 @@ export const translations = {
       storageUsed: "存储使用",
       systemDiskUsage: "系统磁盘占比",
       mountComingSoon: "网络挂载功能即将推出",
+      mountCreated: "网络挂载已创建",
+      mountDialogDesc: "配置并添加网络存储挂载，支持 WebDAV、NFS、SMB 协议",
+      mountUrlRequired: "请输入服务器地址",
+      mountNameRequired: "请输入挂载名称",
       // WebDAV access
       webdavAccessInfo: "WebDAV 访问",
       webdavUrl: "WebDAV 地址",
@@ -1356,6 +1360,10 @@ export const translations = {
       storageUsed: "Storage Used",
       systemDiskUsage: "System Disk Usage",
       mountComingSoon: "Network mount feature coming soon",
+      mountCreated: "Network mount created",
+      mountDialogDesc: "Configure and add a network storage mount via WebDAV, NFS, or SMB protocol",
+      mountUrlRequired: "Server URL is required",
+      mountNameRequired: "Mount name is required",
       // WebDAV access
       webdavAccessInfo: "WebDAV Access",
       webdavUrl: "WebDAV URL",

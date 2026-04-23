@@ -557,6 +557,56 @@ export function TransferStationPanel() {
           </Button>
         </motion.div>
 
+        {/* Mode Indicator Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.03 }}
+        >
+          <div className={cn(
+            "flex items-center gap-3 px-4 py-3 rounded-xl border",
+            isAuth
+              ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/30"
+              : "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/30"
+          )}>
+            {isAuth ? (
+              <>
+                <div className="p-1.5 rounded-lg bg-emerald-500/10">
+                  <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Authenticated Mode</span>
+                    <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] h-5">
+                      Up to 500MB
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Full capacity · Up to 30 day expiry · Password protection · Unlimited downloads
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-1.5 rounded-lg bg-amber-500/10">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">Anonymous Mode</span>
+                    <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[10px] h-5">
+                      Max 50MB
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Limited capacity · Up to 7 day expiry · Sign in for full features
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </motion.div>
+
         {/* Capacity Info with Progress Bars */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}

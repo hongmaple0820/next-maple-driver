@@ -326,28 +326,40 @@ export function FileGrid() {
             <motion.div
               animate={{ y: [0, -8, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6"
+              className={cn(
+                "w-24 h-24 rounded-3xl flex items-center justify-center mb-6",
+                isSearch ? "bg-sky-500/10" :
+                section === "trash" ? "bg-red-500/10" :
+                section === "starred" ? "bg-amber-500/10" :
+                section === "recent" ? "bg-purple-500/10" :
+                "bg-muted/50"
+              )}
             >
               {isSearch ? (
-                <SearchX className="w-10 h-10 opacity-40" />
+                <SearchX className="w-12 h-12 text-sky-500/60" />
               ) : section === "trash" ? (
                 <div className="relative">
-                  <Trash2 className="w-10 h-10 opacity-40" />
-                  <svg className="absolute -bottom-0.5 -right-0.5 w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <Trash2 className="w-12 h-12 text-emerald-500/60" />
+                  <svg className="absolute -bottom-1 -right-1 w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
               ) : section === "starred" ? (
-                <Star className="w-10 h-10 opacity-40" />
+                <div className="relative">
+                  <Star className="w-12 h-12 text-amber-500/60" />
+                  <div className="absolute -bottom-0.5 -right-1 w-4 h-4 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <span className="text-[8px] text-amber-600 font-bold">?</span>
+                  </div>
+                </div>
               ) : section === "recent" ? (
-                <Clock className="w-10 h-10 opacity-40" />
+                <Clock className="w-12 h-12 text-purple-500/60" />
               ) : typeFilter !== "all" || colorLabelFilter ? (
-                <FolderOpen className="w-10 h-10 opacity-40" />
+                <FolderOpen className="w-12 h-12 opacity-40" />
               ) : (
-                <FolderOpen className="w-10 h-10 opacity-40" />
+                <FolderOpen className="w-12 h-12 opacity-40" />
               )}
             </motion.div>
-            <p className="text-lg font-medium mb-1">
+            <p className="text-lg font-semibold mb-1">
               {isSearch
                 ? t.app.noResultsFound
                 : typeFilter !== "all" || colorLabelFilter
@@ -360,7 +372,7 @@ export function FileGrid() {
                 ? t.app.noRecentFiles
                 : t.app.folderIsEmpty}
             </p>
-            <p className="text-sm max-w-xs text-center">
+            <p className="text-sm max-w-xs text-center text-muted-foreground/70">
               {isSearch
                 ? t.app.tryDifferentSearch
                 : typeFilter !== "all" || colorLabelFilter
@@ -373,6 +385,20 @@ export function FileGrid() {
                 ? t.app.starredItemsAppearHere
                 : t.app.modifiedItemsAppearHere}
             </p>
+            {/* Quick action hint */}
+            {section === "starred" && !isSearch && !typeFilter && (
+              <p className="text-xs text-muted-foreground/50 mt-2 flex items-center gap-1">
+                <Star className="w-3 h-3" /> Right-click any file to star it
+              </p>
+            )}
+            {section === "trash" && !isSearch && !typeFilter && (
+              <p className="text-xs text-emerald-600/60 mt-2">Files deleted from here are gone forever</p>
+            )}
+            {isSearch && (
+              <p className="text-xs text-sky-500/50 mt-2 flex items-center gap-1">
+                <SearchX className="w-3 h-3" /> Try different keywords or clear filters
+              </p>
+            )}
           </motion.div>
         </ContextMenuTrigger>
         {emptyAreaContextMenu}

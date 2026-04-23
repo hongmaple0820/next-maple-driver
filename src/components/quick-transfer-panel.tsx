@@ -42,6 +42,115 @@ import { formatFileSize } from "@/lib/file-utils";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
+import { useEffect as usePersistEffect } from "react";
+
+// Local storage key for persisting recently received files
+const RECENT_RECEIVED_KEY = "clouddrive-recent-received-files";
+const MAX_RECENT_FILES = 10;
+
+// Recently Received Files - persists via localStorage
+function RecentlyReceivedFiles() {
+  const { t } = useI18n();
+  const [recentFiles, setRecentFiles] = useState<ReceivedFile[]>([]);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(RECENT_RECEIVED_KEY);
+      if (stored) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setRecentFiles(JSON.parse(stored));
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }, []);
+
+  // Listen for new received files from the active session
+  useEffect(() => {
+    const handleReceived = (e: CustomEvent<ReceivedFile>) => {
+      setRecentFiles((prev) => {
+        const updated = [e.data, ...prev.filter(f => f.id !== e.data.id)].slice(0, MAX_RECENT_FILES);
+        try { localStorage.setItem(RECENT_RECEIVED_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+        return updated;
+      });
+    };
+    window.addEventListener("clouddrive:received-file" as string, handleReceived as EventListener);
+    return () => window.removeEventListener("clouddrive:received-file" as string, handleReceived as EventListener);
+  }, []);
+
+  if (recentFiles.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <Card className="border-emerald-200/50 dark:border-emerald-800/30">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              Recently Received
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => {
+                setRecentFiles([]);
+                try { localStorage.removeItem(RECENT_RECEIVED_KEY); } catch { /* ignore */ }
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="max-h-48">
+            <div className="space-y-1">
+              {recentFiles.map((file, idx) => {
+                const { icon: FileIcon, color } = getFileTypeIcon(file.name, file.mimeType);
+                return (
+                  <motion.div
+                    key={file.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    className="flex items-center gap-2 p-2 rounded-lg border border-border/50 text-sm"
+                  >
+                    <FileIcon className={`w-4 h-4 ${color} shrink-0`} />
+                    <span className="flex-1 min-w-0 truncate">{file.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatFileSize(file.size)}
+                    </span>
+                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] shrink-0 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                      {new Date(file.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => {
+                        const a = document.createElement("a");
+                        a.href = `/api/files/download?id=${file.id}`;
+                        a.download = file.name;
+                        a.click();
+                      }}
+                      title={t.app.download || "Download"}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </Button>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
 
 interface QuickTransferSession {
   id: string;
@@ -171,6 +280,10 @@ function QuickTransferPanelInner() {
   useEffect(() => {
     if (fetchedReceivedFiles.length > 0) {
       setReceivedFiles(fetchedReceivedFiles);
+      // Dispatch custom events for each received file to persist in RecentlyReceivedFiles
+      fetchedReceivedFiles.forEach(file => {
+        window.dispatchEvent(new CustomEvent("clouddrive:received-file", { detail: file }));
+      });
     }
   }, [fetchedReceivedFiles]);
 
@@ -925,6 +1038,9 @@ function QuickTransferPanelInner() {
         <p className="text-xs text-center text-muted-foreground/60 pb-4">
           {t.app.quickTransferNote}
         </p>
+
+        {/* Recently Received Files - persists across navigation */}
+        <RecentlyReceivedFiles />
       </div>
     </div>
   );

@@ -4,43 +4,20 @@ import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 import { getDriver, getDefaultDriver } from '@/lib/storage-drivers/manager';
 import type { StorageDriverConfig } from '@/lib/storage-drivers/types';
 import type { StorageDriver } from '@/lib/storage-drivers/types';
+import {
+  getTransferTasks,
+  isLocalDefault,
+  resolveDriverIdForDb,
+  normalizeDriverId,
+  type TransferTask,
+  type TransferError,
+  type FileTransferResult,
+  type CrossDriverTransferRequest,
+  type CrossDriverTransferResponse,
+  type TransferMode,
+} from '@/lib/transfer-types';
 
-// In-memory transfer task tracking (shared globally)
-export interface TransferTask {
-  id: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
-  totalFiles: number;
-  processedFiles: number;
-  succeededFiles: number;
-  failedFiles: number;
-  totalBytes: number;
-  transferredBytes: number;
-  errors: string[];
-  startedAt: number;
-  completedAt?: number;
-  mode: 'copy' | 'move';
-  sourceDriverId: string;
-  targetDriverId: string;
-}
-
-const globalForTransferTasks = globalThis as unknown as {
-  crossDriverTransferTasks: Map<string, TransferTask> | undefined;
-};
-
-function getTransferTasks(): Map<string, TransferTask> {
-  if (!globalForTransferTasks.crossDriverTransferTasks) {
-    globalForTransferTasks.crossDriverTransferTasks = new Map();
-  }
-  return globalForTransferTasks.crossDriverTransferTasks;
-}
-
-function isLocalDefault(driverId: string | null): boolean {
-  return !driverId || driverId === 'local-default' || driverId === 'default-local';
-}
-
-function resolveDriverIdForDb(driverId: string): string | null {
-  return isLocalDefault(driverId) ? null : driverId;
-}
+// ---- Driver instance resolution ----
 
 async function getDriverInstance(driverId: string): Promise<{ driver: StorageDriver; config: StorageDriverConfig }> {
   if (isLocalDefault(driverId)) {
@@ -76,7 +53,8 @@ async function getDriverInstance(driverId: string): Promise<{ driver: StorageDri
   return { driver: getDriver(config), config };
 }
 
-// Count all files recursively within folders to get accurate total
+// ---- Recursive file counting ----
+
 async function countFilesRecursively(fileIds: string[]): Promise<{ totalFiles: number; totalBytes: number }> {
   let totalFiles = 0;
   let totalBytes = 0;
@@ -102,7 +80,36 @@ async function countFilesRecursively(fileIds: string[]): Promise<{ totalFiles: n
   return { totalFiles, totalBytes };
 }
 
-// POST /api/files/cross-driver-transfer - Transfer files between drivers
+// ---- Name collision handling ----
+
+async function getUniqueName(originalName: string, parentId: string | null): Promise<string> {
+  const dotIndex = originalName.lastIndexOf('.');
+  const baseName = dotIndex > 0 ? originalName.substring(0, dotIndex) : originalName;
+  const extension = dotIndex > 0 ? originalName.substring(dotIndex) : '';
+
+  let name = originalName;
+  let counter = 1;
+
+  while (true) {
+    const existing = await db.fileItem.findFirst({
+      where: {
+        parentId,
+        name,
+        isTrashed: false,
+      },
+    });
+
+    if (!existing) break;
+
+    name = `${baseName} (${counter})${extension}`;
+    counter++;
+  }
+
+  return name;
+}
+
+// ---- POST: Start a cross-driver transfer ----
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -112,13 +119,17 @@ export async function POST(request: NextRequest) {
     const userId = (user as Record<string, unknown>).id as string;
     const isAdmin = (user as Record<string, unknown>).role === 'admin';
 
-    const body = await request.json();
-    const { fileIds, targetDriverId, targetParentId, mode } = body as {
-      fileIds: string[];
-      targetDriverId: string;
-      targetParentId: string;
-      mode: 'copy' | 'move';
-    };
+    const body = await request.json() as CrossDriverTransferRequest;
+    const { fileIds, targetDriverId } = body;
+
+    // Support both `operation` and `mode` parameter names for flexibility
+    const mode: TransferMode = body.operation || body.mode || 'copy';
+
+    // Support both `targetFolderId` and `targetParentId` parameter names
+    const targetParentId = body.targetFolderId || body.targetParentId || null;
+    const resolvedTargetParentId = targetParentId === 'root' ? null : (targetParentId ?? null);
+
+    // ---- Validation ----
 
     if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
       return NextResponse.json({ error: 'fileIds is required and must be a non-empty array' }, { status: 400 });
@@ -128,18 +139,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'targetDriverId is required' }, { status: 400 });
     }
 
-    if (!mode || (mode !== 'copy' && mode !== 'move')) {
-      return NextResponse.json({ error: 'mode must be "copy" or "move"' }, { status: 400 });
+    if (mode !== 'copy' && mode !== 'move') {
+      return NextResponse.json({ error: 'operation must be "copy" or "move"' }, { status: 400 });
     }
 
-    // Resolve target parent ID
-    const resolvedTargetParentId = targetParentId === 'root' ? null : targetParentId;
-
-    // Get source driver IDs from files
+    // Get source files
     const sourceFiles = await db.fileItem.findMany({
       where: { id: { in: fileIds } },
       select: { id: true, driverId: true, name: true, type: true, isTrashed: true, userId: true },
     });
+
+    // Verify all requested files exist
+    const foundIds = new Set(sourceFiles.map(f => f.id));
+    const missingIds = fileIds.filter(id => !foundIds.has(id));
+    if (missingIds.length > 0) {
+      return NextResponse.json({ error: `Files not found: ${missingIds.join(', ')}` }, { status: 404 });
+    }
 
     // Verify ownership and not trashed
     for (const file of sourceFiles) {
@@ -151,26 +166,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine the source driver (use the first file's driver)
-    const sourceDriverId = sourceFiles[0]?.driverId || 'local-default';
+    // Determine source driver (use the first file's driver)
+    const sourceDriverId = normalizeDriverId(sourceFiles[0]?.driverId);
+    const targetNorm = normalizeDriverId(targetDriverId);
 
-    // Check if source and target are the same
-    const sourceNorm = isLocalDefault(sourceDriverId) ? 'local-default' : sourceDriverId;
-    const targetNorm = isLocalDefault(targetDriverId) ? 'local-default' : targetDriverId;
-    if (sourceNorm === targetNorm) {
-      // Same driver - just move/copy within the same driver (only change parentId)
-      // This is still useful for moving between different mount points
-      // Allow it but it's essentially a regular move/copy
-    }
-
-    // Validate target driver exists
+    // Validate target driver exists and is accessible
     try {
-      await getDriverInstance(targetDriverId);
-    } catch {
-      return NextResponse.json({ error: 'Target driver not found' }, { status: 404 });
+      const { driver: targetDriverInstance } = await getDriverInstance(targetDriverId);
+      const health = await targetDriverInstance.healthCheck();
+      if (!health.healthy) {
+        return NextResponse.json(
+          { error: `Target driver is not healthy: ${health.message || 'unknown error'}` },
+          { status: 400 }
+        );
+      }
+    } catch (err) {
+      return NextResponse.json(
+        { error: `Target driver not found or inaccessible: ${err instanceof Error ? err.message : 'unknown'}` },
+        { status: 404 }
+      );
     }
 
-    // Validate target parent folder exists and is on the target driver
+    // Validate target parent folder exists and is a folder
     if (resolvedTargetParentId) {
       const targetParent = await db.fileItem.findUnique({ where: { id: resolvedTargetParentId } });
       if (!targetParent) {
@@ -199,19 +216,24 @@ export async function POST(request: NextRequest) {
       errors: [],
       startedAt: Date.now(),
       mode,
-      sourceDriverId: sourceNorm,
+      sourceDriverId,
       targetDriverId: targetNorm,
+      requestedFileIds: fileIds,
+      fileResults: new Map(),
     };
     tasks.set(taskId, task);
 
-    // Process transfers asynchronously
+    // Process transfers asynchronously (fire-and-forget)
     processTransfer(task, fileIds, targetDriverId, resolvedTargetParentId, mode, userId, isAdmin).catch((err) => {
       task.status = 'failed';
-      task.errors.push(`Unexpected error: ${err instanceof Error ? err.message : 'Unknown'}`);
+      task.errors.push({
+        message: `Unexpected error: ${err instanceof Error ? err.message : 'Unknown'}`,
+        timestamp: Date.now(),
+      });
       task.completedAt = Date.now();
     });
 
-    return NextResponse.json({
+    const response: CrossDriverTransferResponse = {
       taskId,
       status: task.status,
       totalFiles: task.totalFiles,
@@ -219,25 +241,29 @@ export async function POST(request: NextRequest) {
       mode: task.mode,
       sourceDriverId: task.sourceDriverId,
       targetDriverId: task.targetDriverId,
-    }, { status: 202 });
+    };
+
+    return NextResponse.json(response, { status: 202 });
   } catch (error) {
     console.error('Error starting cross-driver transfer:', error);
     return NextResponse.json({ error: 'Failed to start cross-driver transfer' }, { status: 500 });
   }
 }
 
+// ---- Core transfer processing ----
+
 async function processTransfer(
   task: TransferTask,
   fileIds: string[],
   targetDriverId: string,
   targetParentId: string | null,
-  mode: 'copy' | 'move',
+  mode: TransferMode,
   userId: string,
   isAdmin: boolean
 ) {
   task.status = 'in_progress';
 
-  // Get driver instances
+  // Pre-resolve the target driver instance (shared across all files)
   const { driver: targetDriver } = await getDriverInstance(targetDriverId);
 
   for (const fileId of fileIds) {
@@ -247,22 +273,26 @@ async function processTransfer(
     try {
       const file = await db.fileItem.findUnique({ where: { id: fileId } });
       if (!file) {
-        task.errors.push(`File ${fileId} not found`);
+        const err: TransferError = { fileId, message: 'File not found', timestamp: Date.now() };
+        task.errors.push(err);
+        task.fileResults.set(fileId, { fileId, fileName: fileId, status: 'failed', bytesTransferred: 0, error: 'File not found' });
         task.failedFiles++;
         task.processedFiles++;
         continue;
       }
 
-      // Verify ownership
+      // Re-verify ownership at processing time
       if (!isAdmin && file.userId !== userId) {
-        task.errors.push(`Access denied for file "${file.name}"`);
+        const err: TransferError = { fileId, fileName: file.name, message: 'Access denied', timestamp: Date.now() };
+        task.errors.push(err);
+        task.fileResults.set(fileId, { fileId, fileName: file.name, status: 'failed', bytesTransferred: 0, error: 'Access denied' });
         task.failedFiles++;
         task.processedFiles++;
         continue;
       }
 
       if (file.type === 'folder') {
-        // For folders, we need to recursively transfer all children
+        // For folders, recursively transfer all children
         await transferFolder(task, file, targetDriverId, targetDriver, targetParentId, mode, userId, isAdmin);
       } else {
         // For files, perform the actual data transfer
@@ -275,13 +305,24 @@ async function processTransfer(
         const fileRecord = await db.fileItem.findUnique({ where: { id: fileId }, select: { name: true } });
         fileName = fileRecord?.name || fileId;
       } catch { /* ignore */ }
-      task.errors.push(`Failed to transfer "${fileName}": ${errorMessage}`);
+      const err: TransferError = { fileId, fileName, message: `Failed to transfer: ${errorMessage}`, timestamp: Date.now() };
+      task.errors.push(err);
+      task.fileResults.set(fileId, { fileId, fileName, status: 'failed', bytesTransferred: 0, error: errorMessage });
       task.failedFiles++;
       task.processedFiles++;
     }
   }
 
-  task.status = task.failedFiles === 0 ? 'completed' : task.succeededFiles === 0 ? 'failed' : 'completed';
+  // Determine final status
+  if (task.status === 'cancelled') {
+    // Keep cancelled status
+  } else if (task.failedFiles === 0) {
+    task.status = 'completed';
+  } else if (task.succeededFiles === 0) {
+    task.status = 'failed';
+  } else {
+    task.status = 'completed_with_errors';
+  }
   task.completedAt = Date.now();
 
   // Clean up old tasks after 1 hour
@@ -290,32 +331,29 @@ async function processTransfer(
   }, 3600000);
 }
 
+// ---- Folder transfer ----
+
+interface FolderRecord {
+  id: string;
+  name: string;
+  driverId: string | null;
+  userId: string;
+  isTrashed: boolean;
+}
+
 async function transferFolder(
   task: TransferTask,
-  folder: { id: string; name: string; driverId: string | null; userId: string; isTrashed: boolean },
+  folder: FolderRecord,
   targetDriverId: string,
   targetDriver: StorageDriver,
   targetParentId: string | null,
-  mode: 'copy' | 'move',
+  mode: TransferMode,
   userId: string,
   isAdmin: boolean
 ) {
   if (mode === 'copy') {
     // Create a new folder record at the target
-    // Check for name collision
-    const existingFolder = await db.fileItem.findFirst({
-      where: {
-        parentId: targetParentId,
-        name: folder.name,
-        type: 'folder',
-        isTrashed: false,
-      },
-    });
-
-    let newFolderName = folder.name;
-    if (existingFolder) {
-      newFolderName = await getUniqueName(folder.name, targetParentId);
-    }
+    const newFolderName = await getUniqueName(folder.name, targetParentId);
 
     const newFolder = await db.fileItem.create({
       data: {
@@ -327,7 +365,7 @@ async function transferFolder(
       },
     });
 
-    // Now recursively copy all children into the new folder
+    // Recursively copy all children into the new folder
     const children = await db.fileItem.findMany({
       where: { parentId: folder.id, isTrashed: false },
     });
@@ -336,14 +374,17 @@ async function transferFolder(
       if (task.status === 'cancelled') break;
 
       if (child.type === 'folder') {
-        await transferFolder(task, child, targetDriverId, targetDriver, newFolder.id, mode, userId, isAdmin);
+        await transferFolder(
+          task,
+          { id: child.id, name: child.name, driverId: child.driverId, userId: child.userId, isTrashed: child.isTrashed },
+          targetDriverId, targetDriver, newFolder.id, mode, userId, isAdmin
+        );
       } else {
         await transferFile(task, child, targetDriverId, targetDriver, newFolder.id, mode);
       }
     }
   } else {
     // Move mode: update the existing folder record
-    // Check for name collision at target
     const existingFolder = await db.fileItem.findFirst({
       where: {
         parentId: targetParentId,
@@ -354,10 +395,7 @@ async function transferFolder(
       },
     });
 
-    let newFolderName = folder.name;
-    if (existingFolder) {
-      newFolderName = await getUniqueName(folder.name, targetParentId);
-    }
+    const newFolderName = existingFolder ? await getUniqueName(folder.name, targetParentId) : folder.name;
 
     await db.fileItem.update({
       where: { id: folder.id },
@@ -377,7 +415,11 @@ async function transferFolder(
       if (task.status === 'cancelled') break;
 
       if (child.type === 'folder') {
-        await transferFolder(task, child, targetDriverId, targetDriver, folder.id, mode, userId, isAdmin);
+        await transferFolder(
+          task,
+          { id: child.id, name: child.name, driverId: child.driverId, userId: child.userId, isTrashed: child.isTrashed },
+          targetDriverId, targetDriver, folder.id, mode, userId, isAdmin
+        );
       } else {
         await transferFile(task, child, targetDriverId, targetDriver, folder.id, mode);
       }
@@ -385,89 +427,85 @@ async function transferFolder(
   }
 }
 
+// ---- Single file transfer ----
+
+interface FileRecord {
+  id: string;
+  name: string;
+  size: number;
+  storagePath: string | null;
+  driverId: string | null;
+  mimeType: string;
+  userId: string;
+}
+
 async function transferFile(
   task: TransferTask,
-  file: { id: string; name: string; size: number; storagePath: string | null; driverId: string | null; mimeType: string; userId: string },
+  file: FileRecord,
   targetDriverId: string,
   targetDriver: StorageDriver,
   targetParentId: string | null,
-  mode: 'copy' | 'move'
+  mode: TransferMode
 ) {
-  if (mode === 'copy') {
-    // Copy mode: create a new file record and copy the data
-    if (!file.storagePath) {
-      task.errors.push(`No storage path for file "${file.name}"`);
-      task.failedFiles++;
-      task.processedFiles++;
-      return;
-    }
+  const sourceDriverId = normalizeDriverId(file.driverId);
+  const targetNorm = normalizeDriverId(targetDriverId);
+  const sameDriver = sourceDriverId === targetNorm;
 
-    // Get source driver
-    const sourceDriverId = file.driverId || 'local-default';
-    const { driver: sourceDriver } = await getDriverInstance(sourceDriverId);
-
-    // Generate new storage path for target driver
-    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
-    const newStoragePath = `${crypto.randomUUID()}${ext}`;
-
-    // Read from source driver
-    const data = await sourceDriver.readFile(file.storagePath);
-
-    // Write to target driver
-    await targetDriver.writeFile(newStoragePath, data);
-
-    // Check for name collision
-    const newFileName = await getUniqueName(file.name, targetParentId);
-
-    // Create new database record
-    await db.fileItem.create({
-      data: {
-        name: newFileName,
-        type: 'file',
-        size: file.size,
-        mimeType: file.mimeType,
-        parentId: targetParentId,
-        storagePath: newStoragePath,
-        driverId: resolveDriverIdForDb(targetDriverId),
-        userId: file.userId,
-      },
-    });
-
-    task.transferredBytes += file.size || 0;
-    task.succeededFiles++;
+  if (!file.storagePath) {
+    const err: TransferError = { fileId: file.id, fileName: file.name, message: 'No storage path for file', timestamp: Date.now() };
+    task.errors.push(err);
+    task.fileResults.set(file.id, { fileId: file.id, fileName: file.name, status: 'failed', bytesTransferred: 0, error: 'No storage path' });
+    task.failedFiles++;
     task.processedFiles++;
-  } else {
-    // Move mode: transfer the file data and update the record
-    if (!file.storagePath) {
-      task.errors.push(`No storage path for file "${file.name}"`);
-      task.failedFiles++;
-      task.processedFiles++;
-      return;
+    return;
+  }
+
+  // Generate new storage path for target driver
+  const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+  const newStoragePath = `${crypto.randomUUID()}${ext}`;
+
+  try {
+    if (sameDriver) {
+      // Same driver: we can optimize by reading/writing within the same driver
+      // This avoids unnecessary network round-trips for cloud drivers
+      const data = await targetDriver.readFile(file.storagePath);
+      await targetDriver.writeFile(newStoragePath, data);
+    } else {
+      // Different drivers: read from source, write to target
+      const { driver: sourceDriver } = await getDriverInstance(sourceDriverId);
+      const data = await sourceDriver.readFile(file.storagePath);
+      await targetDriver.writeFile(newStoragePath, data);
     }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to read/write file data';
+    const transferErr: TransferError = { fileId: file.id, fileName: file.name, message: errorMessage, timestamp: Date.now() };
+    task.errors.push(transferErr);
+    task.fileResults.set(file.id, { fileId: file.id, fileName: file.name, status: 'failed', bytesTransferred: 0, error: errorMessage });
+    task.failedFiles++;
+    task.processedFiles++;
+    return;
+  }
 
-    // Get source driver
-    const sourceDriverId = file.driverId || 'local-default';
-    const { driver: sourceDriver } = await getDriverInstance(sourceDriverId);
-
-    // Generate new storage path for target driver
-    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
-    const newStoragePath = `${crypto.randomUUID()}${ext}`;
-
-    // Read from source driver
-    const data = await sourceDriver.readFile(file.storagePath);
-
-    // Write to target driver
-    await targetDriver.writeFile(newStoragePath, data);
-
-    // Delete from source driver
+  if (mode === 'move') {
+    // Delete from source driver after successful copy
     try {
-      await sourceDriver.deleteFile(file.storagePath);
+      if (sameDriver) {
+        await targetDriver.deleteFile(file.storagePath);
+      } else {
+        const { driver: sourceDriver } = await getDriverInstance(sourceDriverId);
+        await sourceDriver.deleteFile(file.storagePath);
+      }
     } catch {
       // Source file deletion failure is not critical for the transfer
-      task.errors.push(`Warning: Could not delete source file for "${file.name}"`);
+      task.errors.push({
+        fileId: file.id,
+        fileName: file.name,
+        message: 'Warning: Could not delete source file after move',
+        timestamp: Date.now(),
+      });
     }
 
-    // Check for name collision at target
+    // Check for name collision at target and update existing record
     const existingFile = await db.fileItem.findFirst({
       where: {
         parentId: targetParentId,
@@ -480,7 +518,6 @@ async function transferFile(
 
     const newFileName = existingFile ? await getUniqueName(file.name, targetParentId) : file.name;
 
-    // Update database record
     await db.fileItem.update({
       where: { id: file.id },
       data: {
@@ -490,40 +527,33 @@ async function transferFile(
         name: newFileName !== file.name ? newFileName : undefined,
       },
     });
+  } else {
+    // Copy mode: create a new database record
+    const newFileName = await getUniqueName(file.name, targetParentId);
 
-    task.transferredBytes += file.size || 0;
-    task.succeededFiles++;
-    task.processedFiles++;
-  }
-}
-
-async function getUniqueName(originalName: string, parentId: string | null): Promise<string> {
-  const dotIndex = originalName.lastIndexOf('.');
-  const baseName = dotIndex > 0 ? originalName.substring(0, dotIndex) : originalName;
-  const extension = dotIndex > 0 ? originalName.substring(dotIndex) : '';
-
-  let name = originalName;
-  let counter = 1;
-
-  while (true) {
-    const existing = await db.fileItem.findFirst({
-      where: {
-        parentId,
-        name,
-        isTrashed: false,
+    await db.fileItem.create({
+      data: {
+        name: newFileName,
+        type: 'file',
+        size: file.size,
+        mimeType: file.mimeType,
+        parentId: targetParentId,
+        storagePath: newStoragePath,
+        driverId: resolveDriverIdForDb(targetDriverId),
+        userId: file.userId,
       },
     });
-
-    if (!existing) break;
-
-    name = `${baseName} (${counter})${extension}`;
-    counter++;
   }
 
-  return name;
+  // Update progress
+  task.transferredBytes += file.size || 0;
+  task.succeededFiles++;
+  task.processedFiles++;
+  task.fileResults.set(file.id, { fileId: file.id, fileName: file.name, status: 'success', bytesTransferred: file.size || 0 });
 }
 
-// GET /api/files/cross-driver-transfer - List available storage drivers for transfer
+// ---- GET: List available storage drivers for transfer ----
+
 export async function GET() {
   try {
     const user = await getAuthUser();

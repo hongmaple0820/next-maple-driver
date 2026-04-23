@@ -1,9 +1,10 @@
-import { writeFile, readFile, unlink, access, stat, mkdir, rmdir, readdir } from "fs/promises";
+import { writeFile as fsWriteFile, readFile as fsReadFile, unlink, access, stat, mkdir, rmdir, readdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField } from "./types";
+import { WebDAVStorageDriver } from "./webdav-driver";
 
 const execAsync = promisify(exec);
 
@@ -27,6 +28,16 @@ interface MountDriverConfig {
   mountOptions?: string;
 }
 
+/**
+ * MountStorageDriver handles remote storage access via different protocols.
+ *
+ * For WebDAV protocol: Delegates all file operations to the WebDAVStorageDriver,
+ * which uses native HTTP fetch for PROPFIND/GET/PUT/DELETE/MKCOL operations.
+ *
+ * For NFS/SMB protocols: Attempts to mount the remote filesystem to a local path
+ * using system mount commands, then operates on the local filesystem. Falls back
+ * to a local-only directory if the mount command fails (e.g., insufficient permissions).
+ */
 export class MountStorageDriver implements StorageDriver {
   readonly type = "mount";
   readonly config: StorageDriverConfig;
@@ -35,11 +46,32 @@ export class MountStorageDriver implements StorageDriver {
   private mountConfig: MountDriverConfig;
   private mounted: boolean = false;
 
+  // WebDAV delegate - used when protocol is "webdav"
+  private webdavDelegate: WebDAVStorageDriver | null = null;
+
   constructor(config: StorageDriverConfig) {
     this.config = config;
     this.mountConfig = config.config as unknown as MountDriverConfig;
     this.mountPoint = this.mountConfig.mountPoint || join(process.cwd(), "mnt", config.id);
     this.pathPrefix = (this.mountConfig.pathPrefix || "").replace(/^\/+|\/+$/g, "");
+
+    // If protocol is WebDAV, create a WebDAV delegate for all file operations
+    if (this.mountConfig.protocol === "webdav") {
+      this.webdavDelegate = new WebDAVStorageDriver({
+        ...config,
+        config: {
+          url: this.mountConfig.url || "",
+          username: this.mountConfig.username || "",
+          password: this.mountConfig.password || "",
+          pathPrefix: this.mountConfig.pathPrefix || "",
+        },
+      } as StorageDriverConfig);
+    }
+  }
+
+  /** Check if we should use the WebDAV delegate for file operations */
+  private get useWebDAV(): boolean {
+    return this.mountConfig.protocol === "webdav" && this.webdavDelegate !== null;
   }
 
   private resolvePath(path: string): string {
@@ -55,32 +87,49 @@ export class MountStorageDriver implements StorageDriver {
     const cfg = this.mountConfig;
 
     try {
-      // Ensure mount point exists
-      if (!existsSync(this.mountPoint)) {
-        await mkdir(this.mountPoint, { recursive: true });
-      }
-
       switch (cfg.protocol) {
         case "webdav": {
-          // For WebDAV mounting, we use the local file system approach
-          // (Real WebDAV mounting requires FUSE/rclone which may not be available)
-          // Instead, we delegate to the webdav-driver pattern but store locally
+          // For WebDAV, we don't need a filesystem mount.
+          // The WebDAVStorageDriver handles all operations via HTTP.
+          // We still create a local mount point directory as a cache/staging area.
           if (!cfg.url) return { success: false, message: "WebDAV URL is required" };
-          // Create a marker file indicating this is a WebDAV mount
-          await writeFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
+
+          // Verify WebDAV connectivity
+          if (this.webdavDelegate) {
+            const health = await this.webdavDelegate.healthCheck();
+            if (!health.healthy) {
+              return { success: false, message: `WebDAV connection failed: ${health.message}` };
+            }
+          }
+
+          // Create local staging directory
+          if (!existsSync(this.mountPoint)) {
+            await mkdir(this.mountPoint, { recursive: true });
+          }
+
+          // Write mount info marker
+          await fsWriteFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
             protocol: "webdav",
             url: cfg.url,
             username: cfg.username || "",
             mountedAt: new Date().toISOString(),
+            mode: "delegate",
           }));
+
           this.mounted = true;
-          return { success: true, message: `WebDAV mount point created at ${this.mountPoint}` };
+          return { success: true, message: `WebDAV connected to ${cfg.url}` };
         }
 
         case "nfs": {
           if (!cfg.host || !cfg.exportPath) {
             return { success: false, message: "NFS host and export path are required" };
           }
+
+          // Ensure mount point exists
+          if (!existsSync(this.mountPoint)) {
+            await mkdir(this.mountPoint, { recursive: true });
+          }
+
           const nfsPath = `${cfg.host}:${cfg.exportPath}`;
           const opts = cfg.mountOptions || "rw,soft,intr";
           try {
@@ -89,7 +138,7 @@ export class MountStorageDriver implements StorageDriver {
             return { success: true, message: `NFS mounted: ${nfsPath} -> ${this.mountPoint}` };
           } catch (e) {
             // If mount command fails, fall back to local directory mode
-            await writeFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
+            await fsWriteFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
               protocol: "nfs",
               host: cfg.host,
               exportPath: cfg.exportPath,
@@ -106,6 +155,12 @@ export class MountStorageDriver implements StorageDriver {
           if (!cfg.host || !cfg.share) {
             return { success: false, message: "SMB host and share name are required" };
           }
+
+          // Ensure mount point exists
+          if (!existsSync(this.mountPoint)) {
+            await mkdir(this.mountPoint, { recursive: true });
+          }
+
           const smbPath = `//${cfg.host}/${cfg.share}`;
           const opts = cfg.mountOptions || `username=${cfg.username || "guest"},password=${cfg.password || ""},domain=${cfg.domain || "WORKGROUP"}`;
           try {
@@ -114,7 +169,7 @@ export class MountStorageDriver implements StorageDriver {
             return { success: true, message: `SMB mounted: ${smbPath} -> ${this.mountPoint}` };
           } catch (e) {
             // Fall back to local directory mode
-            await writeFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
+            await fsWriteFile(join(this.mountPoint, ".mount-info"), JSON.stringify({
               protocol: "smb",
               host: cfg.host,
               share: cfg.share,
@@ -149,6 +204,7 @@ export class MountStorageDriver implements StorageDriver {
           // Ignore unmount errors
         }
       }
+      // WebDAV doesn't need unmounting - just mark as unmounted
       this.mounted = false;
       return { success: true, message: "Unmounted successfully" };
     } catch (e) {
@@ -157,21 +213,33 @@ export class MountStorageDriver implements StorageDriver {
   }
 
   async writeFile(path: string, data: Buffer): Promise<void> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.writeFile(path, data);
+    }
+
     await this.mount();
     const fullPath = this.resolvePath(path);
     const dir = join(fullPath, "..");
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    await writeFile(fullPath, data);
+    await fsWriteFile(fullPath, data);
   }
 
   async readFile(path: string): Promise<Buffer> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.readFile(path);
+    }
+
     await this.mount();
-    return readFile(this.resolvePath(path));
+    return fsReadFile(this.resolvePath(path));
   }
 
   async deleteFile(path: string): Promise<void> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.deleteFile(path);
+    }
+
     await this.mount();
     try {
       await unlink(this.resolvePath(path));
@@ -181,6 +249,10 @@ export class MountStorageDriver implements StorageDriver {
   }
 
   async fileExists(path: string): Promise<boolean> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.fileExists(path);
+    }
+
     await this.mount();
     try {
       await access(this.resolvePath(path));
@@ -191,17 +263,29 @@ export class MountStorageDriver implements StorageDriver {
   }
 
   async getFileSize(path: string): Promise<number> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.getFileSize(path);
+    }
+
     await this.mount();
     const s = await stat(this.resolvePath(path));
     return s.size;
   }
 
   async createDir(path: string): Promise<void> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.createDir(path);
+    }
+
     await this.mount();
     await mkdir(this.resolvePath(path), { recursive: true });
   }
 
   async deleteDir(path: string): Promise<void> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.deleteDir(path);
+    }
+
     await this.mount();
     try {
       await rmdir(this.resolvePath(path), { recursive: true });
@@ -211,20 +295,52 @@ export class MountStorageDriver implements StorageDriver {
   }
 
   async dirExists(path: string): Promise<boolean> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.dirExists(path);
+    }
+
     await this.mount();
     return existsSync(this.resolvePath(path));
   }
 
   async listDir(path: string): Promise<string[]> {
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.listDir(path);
+    }
+
     await this.mount();
     try {
-      return await readdir(this.resolvePath(path));
+      const entries = await readdir(this.resolvePath(path));
+      // Add "/" suffix for directories to match convention
+      const results: string[] = [];
+      for (const entry of entries) {
+        const fullPath = join(this.resolvePath(path), entry);
+        try {
+          const s = await stat(fullPath);
+          results.push(s.isDirectory() ? entry + "/" : entry);
+        } catch {
+          results.push(entry);
+        }
+      }
+      return results;
     } catch {
       return [];
     }
   }
 
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
+    // For WebDAV protocol, delegate health check to WebDAV driver
+    if (this.useWebDAV && this.webdavDelegate) {
+      const result = await this.webdavDelegate.healthCheck();
+      return {
+        healthy: result.healthy,
+        message: result.healthy
+          ? `WebDAV mount healthy: ${result.message}`
+          : `WebDAV mount unhealthy: ${result.message}`,
+      };
+    }
+
+    // For NFS/SMB, check the local mount point
     try {
       const mountResult = await this.mount();
       if (!mountResult.success) {
@@ -239,6 +355,17 @@ export class MountStorageDriver implements StorageDriver {
       // Try to read the mount info file if it exists
       const mountInfoPath = join(this.mountPoint, ".mount-info");
       if (existsSync(mountInfoPath)) {
+        try {
+          const info = JSON.parse(await fsReadFile(mountInfoPath, "utf-8"));
+          if (info.status === "local-fallback") {
+            return {
+              healthy: true,
+              message: `Mount point accessible (local fallback mode - ${this.mountConfig.protocol} mount failed)`,
+            };
+          }
+        } catch {
+          // Ignore parse errors
+        }
         return { healthy: true, message: `Mount point accessible (${this.mountConfig.protocol} protocol)` };
       }
 
@@ -255,6 +382,12 @@ export class MountStorageDriver implements StorageDriver {
   }
 
   async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
+    // For WebDAV protocol, delegate to WebDAV driver
+    if (this.useWebDAV && this.webdavDelegate) {
+      return this.webdavDelegate.getStorageInfo();
+    }
+
+    // For NFS/SMB, use filesystem stats
     try {
       await this.mount();
       const { statfs } = await import("fs");
@@ -295,7 +428,7 @@ export const mountDriverFactory: StorageDriverFactory = {
       type: "path",
       required: true,
       placeholder: "/mnt/clouddrive",
-      helpText: "Local directory path where the remote storage will be mounted",
+      helpText: "Local directory path where the remote storage will be mounted (used by NFS/SMB)",
     },
     {
       key: "url",
@@ -367,7 +500,7 @@ export const mountDriverFactory: StorageDriverFactory = {
       type: "text",
       required: false,
       placeholder: "rw,soft,intr",
-      helpText: "Additional mount options (comma-separated)",
+      helpText: "Additional mount options for NFS/SMB (comma-separated)",
     },
   ],
   create: (config) => new MountStorageDriver(config),

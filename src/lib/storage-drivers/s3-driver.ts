@@ -3,9 +3,10 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   HeadObjectCommand,
+  HeadBucketCommand,
   ListObjectsV2Command,
-  CreateBucketCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField } from "./types";
@@ -121,7 +122,7 @@ export class S3StorageDriver implements StorageDriver {
   }
 
   async deleteDir(path: string): Promise<void> {
-    // List and delete all objects with this prefix
+    // List and delete all objects with this prefix using batch delete
     const prefix = this.getKey(path) + "/";
     let continuationToken: string | undefined;
 
@@ -134,16 +135,24 @@ export class S3StorageDriver implements StorageDriver {
         })
       );
 
-      if (response.Contents) {
-        for (const obj of response.Contents) {
-          if (obj.Key) {
-            await this.client.send(
-              new DeleteObjectCommand({
-                Bucket: this.bucket,
-                Key: obj.Key,
-              })
-            );
-          }
+      if (response.Contents && response.Contents.length > 0) {
+        // Batch delete up to 1000 objects at a time (S3 limit)
+        const objects = response.Contents
+          .filter((obj) => obj.Key)
+          .map((obj) => ({ Key: obj.Key! }));
+
+        // Delete in batches of 1000
+        for (let i = 0; i < objects.length; i += 1000) {
+          const batch = objects.slice(i, i + 1000);
+          await this.client.send(
+            new DeleteObjectsCommand({
+              Bucket: this.bucket,
+              Delete: {
+                Objects: batch,
+                Quiet: true,
+              },
+            })
+          );
         }
       }
 
@@ -225,15 +234,40 @@ export class S3StorageDriver implements StorageDriver {
 
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
     try {
+      // First, verify the bucket exists and we have access
+      await this.client.send(
+        new HeadBucketCommand({
+          Bucket: this.bucket,
+        })
+      );
+
+      // Then, try to list objects to verify read access
       await this.client.send(
         new ListObjectsV2Command({
           Bucket: this.bucket,
           MaxKeys: 1,
         })
       );
-      return { healthy: true, message: "S3 bucket is accessible" };
+
+      return { healthy: true, message: `S3 bucket "${this.bucket}" is accessible` };
     } catch (e) {
-      return { healthy: false, message: `S3 error: ${(e as Error).message}` };
+      const err = e as { name?: string; message?: string; $metadata?: { httpStatusCode?: number } };
+      const statusCode = err.$metadata?.httpStatusCode;
+
+      if (statusCode === 403 || err.name === "AccessDenied") {
+        return { healthy: false, message: `S3 access denied for bucket "${this.bucket}": check credentials and permissions` };
+      }
+      if (statusCode === 404 || err.name === "NoSuchBucket") {
+        return { healthy: false, message: `S3 bucket "${this.bucket}" does not exist` };
+      }
+      if (err.name === "InvalidAccessKeyId") {
+        return { healthy: false, message: "S3 invalid access key ID: check your credentials" };
+      }
+      if (err.name === "SignatureDoesNotMatch") {
+        return { healthy: false, message: "S3 signature mismatch: check your secret access key" };
+      }
+
+      return { healthy: false, message: `S3 error: ${err.message || "unknown error"}` };
     }
   }
 

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import { join } from 'path';
+
+const TRANSFER_STORAGE_PATH = join(process.cwd(), 'storage', 'transfers');
 
 // POST /api/transfer/[token]/download - Download the file (verifies password, increments count)
 export async function POST(
@@ -19,7 +21,7 @@ export async function POST(
 
     if (!transferFile) {
       return NextResponse.json(
-        { error: 'Transfer not found' },
+        { error: 'Transfer not found', code: 'NOT_FOUND' },
         { status: 404 }
       );
     }
@@ -27,15 +29,21 @@ export async function POST(
     // Check if expired
     if (transferFile.expiresAt && transferFile.expiresAt < new Date()) {
       return NextResponse.json(
-        { error: 'This transfer has expired', expired: true },
+        { error: 'This transfer has expired', expired: true, code: 'EXPIRED' },
         { status: 410 }
       );
     }
 
-    // Check download limit
+    // Check download limit BEFORE incrementing count
     if (transferFile.maxDownloads > 0 && transferFile.downloadCount >= transferFile.maxDownloads) {
       return NextResponse.json(
-        { error: 'Download limit reached', limitReached: true },
+        {
+          error: 'Download limit reached',
+          limitReached: true,
+          code: 'DOWNLOAD_LIMIT_REACHED',
+          downloadCount: transferFile.downloadCount,
+          maxDownloads: transferFile.maxDownloads,
+        },
         { status: 410 }
       );
     }
@@ -43,19 +51,31 @@ export async function POST(
     // Verify password
     if (transferFile.password && transferFile.password !== password) {
       return NextResponse.json(
-        { error: 'Incorrect password' },
+        { error: 'Incorrect password', code: 'INVALID_PASSWORD' },
         { status: 403 }
       );
     }
 
-    // Increment download count
-    await db.transferFile.update({
+    // Verify the physical file still exists before incrementing the count
+    const storagePath = join(TRANSFER_STORAGE_PATH, transferFile.storagePath);
+    try {
+      await stat(storagePath);
+    } catch {
+      // Physical file is missing - clean up the DB record
+      await db.transferFile.delete({ where: { id: transferFile.id } }).catch(() => {});
+      return NextResponse.json(
+        { error: 'File no longer available', code: 'FILE_MISSING' },
+        { status: 404 }
+      );
+    }
+
+    // Increment download count atomically
+    const updatedFile = await db.transferFile.update({
       where: { id: transferFile.id },
       data: { downloadCount: { increment: 1 } },
     });
 
     // Read and return the file
-    const storagePath = join(process.cwd(), 'storage', 'transfers', transferFile.storagePath);
     const fileBuffer = await readFile(storagePath);
 
     return new NextResponse(fileBuffer, {
@@ -63,6 +83,8 @@ export async function POST(
         'Content-Type': transferFile.mimeType || 'application/octet-stream',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(transferFile.fileName)}`,
         'Content-Length': String(transferFile.fileSize),
+        'X-Download-Count': String(updatedFile.downloadCount),
+        'X-Max-Downloads': String(transferFile.maxDownloads),
       },
     });
   } catch (error) {

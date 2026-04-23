@@ -191,6 +191,7 @@ export function AdminDiskTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-disk"] });
       queryClient.invalidateQueries({ queryKey: ["admin-drivers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-disk-info"] });
       setMountDialogOpen(false);
       setMountPath("");
       setMountName("");
@@ -198,6 +199,103 @@ export function AdminDiskTab() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  // Create mount-type driver (for both quick WebDAV and network mount dialog)
+  const createMountDriver = useMutation({
+    mutationFn: async (data: { name: string; type: string; basePath?: string; config: Record<string, string> }) => {
+      const res = await fetch("/api/admin/drivers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create mount driver");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-disk"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-drivers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-disk-info"] });
+      toast.success(t.admin.mountCreated);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Quick WebDAV mount submit handler
+  const handleQuickWebdavMount = useCallback(() => {
+    if (!netMountUrl) {
+      toast.error(t.admin.mountUrlRequired);
+      return;
+    }
+    createMountDriver.mutate({
+      name: `WebDAV - ${netMountUrl}`,
+      type: "mount",
+      basePath: netMountPath || undefined,
+      config: {
+        protocol: "webdav",
+        url: netMountUrl,
+        mountPoint: netMountPath || "/mnt/webdav",
+        username: netMountUsername,
+        password: netMountPassword,
+      },
+    });
+  }, [netMountUrl, netMountPath, netMountUsername, netMountPassword, createMountDriver, t]);
+
+  // Network mount dialog submit handler
+  const handleNetworkMountSubmit = useCallback(() => {
+    if (!netMountName) {
+      toast.error(t.admin.mountNameRequired);
+      return;
+    }
+    if (!netMountUrl) {
+      toast.error(t.admin.mountUrlRequired);
+      return;
+    }
+    const config: Record<string, string> = {
+      protocol: netMountProtocol,
+      url: netMountUrl,
+      mountPoint: netMountPath || "/mnt/remote",
+      username: netMountUsername,
+      password: netMountPassword,
+    };
+    if (netMountProtocol === "nfs") {
+      // For NFS, parse host and exportPath from URL
+      const parts = netMountUrl.split(":");
+      if (parts.length >= 2) {
+        config.host = parts[0];
+        config.exportPath = parts.slice(1).join(":");
+      }
+    } else if (netMountProtocol === "smb") {
+      // For SMB, parse host and share from URL
+      const cleaned = netMountUrl.replace(/^\/\/+/, "");
+      const parts = cleaned.split("/");
+      if (parts.length >= 2) {
+        config.host = parts[0];
+        config.share = parts.slice(1).join("/");
+      }
+    }
+    createMountDriver.mutate(
+      {
+        name: netMountName,
+        type: "mount",
+        basePath: netMountPath || undefined,
+        config,
+      },
+      {
+        onSuccess: () => {
+          setNetworkMountDialogOpen(false);
+          setNetMountName("");
+          setNetMountProtocol("webdav");
+          setNetMountUrl("");
+          setNetMountPath("");
+          setNetMountUsername("");
+          setNetMountPassword("");
+        },
+      },
+    );
+  }, [netMountName, netMountProtocol, netMountUrl, netMountPath, netMountUsername, netMountPassword, createMountDriver, t]);
 
   // --- Cleanup Handlers ---
 
@@ -777,6 +875,8 @@ export function AdminDiskTab() {
                     <div className="space-y-1.5">
                       <Label className="text-xs">{t.admin.mountUrl}</Label>
                       <Input
+                        value={netMountUrl}
+                        onChange={(e) => setNetMountUrl(e.target.value)}
                         placeholder="https://dav.example.com/remote.php/dav/"
                         className="h-8 text-sm"
                       />
@@ -784,6 +884,8 @@ export function AdminDiskTab() {
                     <div className="space-y-1.5">
                       <Label className="text-xs">{t.admin.mountPath}</Label>
                       <Input
+                        value={netMountPath}
+                        onChange={(e) => setNetMountPath(e.target.value)}
                         placeholder="/mnt/webdav"
                         className="h-8 text-sm"
                       />
@@ -791,6 +893,8 @@ export function AdminDiskTab() {
                     <div className="space-y-1.5">
                       <Label className="text-xs">{t.admin.username}</Label>
                       <Input
+                        value={netMountUsername}
+                        onChange={(e) => setNetMountUsername(e.target.value)}
                         placeholder="user@example.com"
                         className="h-8 text-sm"
                       />
@@ -799,6 +903,8 @@ export function AdminDiskTab() {
                       <Label className="text-xs">{t.admin.password}</Label>
                       <Input
                         type="password"
+                        value={netMountPassword}
+                        onChange={(e) => setNetMountPassword(e.target.value)}
                         placeholder="••••••••"
                         className="h-8 text-sm"
                       />
@@ -808,10 +914,11 @@ export function AdminDiskTab() {
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
-                    onClick={() => toast.info(t.admin.mountComingSoon)}
+                    onClick={handleQuickWebdavMount}
+                    disabled={createMountDriver.isPending || !netMountUrl}
                   >
                     <HardDriveUpload className="w-3.5 h-3.5" />
-                    {t.admin.mountBtn}
+                    {createMountDriver.isPending ? t.app.creating : t.admin.mountBtn}
                   </Button>
                 </div>
 
@@ -930,7 +1037,7 @@ export function AdminDiskTab() {
           <DialogHeader>
             <DialogTitle>{t.admin.addMount}</DialogTitle>
             <DialogDescription>
-              {t.admin.mountComingSoon}
+              {t.admin.mountDialogDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -997,12 +1104,10 @@ export function AdminDiskTab() {
             </DialogClose>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                setNetworkMountDialogOpen(false);
-                toast.info(t.admin.mountComingSoon);
-              }}
+              onClick={handleNetworkMountSubmit}
+              disabled={createMountDriver.isPending || !netMountName || !netMountUrl}
             >
-              {t.admin.mountBtn}
+              {createMountDriver.isPending ? t.app.creating : t.admin.mountBtn}
             </Button>
           </DialogFooter>
         </DialogContent>

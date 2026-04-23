@@ -47,16 +47,17 @@ async function main() {
   }
 
   // Create default storage driver config
-  const existingDefaultDriver = await prisma.storageDriverConfig.findFirst({
+  const existingDefaultDriver = await prisma.storageDriver.findFirst({
     where: { isDefault: true },
   });
 
   if (!existingDefaultDriver) {
-    await prisma.storageDriverConfig.create({
+    await prisma.storageDriver.create({
       data: {
         name: 'Default Local Storage',
         type: 'local',
-        config: JSON.stringify({ path: './storage' }),
+        basePath: './storage',
+        config: JSON.stringify({}),
         isDefault: true,
         isEnabled: true,
         priority: 0,
