@@ -33,6 +33,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ----- Quota enforcement -----
+    const totalUploadSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    // Fetch the user's storage limit from the database
+    const dbUser = await db.user.findUnique({
+      where: { id: userId },
+      select: { storageLimit: true },
+    });
+    const storageLimit = Number(dbUser?.storageLimit ?? 10737418240); // default 10 GB
+
+    // Calculate current used storage (non-trashed files only)
+    const usedAggregate = await db.fileItem.aggregate({
+      _sum: { size: true },
+      where: { userId, type: 'file', isTrashed: false },
+    });
+    const usedBytes = usedAggregate._sum.size ?? 0;
+
+    if (usedBytes + totalUploadSize > storageLimit) {
+      return NextResponse.json(
+        {
+          error: 'Storage quota exceeded',
+          detail: `Upload would exceed your storage limit. Used: ${formatBytes(usedBytes)} / ${formatBytes(storageLimit)}, trying to upload: ${formatBytes(totalUploadSize)}`,
+        },
+        { status: 413 }
+      );
+    }
+    // ----- End quota enforcement -----
+
     // Ensure storage directory exists
     const STORAGE_PATH = join(process.cwd(), 'storage');
     if (!existsSync(STORAGE_PATH)) {
@@ -217,4 +245,11 @@ async function uploadSingleFile(
     createdAt: fileItem.createdAt.toISOString(),
     updatedAt: fileItem.updatedAt.toISOString(),
   };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }

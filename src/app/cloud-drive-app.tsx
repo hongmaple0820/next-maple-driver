@@ -19,6 +19,7 @@ import { TaskManagerPanel } from "@/components/task-manager-panel";
 import { TransferPanel } from "@/components/transfer-panel";
 import { QuickTransferPanel } from "@/components/quick-transfer-panel";
 import { TransferStationPanel } from "@/components/transfer-station-panel";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useFileStore } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
 import { toast } from "sonner";
@@ -54,6 +55,11 @@ export default function CloudDriveApp() {
   const storageAlertShown80 = useRef(false);
   const storageAlertShown90 = useRef(false);
 
+  // Reuse the storage-stats query already set up by FileSidebar.
+  // Both components share the same QueryClient, so TanStack Query
+  // deduplicates the fetches.  We set a longer refetchInterval here
+  // because the sidebar already refreshes every 30 s — the alert
+  // logic only needs a periodic re-check.
   const { data: stats } = useQuery<StorageStats>({
     queryKey: ["storage-stats"],
     queryFn: async () => {
@@ -61,7 +67,7 @@ export default function CloudDriveApp() {
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: 30000,
   });
 
   // Check storage usage and show alerts
@@ -227,71 +233,73 @@ export default function CloudDriveApp() {
   }, [selectedFileIds, detailFile, setDetailFile, clearSelection, setShortcutsOpen, setClipboard, setPreferencesOpen, currentFolderId, navigateBack, navigateForward, setCurrentFolderId]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="flex h-screen overflow-hidden bg-background"
-    >
-      {/* Sidebar */}
-      <FileSidebar />
+    <ErrorBoundary>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="flex h-screen overflow-hidden bg-background"
+      >
+        {/* Sidebar */}
+        <FileSidebar />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar - hide for transfer sections */}
-        {section !== "quick-transfer" && section !== "transfer-station" && <FileToolbar />}
+        {/* Main content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Toolbar - hide for transfer sections */}
+          {section !== "quick-transfer" && section !== "transfer-station" && <FileToolbar />}
 
-        {/* Quick Transfer Panel */}
-        {section === "quick-transfer" ? (
-          <QuickTransferPanel />
-        ) : section === "transfer-station" ? (
-          <TransferStationPanel />
-        ) : (
-          /* File area with upload zone */
-          <UploadZone>
-            <div className="flex-1 flex flex-col min-h-0">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${section}-${currentFolderId}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15, ease: "easeInOut" }}
-                  className="flex-1 overflow-y-auto"
-                >
-                  {viewMode === "grid" ? <FileGrid /> : <FileList />}
-                </motion.div>
-              </AnimatePresence>
-              <FileStatusBar />
-            </div>
-          </UploadZone>
-        )}
-      </div>
+          {/* Quick Transfer Panel */}
+          {section === "quick-transfer" ? (
+            <QuickTransferPanel />
+          ) : section === "transfer-station" ? (
+            <TransferStationPanel />
+          ) : (
+            /* File area with upload zone */
+            <UploadZone>
+              <div className="flex-1 flex flex-col min-h-0">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${section}-${currentFolderId}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    className="flex-1 overflow-y-auto"
+                  >
+                    {viewMode === "grid" ? <FileGrid /> : <FileList />}
+                  </motion.div>
+                </AnimatePresence>
+                <FileStatusBar />
+              </div>
+            </UploadZone>
+          )}
+        </div>
 
-      {/* Dialogs */}
-      <FileActions />
+        {/* Dialogs */}
+        <FileActions />
 
-      {/* Batch actions floating bar */}
-      <BatchActions />
+        {/* Batch actions floating bar */}
+        <BatchActions />
 
-      {/* Batch move/copy dialogs */}
-      <BatchMoveDialog />
-      <BatchCopyDialog />
+        {/* Batch move/copy dialogs */}
+        <BatchMoveDialog />
+        <BatchCopyDialog />
 
-      {/* Keyboard shortcuts dialog */}
-      <KeyboardShortcutsDialog />
+        {/* Keyboard shortcuts dialog */}
+        <KeyboardShortcutsDialog />
 
-      {/* User preferences dialog */}
-      <UserPreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
+        {/* User preferences dialog */}
+        <UserPreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
 
-      {/* Upload progress floating panel */}
-      <UploadProgressOverlay />
+        {/* Upload progress floating panel */}
+        <UploadProgressOverlay />
 
-      {/* Task Manager floating panel */}
-      <TaskManagerPanel />
+        {/* Task Manager floating panel */}
+        <TaskManagerPanel />
 
-      {/* Admin Panel */}
-      <AdminPanel />
-    </motion.div>
+        {/* Admin Panel */}
+        <AdminPanel />
+      </motion.div>
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,8 +17,53 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import Link from "next/link";
 import QRCode from "qrcode";
+
+// Floating particle component for the left panel background
+function FloatingParticles() {
+  const particles = useMemo(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 4 + 2,
+      duration: Math.random() * 20 + 15,
+      delay: Math.random() * 10,
+      opacity: Math.random() * 0.3 + 0.1,
+    })),
+  []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            width: p.size,
+            height: p.size,
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            opacity: p.opacity,
+          }}
+          animate={{
+            y: [0, -30, 0, 20, 0],
+            x: [0, 15, -10, 5, 0],
+            opacity: [p.opacity, p.opacity * 1.5, p.opacity, p.opacity * 0.8, p.opacity],
+          }}
+          transition={{
+            duration: p.duration,
+            delay: p.delay,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 type QrLoginState = "idle" | "loading" | "pending" | "scanned" | "confirmed" | "expired" | "error";
 
@@ -309,6 +354,9 @@ export function LoginRegisterPage() {
           </svg>
         </div>
 
+        {/* Floating particles */}
+        <FloatingParticles />
+
         {/* Decorative circles */}
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-emerald-500/20 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-emerald-400/15 blur-3xl" />
@@ -321,12 +369,22 @@ export function LoginRegisterPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            {/* Logo */}
+            {/* Logo with floating animation */}
             <div className="flex items-center gap-4 mb-10">
-              <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-xl">
+              <motion.div
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-xl"
+              >
                 <Cloud className="w-8 h-8 text-white" />
-              </div>
-              <span className="text-3xl font-bold text-white tracking-tight">CloudDrive</span>
+              </motion.div>
+              <motion.span
+                animate={{ y: [0, -3, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.1 }}
+                className="text-3xl font-bold text-white tracking-tight"
+              >
+                CloudDrive
+              </motion.span>
             </div>
 
             {/* Tagline */}
@@ -339,7 +397,7 @@ export function LoginRegisterPage() {
               {t.auth.storeShareManage}
             </p>
 
-            {/* Features */}
+            {/* Features with hover animations */}
             <div className="space-y-5">
               {features.map((feature, index) => (
                 <motion.div
@@ -347,9 +405,10 @@ export function LoginRegisterPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.3 + index * 0.15, ease: "easeOut" }}
-                  className="flex items-start gap-4"
+                  whileHover={{ x: 6, transition: { duration: 0.2 } }}
+                  className="flex items-start gap-4 p-3 -ml-3 rounded-xl cursor-default hover:bg-white/5 transition-colors duration-200"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/15 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/15 shrink-0 transition-transform duration-200 group-hover:scale-110">
                     <feature.icon className="w-5 h-5 text-emerald-200" />
                   </div>
                   <div>
@@ -438,7 +497,14 @@ export function LoginRegisterPage() {
                 </AnimatePresence>
 
                 {/* Login Form */}
-                <TabsContent value="login" className="mt-0">
+                <TabsContent value="login" className="mt-0" forceMount={activeTab === "login" ? true : undefined}>
+                  <motion.div
+                    key="login-form"
+                    initial={{ opacity: 0, x: activeTab === "register" ? -20 : 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    style={{ display: activeTab === "login" ? "block" : "none" }}
+                  >
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="login-email">{t.auth.email}</Label>
@@ -459,6 +525,7 @@ export function LoginRegisterPage() {
                         <Label htmlFor="login-password">{t.auth.password}</Label>
                         <button
                           type="button"
+                          onClick={() => toast.info("Password reset is not available yet", { description: "This feature is coming soon. Please contact your administrator for help." })}
                           className="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium transition-colors"
                         >
                           {t.auth.forgotPassword}
@@ -500,26 +567,37 @@ export function LoginRegisterPage() {
                     </div>
                     <Button
                       type="submit"
-                      className="w-full h-11 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/25 transition-all duration-200"
+                      className="w-full h-11 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 relative overflow-hidden group"
                       disabled={isLoading}
                     >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t.auth.signingIn}
-                        </>
-                      ) : (
-                        <>
-                          {t.auth.signIn}
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </>
-                      )}
+                      <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-[shimmer_3s_ease-in-out_infinite]" style={{ backgroundSize: "200% 100%" }} />
+                      <span className="relative flex items-center justify-center gap-0">
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            {t.auth.signingIn}
+                          </>
+                        ) : (
+                          <>
+                            {t.auth.signIn}
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </>
+                        )}
+                      </span>
                     </Button>
                   </form>
+                  </motion.div>
                 </TabsContent>
 
                 {/* Register Form */}
-                <TabsContent value="register" className="mt-0">
+                <TabsContent value="register" className="mt-0" forceMount={activeTab === "register" ? true : undefined}>
+                  <motion.div
+                    key="register-form"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    style={{ display: activeTab === "register" ? "block" : "none" }}
+                  >
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="register-name">{t.auth.fullName}</Label>
@@ -646,26 +724,37 @@ export function LoginRegisterPage() {
                     </div>
                     <Button
                       type="submit"
-                      className="w-full h-11 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/25 transition-all duration-200"
+                      className="w-full h-11 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 relative overflow-hidden group"
                       disabled={isLoading}
                     >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t.auth.creatingAccount}
-                        </>
-                      ) : (
-                        <>
-                          {t.auth.createAccountBtn}
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </>
-                      )}
+                      <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ backgroundSize: "200% 100%" }} />
+                      <span className="relative flex items-center justify-center gap-0">
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            {t.auth.creatingAccount}
+                          </>
+                        ) : (
+                          <>
+                            {t.auth.createAccountBtn}
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </>
+                        )}
+                      </span>
                     </Button>
                   </form>
+                  </motion.div>
                 </TabsContent>
 
                 {/* QR Code Login Tab */}
-                <TabsContent value="qrcode" className="mt-0">
+                <TabsContent value="qrcode" className="mt-0" forceMount={activeTab === "qrcode" ? true : undefined}>
+                  <motion.div
+                    key="qrcode-form"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    style={{ display: activeTab === "qrcode" ? "block" : "none" }}
+                  >
                   <div className="flex flex-col items-center py-4">
                     <AnimatePresence mode="wait">
                       {/* Loading state */}
@@ -827,6 +916,7 @@ export function LoginRegisterPage() {
                       )}
                     </AnimatePresence>
                   </div>
+                  </motion.div>
                 </TabsContent>
               </Tabs>
 

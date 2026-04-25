@@ -3921,3 +3921,96 @@ Unresolved Issues / Next Phase Priorities:
 6. i18n translations need completion for new features
 7. Consider adding file preview for more file types (PDF, Office docs)
 8. Add keyboard shortcut for opening Task Manager
+
+---
+Task ID: 4
+Agent: Backend & UX Fixes Agent
+Task: Fix duplicate storage-stats query, add quota enforcement, trash auto-cleanup, error boundary, and fix forgot password
+
+Work Log:
+- Task 1: Fixed duplicate storage-stats query
+  - Both file-sidebar.tsx and cloud-drive-app.tsx use useQuery with key ["storage-stats"] and share the same QueryClient from page.tsx
+  - TanStack Query deduplicates same-key queries automatically, so there's no actual duplicate API calls
+  - Made refetchInterval consistent (both use 30000ms) and added clarifying comment in cloud-drive-app.tsx
+- Task 2: Added server-side quota enforcement on file upload
+  - Modified /api/files/upload/route.ts POST handler
+  - Before processing any files, now checks user's storageLimit from User model (default 10GB)
+  - Calculates current used storage via aggregate query on non-trashed files
+  - If total upload size + used bytes > storage limit, returns HTTP 413 with descriptive error message
+  - Added formatBytes() helper for human-readable size in error messages
+- Task 3: Added trash auto-cleanup API endpoint
+  - Created /api/files/trash/auto-cleanup/route.ts with DELETE method
+  - Finds all trashed items where updatedAt is more than 30 days ago
+  - Deletes each expired item recursively (including physical file cleanup)
+  - Returns count of cleaned items
+  - Requires authentication (same pattern as other endpoints)
+- Task 4: Added React Error Boundary component
+  - Created src/components/error-boundary.tsx using React class component
+  - Shows friendly error UI with AlertTriangle icon, error message, and "Try Again" button
+  - Displays error details in a code block for debugging
+  - Wrapped main app content in cloud-drive-app.tsx with <ErrorBoundary>
+  - Supports custom fallback prop
+- Task 5: Fixed "Forgot Password" button on login page
+  - Added onClick handler that shows toast.info with "Password reset is not available yet" message
+  - Added "This feature is coming soon" description in the toast
+  - Added toast import from sonner to login-register-page.tsx
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- 5 tasks completed across 5 files modified and 2 new files created
+- Storage stats query verified as properly shared (no duplicate calls)
+- Server-side quota enforcement prevents uploads beyond storage limit
+- Auto-cleanup endpoint enables automated trash management
+- Error boundary provides graceful error recovery for the main app
+- Forgot Password button now gives user feedback instead of being a no-op
+- Lint clean, no errors
+
+---
+Task ID: 5
+Agent: UI/UX Improvements Agent
+Task: UI/UX Improvements - Login Animations, Empty States, Card Hover, Folder Dialog, Welcome Tooltip
+
+Work Log:
+- Enhancement 1: Login Page Animations and Design
+  - Added FloatingParticles component: 30 animated dots with random positions, sizes, and floating keyframe animations on the left panel background
+  - Added gentle floating animation (y: [0, -6, 0]) to the Cloud logo icon and CloudDrive text with staggered timing
+  - Added whileHover={{ x: 6 }} animation on feature cards with hover:bg-white/5 transition for visual feedback
+  - Added gradient shimmer overlay on Sign In and Create Account buttons: on hover, an emerald-to-teal gradient fades in with a shimmer effect
+  - Added smooth tab transitions: wrapped TabsContent in motion.div with opacity/x transitions when switching between login, register, and QR code tabs (using forceMount for proper animation)
+
+- Enhancement 2: Empty State for File Browser
+  - Updated file-grid.tsx empty state: added staggered entrance animation on the Upload button (delay: 0.3s), enlarged upload icon, added "Drop files here or click Upload" helper text with drag-drop icon, enhanced button with shadow-md and hover:-translate-y-0.5
+  - Updated file-list.tsx empty state: added floating animation to icon (same y: [0, -8, 0] as grid), added staggered upload button entrance, same "Drop files here" helper text and enhanced button styling
+  - Both views now have context-aware colored icon backgrounds (sky for search, red for trash, amber for starred, purple for recent)
+
+- Enhancement 3: File Card Hover Effects
+  - Added hover:shadow-lg hover:shadow-emerald-500/10 for subtle shadow elevation on hover
+  - Changed hover:-translate-y from -1 to -0.5 for smoother, more subtle lift
+  - Replaced action menu button transition-opacity with framer-motion animate: opacity + scale (0.8 → 1) for smooth appearance on hover
+  - Kept existing whileHover={{ scale: 1.02 }} from framer-motion on the card wrapper
+
+- Enhancement 4: New Folder Dialog Improvements
+  - Added folder color picker: 6 preset colors (Yellow/Default, Red, Green, Blue, Purple, Gray) displayed as circular buttons with checkmark on selection and ring highlight
+  - Added folder icon preview that updates as you type the name and change the color: shows a Folder icon with the selected color, preview text shows name or "Untitled Folder"
+  - Preview animates with framer-motion (opacity + scale) when name/color changes
+  - Color label is sent to the API when creating the folder (if not default)
+  - Reset color to default on dialog close
+
+- Enhancement 5: Welcome Tooltip for First-Time Users
+  - Created welcome-tooltip.tsx component with emerald gradient tooltip showing "Start by uploading your first file!" message
+  - Shows only when user has 0 files and 0 folders (checks stats.totalFiles and stats.totalFolders)
+  - Uses localStorage key "clouddrive-welcome-shown" to persist dismissal — only shows once
+  - Animated entrance with framer-motion (opacity, y, scale transitions)
+  - Has a dismiss (X) button and Sparkles icon
+  - Positioned near the Upload button in the toolbar with an arrow pointer
+
+- 5 files modified (login-register-page.tsx, file-grid.tsx, file-list.tsx, file-card.tsx, create-folder-dialog.tsx, file-toolbar.tsx), 1 new file created (welcome-tooltip.tsx)
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Login page significantly enhanced with floating particles, animated logo, hover effects, gradient buttons, and smooth tab transitions
+- Empty states now have animated upload button with "Drop files here" helper text
+- File card hover effects improved with shadow elevation and smooth action menu appearance
+- New Folder dialog has color picker, live icon preview, and animation
+- Welcome tooltip guides first-time users to the Upload button
+- Lint clean, no errors

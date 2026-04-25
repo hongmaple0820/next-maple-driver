@@ -642,13 +642,14 @@ export function FileCard({ file }: FileCardProps) {
               "group relative cursor-pointer transition-all duration-300 border overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2",
               "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-emerald-500/0 hover:after:bg-emerald-500/40 after:transition-colors after:duration-300",
               "hover:bg-gradient-to-br hover:from-accent/40 hover:to-accent/10",
+              "hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5",
               // Colored left border for color label
               colorStyle && !isSelected && !isDragOver ? `border-l-[3px] ${colorStyle.border}` : !isSelected && !isDragOver && "border-l-[3px] border-l-transparent",
               isSelected
                 ? "border-emerald-500/70 shadow-lg shadow-emerald-500/20 bg-emerald-500/[0.07] dark:bg-emerald-500/15 ring-1 ring-emerald-500/30 border-l-emerald-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/25"
                 : isDragOver && file.type === "folder"
                 ? "border-emerald-500/60 shadow-md shadow-emerald-500/15 bg-emerald-500/5 scale-[1.02] border-l-emerald-500"
-                : "border-border/40 bg-card hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/[0.07] hover:-translate-y-1",
+                : "border-border/40 bg-card hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/[0.07] hover:-translate-y-0.5",
               colorStyle && !isSelected && !isDragOver && colorStyle.border
             )}
             onClick={handleClick}
@@ -696,11 +697,16 @@ export function FileCard({ file }: FileCardProps) {
               )}
             </AnimatePresence>
 
-            {/* Action menu */}
-            <div
+            {/* Action menu - smooth appearance */}
+            <motion.div
+              initial={false}
+              animate={{
+                opacity: isHovered || isSelected ? 1 : 0,
+                scale: isHovered || isSelected ? 1 : 0.8,
+              }}
+              transition={{ duration: 0.15 }}
               className={cn(
-                "absolute top-2 right-2 z-10 transition-opacity",
-                isHovered || isSelected ? "opacity-100" : "opacity-0",
+                "absolute top-2 right-2 z-10",
                 colorStyle && "right-7"
               )}
               onClick={(e) => e.stopPropagation()}
@@ -719,7 +725,7 @@ export function FileCard({ file }: FileCardProps) {
                   {actionItems}
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
+            </motion.div>
 
             <CardContent className={cn(
               "flex flex-col items-center gap-2 relative z-[2]",

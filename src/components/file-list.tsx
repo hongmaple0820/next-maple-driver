@@ -809,26 +809,37 @@ export function FileList() {
             transition={{ duration: 0.3 }}
             className="flex flex-col items-center justify-center py-24 text-muted-foreground min-h-[300px]"
           >
-            <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mb-6">
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className={cn(
+                "w-20 h-20 rounded-2xl flex items-center justify-center mb-6",
+                isSearch ? "bg-sky-500/10" :
+                section === "trash" ? "bg-red-500/10" :
+                section === "starred" ? "bg-amber-500/10" :
+                section === "recent" ? "bg-purple-500/10" :
+                "bg-muted/50"
+              )}
+            >
               {isSearch ? (
-                <SearchX className="w-10 h-10 opacity-40" />
+                <SearchX className="w-10 h-10 text-sky-500/60" />
               ) : section === "trash" ? (
                 <div className="relative">
-                  <Trash2 className="w-10 h-10 opacity-40" />
+                  <Trash2 className="w-10 h-10 text-emerald-500/60" />
                   <svg className="absolute -bottom-0.5 -right-0.5 w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
               ) : section === "starred" ? (
-                <Star className="w-10 h-10 opacity-40" />
+                <Star className="w-10 h-10 text-amber-500/60" />
               ) : section === "recent" ? (
-                <Clock className="w-10 h-10 opacity-40" />
+                <Clock className="w-10 h-10 text-purple-500/60" />
               ) : typeFilter !== "all" || colorLabelFilter ? (
                 <FolderOpen className="w-10 h-10 opacity-40" />
               ) : (
                 <FolderOpen className="w-10 h-10 opacity-40" />
               )}
-            </div>
+            </motion.div>
             <p className="text-lg font-medium mb-1">
               {isSearch
                 ? t.app.noResultsFound
@@ -842,7 +853,7 @@ export function FileList() {
                 ? t.app.noRecentFiles
                 : t.app.folderIsEmpty}
             </p>
-            <p className="text-sm max-w-xs text-center">
+            <p className="text-sm max-w-xs text-center text-muted-foreground/70">
               {isSearch
                 ? t.app.tryDifferentSearch
                 : typeFilter !== "all" || colorLabelFilter
@@ -850,36 +861,49 @@ export function FileList() {
                 : section === "trash"
                 ? "Deleted items will appear here"
                 : section === "files"
-                ? "This folder is empty. Drop files here or click Upload to add files."
+                ? "Drop files here or click Upload to add files."
                 : `Items you ${section === "starred" ? "star" : "modify"} will appear here`}
             </p>
-            {/* Upload button for empty files section */}
+            {/* Upload button for empty files section with enhanced design */}
             {section === "files" && !isSearch && !typeFilter && !colorLabelFilter && (
-              <Button
-                size="sm"
-                className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const input = document.createElement("input");
-                  input.type = "file";
-                  input.multiple = true;
-                  input.onchange = async (ev) => {
-                    const fileList = (ev.target as HTMLInputElement).files;
-                    if (!fileList || fileList.length === 0) return;
-                    for (const file of Array.from(fileList)) {
-                      try {
-                        await uploadFileWithProgress(file, currentFolderId, queryClient);
-                      } catch {
-                        // Error already shown via toast
-                      }
-                    }
-                  };
-                  input.click();
-                }}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                className="flex flex-col items-center gap-3 mt-5"
               >
-                <Upload className="w-3.5 h-3.5" />
-                Upload Files
-              </Button>
+                <Button
+                  size="sm"
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/25 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.multiple = true;
+                    input.onchange = async (ev) => {
+                      const fileList = (ev.target as HTMLInputElement).files;
+                      if (!fileList || fileList.length === 0) return;
+                      for (const file of Array.from(fileList)) {
+                        try {
+                          await uploadFileWithProgress(file, currentFolderId, queryClient);
+                        } catch {
+                          // Error already shown via toast
+                        }
+                      }
+                    };
+                    input.click();
+                  }}
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Files
+                </Button>
+                <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Drop files here or click Upload
+                </p>
+              </motion.div>
             )}
           </motion.div>
         </ContextMenuTrigger>

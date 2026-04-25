@@ -23,6 +23,7 @@ import { COLOR_LABELS } from "@/lib/file-utils";
 import type { StorageStats } from "@/lib/file-utils";
 import { ActivityPanel } from "@/components/activity-panel";
 import { QuickTransferPopover } from "@/components/quick-transfer-popover";
+import { WelcomeTooltip } from "@/components/welcome-tooltip";
 import { useI18n } from "@/lib/i18n";
 import {
   Tooltip,
@@ -482,14 +483,20 @@ export function FileToolbar() {
             <>
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    onClick={handleUploadClick}
-                    className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
-                  >
-                    <CloudUpload className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{t.app.upload}</span>
-                  </Button>
+                  <div className="relative">
+                    <Button
+                      size="sm"
+                      onClick={handleUploadClick}
+                      className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
+                    >
+                      <CloudUpload className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{t.app.upload}</span>
+                    </Button>
+                    {/* Welcome tooltip for first-time users */}
+                    {!stats?.totalFiles && !stats?.totalFolders && (
+                      <WelcomeTooltip />
+                    )}
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"

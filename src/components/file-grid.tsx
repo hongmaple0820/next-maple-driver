@@ -390,27 +390,40 @@ export function FileGrid() {
                 ? t.app.starredItemsAppearHere
                 : t.app.modifiedItemsAppearHere}
             </p>
-            {/* Upload button for empty files section */}
+            {/* Upload button for empty files section with enhanced design */}
             {section === "files" && !isSearch && !typeFilter && !colorLabelFilter && (
-              <Button
-                size="sm"
-                className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const input = document.createElement("input");
-                  input.type = "file";
-                  input.multiple = true;
-                  input.onchange = async (ev) => {
-                    const fileList = (ev.target as HTMLInputElement).files;
-                    if (!fileList || fileList.length === 0) return;
-                    await uploadFilesWithProgress(fileList, currentFolderId, queryClient);
-                  };
-                  input.click();
-                }}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                className="flex flex-col items-center gap-3 mt-5"
               >
-                <Upload className="w-3.5 h-3.5" />
-                Upload Files
-              </Button>
+                <Button
+                  size="sm"
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/25 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.multiple = true;
+                    input.onchange = async (ev) => {
+                      const fileList = (ev.target as HTMLInputElement).files;
+                      if (!fileList || fileList.length === 0) return;
+                      await uploadFilesWithProgress(fileList, currentFolderId, queryClient);
+                    };
+                    input.click();
+                  }}
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Files
+                </Button>
+                <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Drop files here or click Upload
+                </p>
+              </motion.div>
             )}
             {/* Quick action hint */}
             {section === "starred" && !isSearch && !typeFilter && (
