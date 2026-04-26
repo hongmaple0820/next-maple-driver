@@ -95,13 +95,15 @@ model FileVersion {
 model StorageDriver {
   id              String    @id @default(cuid())
   name            String
-  type            String    @default("local") // "local", "webdav", "s3", "mount", "baidu", "aliyun", "onedrive", "google", "115", "quark"
+  type            String    @default("local") // "local", "webdav", "s3", "mount", "ftp", "baidu", "aliyun", "onedrive", "google", "115", "quark"
   basePath        String?   @default("") // File system path for local/mount drivers
   config          String    @default("{}") // JSON string of driver-specific config
   status          String    @default("active") // "active", "inactive", "error"
   isDefault       Boolean   @default(false)
   isEnabled       Boolean   @default(true)
   priority        Int       @default(0) // Higher priority drivers are tried first
+  mountPath       String?   @default("") // Virtual mount path in VFS (e.g., "/baidu", "/s3-backup")
+  isReadOnly      Boolean   @default(false) // Whether this mount is read-only
   // Cloud driver auth fields
   authType        String    @default("none") // "oauth", "password", "sms", "email", "none"
   authStatus      String    @default("pending") // "pending", "authorized", "expired", "error"
@@ -225,4 +227,25 @@ model TransferHistory {
   @@index([token])
   @@index([createdAt])
   @@index([status])
+}
+
+model VFSNode {
+  id          String   @id @default(cuid())
+  name        String   // Display name
+  path        String   // Full virtual path (e.g., "/baidu/photos")
+  parentId    String?  // Parent node ID (null for root-level mounts)
+  driverId    String?  // Linked storage driver ID (null for virtual folders)
+  driverPath  String?  @default("") // Path within the driver (if different from virtual path)
+  isDir       Boolean  @default(true)
+  isReadOnly  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent      VFSNode?  @relation("VFSHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    VFSNode[] @relation("VFSHierarchy")
+
+  @@unique([path])
+  @@index([parentId])
+  @@index([driverId])
 }

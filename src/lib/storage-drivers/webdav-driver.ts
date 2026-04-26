@@ -1,4 +1,4 @@
-import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField } from "./types";
+import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField, FileInfo } from "./types";
 
 interface WebDAVDriverConfig {
   url: string;
@@ -328,11 +328,11 @@ export class WebDAVStorageDriver implements StorageDriver {
     }
   }
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     try {
       const resources = await this.propfind(path, 1);
       const dirPath = this.getDavPath(path).replace(/\/+$/, "");
-      const results: string[] = [];
+      const results: FileInfo[] = [];
 
       for (const resource of resources) {
         // Normalize href - remove trailing slash for comparison
@@ -352,7 +352,14 @@ export class WebDAVStorageDriver implements StorageDriver {
 
         // Check if it's a directory
         const isDir = resource.props.resourcetype?.collection === true || href.endsWith("/");
-        results.push(isDir ? name + "/" : name);
+
+        results.push({
+          name,
+          size: resource.props.getcontentlength ?? 0,
+          isDir,
+          lastModified: resource.props.getlastmodified ? new Date(resource.props.getlastmodified) : undefined,
+          created: resource.props.creationdate ? new Date(resource.props.creationdate) : undefined,
+        });
       }
 
       return results;

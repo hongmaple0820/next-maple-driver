@@ -4184,3 +4184,228 @@ Stage Summary:
 - Comprehensive animation system implemented across all UI components
 - Admin panel now has activity log tab with filtering and export
 - Build error fixed and verified working
+
+---
+Task ID: 3a
+Agent: VFS Architecture Agent
+Task: Enhanced StorageDriver Architecture and Virtual File System (VFS)
+
+Work Log:
+- Architecture 1: Updated StorageDriver interface in types.ts
+  - Added FileInfo interface with rich file metadata (name, size, isDir, lastModified, created, mimeType, id, parentPath, extension, thumbnailUrl, downloadUrl, md5)
+  - Changed listDir return type from Promise<string[]> to Promise<FileInfo[]> (CRITICAL breaking change)
+  - Added new optional methods: getFileInfo, createReadStream, createWriteStream, getDownloadLink, copyWithin, moveWithin
+  - Added VFSMountPoint interface for VFS mount configuration
+- Architecture 2: Updated ALL driver implementations for FileInfo[] return type
+  - local-driver.ts: listDir returns FileInfo[] with stat data (size, isDir, lastModified, created); added getFileInfo method
+  - webdav-driver.ts: listDir returns FileInfo[] using WebDAV resource props (size, lastModified, created, isDir from collection type)
+  - s3-driver.ts: listDir returns FileInfo[] with S3 object metadata (size, lastModified from ListObjectsV2)
+  - mount-driver.ts: listDir returns FileInfo[] - delegates to WebDAV or uses local filesystem stat
+  - cloud-driver-base.ts: listDir stub returns FileInfo[] (empty array)
+  - baidu-driver.ts: listDir returns FileInfo[] (empty stub)
+  - aliyun-driver.ts: listDir returns FileInfo[] (empty stub)
+  - onedrive-driver.ts: listDir returns FileInfo[] (empty stub)
+  - google-driver.ts: listDir returns FileInfo[] (empty stub)
+  - 115-driver.ts: listDir returns FileInfo[] (empty stub)
+  - quark-driver.ts: listDir returns FileInfo[] (empty stub)
+- Architecture 3: Created Virtual File System (VFS) module
+  - Created src/lib/vfs/index.ts with complete VFS implementation
+  - In-memory mount cache with 30-second TTL for performance
+  - resolveVirtualPath: resolves virtual path to driver + real path (longest prefix match)
+  - listVirtualDir: lists mount points at root, delegates to driver for mounted paths
+  - readVirtualFile, writeVirtualFile, deleteVirtualFile: virtual path operations with read-only enforcement
+  - getVirtualFileInfo: file stat with fallback when getFileInfo not available
+  - getVirtualDownloadLink: download URL from driver
+  - invalidateMountCache: cache invalidation for driver changes
+- Architecture 4: Updated Prisma schema
+  - Added mountPath (String?, default "") to StorageDriver model for VFS mount path
+  - Added isReadOnly (Boolean, default false) to StorageDriver model
+  - Added new VFSNode model with self-referential hierarchy (parent/children), unique path constraint, indexes on parentId and driverId
+  - Ran db:push successfully to apply schema changes
+- Architecture 5: Created VFS API route
+  - Created src/app/api/vfs/[...path]/route.ts
+  - GET: list directory (default), get mount points (?action=mounts), file info (?action=info), download link (?action=download)
+  - POST: create directory (?action=mkdir), upload file (?action=upload) - admin only
+  - DELETE: delete file/directory - admin only
+  - All endpoints require authentication via getAuthUser
+- Architecture 6: Updated admin drivers API routes
+  - Added mountPath and isReadOnly fields to POST create handler
+  - Added mountPath and isReadOnly fields to PUT update handler
+  - Added mountPath and isReadOnly to GET listing response
+  - Added invalidateMountCache() calls after create, update, and delete operations
+  - Updated both route.ts and [id]/route.ts admin driver endpoints
+
+Stage Summary:
+- Core architectural change: StorageDriver interface enhanced with FileInfo and VFS support
+- All 10 driver implementations updated for FileInfo[] compatibility
+- Virtual File System module created with mount point resolution, caching, and path routing
+- Prisma schema updated with mountPath, isReadOnly fields and VFSNode model
+- VFS API route created with list/info/download/mkdir/upload/delete operations
+- Admin API routes updated to support VFS mount configuration and cache invalidation
+- Lint clean, no errors
+
+---
+Task ID: 5
+Agent: FTP/SFTP Driver Agent
+Task: Create FTP/SFTP Storage Driver for CloudDrive
+
+Work Log:
+- Installed ssh2 (v1.17.0) and basic-ftp (v5.3.0) packages with @types/ssh2 dev dependency
+- Created new FTP/SFTP driver at src/lib/storage-drivers/ftp-driver.ts:
+  - FTPStorageDriver class implementing StorageDriver interface
+  - Supports both FTP (via basic-ftp) and SFTP (via ssh2) protocols based on config.protocol
+  - FTP support: standard FTP and FTPS (explicit TLS) with secure option
+  - SFTP support: password auth and SSH private key auth with optional passphrase
+  - Full file operations: writeFile, readFile, deleteFile, fileExists, getFileSize
+  - Full directory operations: createDir, deleteDir, dirExists, listDir
+  - getFileInfo with stat for SFTP and parent listing for FTP
+  - healthCheck verifies connection to server
+  - Helper methods: sftpMkdirp (recursive mkdir), sftpRmdir (recursive delete), sftpListDir, ftpListDir
+  - ftpDriverFactory with type "ftp", displayName "FTP / SFTP", 9 config fields
+- Updated types.ts: Added "ftp" to StorageDriverConfig type union
+- Updated manager.ts: Imported and registered ftpDriverFactory
+- Updated index.ts: Added export for ftp-driver
+- Updated admin-drivers-tab.tsx:
+  - Added ftp: Globe to driverTypeIcons
+  - Added ftp config fields (protocol, host, port, username, password, privateKey, passphrase, secure, pathPrefix)
+  - Added ftp: "FTP / SFTP" to driverTypeLabels
+  - Added ftp tooltip: "FTP/SFTP: Connect to FTP or SFTP servers for file access"
+  - Added FTP/SFTP button in Storage Protocols section with Globe icon and tooltip
+- Updated Prisma schema: Added "ftp" to StorageDriver type comment
+- Fixed lint error: Replaced require("stream") with ESM import of Writable from "stream"
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- New FTP/SFTP storage driver fully implemented and registered
+- Supports both FTP/FTPS and SFTP protocols
+- SFTP supports password and SSH key authentication
+- FTP supports standard and FTPS (TLS) connections
+- Admin UI updated with FTP/SFTP driver option in Storage Protocols section
+- Lint clean, no errors
+
+---
+Task ID: 4
+Agent: Transfer Engine Agent
+Task: Enhance cross-driver transfer engine with streaming and VFS integration
+
+Work Log:
+- Created new Transfer Engine module at `/src/lib/transfer-engine/index.ts`
+  - Unified cross-driver transfer engine supporting copy/move between ANY two drivers
+  - Streaming transfer when both drivers support createReadStream/createWriteStream
+  - Automatic fallback to buffer-based transfer when streaming isn't available
+  - Byte-level progress tracking with speed calculation (bytes/second)
+  - Cancellation support via AbortController
+  - Auto-creates destination directories
+  - In-memory task store that survives HMR via globalThis
+  - VFS-aware `startVFSTransfer()` convenience function that auto-lists source directory
+  - Task auto-cleanup after 1 hour
+
+- Created VFS-aware API route at `/src/app/api/files/cross-driver-transfer/vfs/route.ts`
+  - POST: Start a VFS-based cross-driver transfer using virtual paths
+  - GET: Get transfer task status (or list all tasks)
+  - DELETE: Cancel a running transfer task
+  - Accepts sourcePath, destPath, sourceDriverId, destDriverId, operation, files parameters
+  - Auto-lists source directory via VFS resolution when no explicit file list provided
+  - Returns 202 Accepted with task info on start
+
+- Updated existing cross-driver transfer route at `/src/app/api/files/cross-driver-transfer/route.ts`
+  - Added streaming transfer support in `transferFile()` function
+  - When both source and destination drivers support streaming, uses ReadableStream pump for memory-efficient transfer
+  - Falls back to buffer-based transfer on streaming failure
+  - Added AbortController for proper cancellation support
+  - Speed and byte-level progress tracking during streaming
+  - Cancellation gates in both file loop and stream pump loop
+
+- Updated task status route at `/src/app/api/files/cross-driver-transfer/[taskId]/route.ts`
+  - Now queries both legacy (transfer-types) and new (transfer-engine) task stores
+  - Unified GET response includes speed, byteProgress for both task types
+  - DELETE cancellation now also handles new engine tasks via `cancelTransferTask()`
+
+- All changes pass lint check, dev server running without errors
+
+Stage Summary:
+- Transfer engine with streaming support fully implemented
+- VFS-aware API endpoint for path-based cross-driver transfers
+- Existing file-ID-based transfer route enhanced with streaming + cancellation
+- Task status endpoint unified to serve both engine types
+- 3 files created, 2 files updated
+- Lint clean, no errors
+
+
+---
+Task ID: 8, 9, 10
+Agent: UI Update Agent
+Task: Update UI components for VFS, mount path, and cross-driver transfer
+
+Work Log:
+- Feature 1: Updated Admin Drivers Tab with Mount Path and isReadOnly support
+  - Added `mountPath` and `isReadOnly` fields to DriverInfo interface
+  - Added `newDriverMountPath` and `newDriverIsReadOnly` state variables
+  - Added `defaultMountPaths` mapping per driver type (local=/local, s3=/s3, webdav=/webdav, mount=/network, ftp=/ftp, etc.)
+  - Updated `handleTypeChange` to set default mount path when type changes
+  - Added Mount Path (VFS) input field with help text in the add driver dialog
+  - Added Read-only mount toggle (Switch) with description in the add driver dialog
+  - Updated createDriver mutation body to include `mountPath` and `isReadOnly`
+  - Updated onSuccess reset to include new fields
+  - Added mount path display in driver cards with FolderOpen icon and code styling
+  - Added Read-only badge (amber) in driver cards when `isReadOnly` is true
+
+- Feature 2: Added VFS Navigation to File Sidebar
+  - Added VFS mount points query (`/api/vfs?action=mounts`) with 30s refetch interval
+  - Added `vfsMode`, `vfsPath`, `setVfsMode`, `setVfsPath` from file store
+  - Added `navigateToVFSPath` handler that sets vfsMode, vfsPath, and switches to files section
+  - Added "Storage Drives" section below existing drivers list
+  - Each mount point shows: driver-type icon, mount path name, and status dot (emerald=writable, amber=read-only)
+  - Used AnimatePresence with motion.button for smooth mount point animations
+  - Active VFS path is highlighted with bg-accent
+  - Expanded getDriverIcon to support all driver types (ftp, baidu, aliyun, onedrive, google, 115, quark)
+  - Added getDriverIconElement helper for JSX icon rendering
+  - Created new `/api/vfs/route.ts` to handle `?action=mounts` (previously returning 404)
+
+- Feature 3: Updated Batch Move/Copy Dialog with VFS mount points
+  - Rewrote `batch-move-copy-dialog.tsx` with VFS mount point targets
+  - Added VFS mount points query for both move and copy dialogs
+  - Added "Storage Drives (VFS)" section with mount point buttons showing driver icon, path, and read-only/writable badge
+  - Added TransferProgress interface and `transferProgress` state
+  - Added inline progress component during batch operations: file counter, progress bar, speed indicator
+  - Added `formatSpeed` utility for human-readable speed display
+  - Added Loader2 spinner on submit button during operations
+  - Added Lucide icon components (Server, Cloud, Globe, Network, HardDrive) as proper icon replacements
+
+- Feature 4: Updated Cross-Driver Move Dialog with VFS mount points
+  - Replaced emoji-based getDriverIcon with proper Lucide icon components
+  - Added `driverIconComponents` mapping for all driver types
+  - Added `getDriverIconSmall` helper for smaller icon size in driver cards
+  - Added mount path display in each target driver card: `({mountPath})` after driver name
+  - Added Read-only badge in driver cards when `isReadOnly` is true
+  - Added transfer speed display during active transfers
+  - Increased max height of driver list from max-h-48 to max-h-56
+  - Added `formatSpeed` utility for transfer speed display
+  - Added `isReadOnly` and `mountPath` to DriverInfo interface
+
+- Feature 5: Added VFS browser mode to File Store
+  - Added `vfsMode: boolean` state (default: false)
+  - Added `vfsPath: string` state (default: "/")
+  - Added `setVfsMode` and `setVfsPath` actions
+  - Updated `setSection` to reset vfsMode and vfsPath on section change
+
+- Feature 6: Created VFS root API route
+  - Created `/api/vfs/route.ts` to handle `?action=mounts` query
+  - Fixes 404 error when sidebar fetches VFS mount points
+
+Files Modified:
+- src/store/file-store.ts (added vfsMode, vfsPath, setVfsMode, setVfsPath)
+- src/components/admin/admin-drivers-tab.tsx (mount path input, isReadOnly toggle, card display)
+- src/components/file-sidebar.tsx (VFS mount points section, driver icons, navigation)
+- src/components/batch-move-copy-dialog.tsx (VFS targets, progress component, icons)
+- src/components/cross-driver-move-dialog.tsx (VFS targets, Lucide icons, mount path display)
+- src/app/api/vfs/route.ts (new file for VFS root endpoint)
+
+Stage Summary:
+- Admin drivers tab now supports mount path and read-only configuration
+- File sidebar shows VFS mount points as clickable navigation items
+- Batch move/copy dialogs show VFS targets with read-only indicators
+- Cross-driver transfer dialog shows mount paths and uses proper icons
+- File store supports VFS browser mode for future VFS file browsing
+- VFS API endpoint now works for mount point listing
+- Lint clean, dev server running without errors

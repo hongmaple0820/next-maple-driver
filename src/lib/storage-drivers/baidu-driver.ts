@@ -4,6 +4,7 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  FileInfo,
 } from "./types";
 
 /**
@@ -58,12 +59,12 @@ export class BaiduDriver extends CloudDriverBase {
    * List files in a directory on Baidu Wangpan.
    * Uses PCS API: /rest/2.0/xpan/file?method=list
    */
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, call Baidu PCS API
       // GET https://pan.baidu.com/rest/2.0/xpan/file?method=list&dir={path}&access_token={token}
       void path;
-      return ["Documents/", "Photos/", "readme.txt"];
+      return [];
     });
   }
 

@@ -5,6 +5,7 @@ import type {
   OAuthTokenResponse,
   CloudAuthType,
   CloudAuthStatus,
+  FileInfo,
 } from "./types";
 
 /**
@@ -289,7 +290,7 @@ export abstract class CloudDriverBase implements StorageDriver {
     return false;
   }
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     void path;
     // Stub: In production, list directory contents from cloud provider
     return [];

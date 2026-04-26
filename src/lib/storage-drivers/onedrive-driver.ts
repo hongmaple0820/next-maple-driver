@@ -4,6 +4,7 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  FileInfo,
 } from "./types";
 
 /**
@@ -74,12 +75,12 @@ export class OneDriveDriver extends CloudDriverBase {
    * List files in a directory on OneDrive.
    * Uses Microsoft Graph API: GET /me/drive/root:/{path}:/children
    */
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, call Microsoft Graph API
       // GET https://graph.microsoft.com/v1.0/me/drive/root:/{path}:/children
       void path;
-      return ["Documents/", "Pictures/", "notes.txt"];
+      return [];
     });
   }
 

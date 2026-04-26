@@ -4,6 +4,7 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  FileInfo,
 } from "./types";
 
 /**
@@ -63,12 +64,12 @@ export class GoogleDriver extends CloudDriverBase {
    * List files in a directory on Google Drive.
    * Uses Drive API: files.list with q parameter
    */
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, call Google Drive API
       // GET https://www.googleapis.com/drive/v3/files?q='{parentId}'+in+parents
       void path;
-      return ["My Drive/", "Shared/", "document.pdf"];
+      return [];
     });
   }
 

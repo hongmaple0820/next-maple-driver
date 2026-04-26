@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { existsSync } from 'fs';
+import { invalidateMountCache } from '@/lib/vfs';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -25,7 +26,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, status, priority, isDefault, basePath, config, authType, authStatus } = body;
+    const { name, status, priority, isDefault, basePath, config, authType, authStatus, mountPath, isReadOnly } = body;
 
     const existing = await db.storageDriver.findUnique({ where: { id } });
     if (!existing) {
@@ -49,6 +50,8 @@ export async function PUT(
     if (config !== undefined) updateData.config = JSON.stringify(config);
     if (authType !== undefined) updateData.authType = authType;
     if (authStatus !== undefined) updateData.authStatus = authStatus;
+    if (mountPath !== undefined) updateData.mountPath = mountPath;
+    if (isReadOnly !== undefined) updateData.isReadOnly = isReadOnly;
 
     const driver = await db.storageDriver.update({
       where: { id },
@@ -71,7 +74,12 @@ export async function PUT(
       createdAt: driver.createdAt.toISOString(),
       updatedAt: driver.updatedAt.toISOString(),
       healthy: driver.type === 'local' ? existsSync(driver.basePath || './storage') : false,
+      mountPath: driver.mountPath,
+      isReadOnly: driver.isReadOnly,
     });
+
+    // Invalidate VFS mount cache after driver changes
+    invalidateMountCache();
   } catch (error) {
     console.error('Error updating driver:', error);
     return NextResponse.json({ error: 'Failed to update driver' }, { status: 500 });
@@ -104,6 +112,9 @@ export async function DELETE(
     }
 
     await db.storageDriver.delete({ where: { id } });
+
+    // Invalidate VFS mount cache after driver changes
+    invalidateMountCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

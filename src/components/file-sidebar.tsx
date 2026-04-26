@@ -37,7 +37,7 @@ function ChevronIcon({ className }: { className?: string }) {
 
 function DriverStatusSection() {
   const { t } = useI18n();
-  const { currentDriverId, setCurrentDriverId, setSection } = useFileStore();
+  const { currentDriverId, setCurrentDriverId, setSection, vfsMode, vfsPath, setVfsMode, setVfsPath } = useFileStore();
   const { data: driversData } = useQuery({
     queryKey: ["sidebar-drivers"],
     queryFn: async () => {
@@ -50,6 +50,21 @@ function DriverStatusSection() {
       }
     },
     refetchInterval: 60000,
+  });
+
+  // Fetch VFS mount points
+  const { data: vfsData } = useQuery({
+    queryKey: ["vfs-mounts"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/vfs?action=mounts");
+        if (!res.ok) throw new Error("Failed to fetch VFS mounts");
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 30000,
   });
 
   const drivers: { id: string; name: string; type: string; status: string; healthy?: boolean }[] = driversData?.drivers || [];
@@ -65,8 +80,20 @@ function DriverStatusSection() {
       case "webdav": return Globe;
       case "s3": return Cloud;
       case "mount": return Network;
+      case "ftp": return Globe;
+      case "baidu": return Cloud;
+      case "aliyun": return Cloud;
+      case "onedrive": return Cloud;
+      case "google": return Cloud;
+      case "115": return HardDrive;
+      case "quark": return HardDrive;
       default: return Cloud;
     }
+  };
+
+  const getDriverIconElement = (type: string, className?: string) => {
+    const Icon = getDriverIcon(type);
+    return <Icon className={className || "w-3.5 h-3.5 shrink-0"} />;
   };
 
   const getStatusColor = (driver: { status: string; healthy?: boolean }) => {
@@ -77,14 +104,20 @@ function DriverStatusSection() {
 
   const handleDriverClick = (driver: { id: string; name: string }) => {
     if (driver.id === "default-local") {
-      // Clicking the default local driver clears the driver filter and shows all files
       setCurrentDriverId(null);
     } else {
-      // Clicking a specific driver sets it as active filter
       setCurrentDriverId(driver.id, driver.name);
     }
     setSection("files");
   };
+
+  const navigateToVFSPath = (mountPath: string) => {
+    setVfsMode(true);
+    setVfsPath(mountPath);
+    setSection("files");
+  };
+
+  const currentVFSPath = vfsMode ? vfsPath : "";
 
   return (
     <div className="border-t border-border/40 mx-3 pt-3 pb-1">
@@ -132,6 +165,39 @@ function DriverStatusSection() {
           <p className="text-[10px] text-muted-foreground/60 px-2">+{drivers.length - 4} more</p>
         )}
       </div>
+
+      {/* VFS Mount Points */}
+      {vfsData?.mounts && vfsData.mounts.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          <button className="flex items-center gap-2 w-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            <HardDrive className="w-3 h-3" />
+            Storage Drives
+          </button>
+          <AnimatePresence>
+            {vfsData.mounts.map((mount: any) => (
+              <motion.button
+                key={mount.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className={cn(
+                  "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md",
+                  "hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer",
+                  currentVFSPath === mount.mountPath && "bg-accent text-accent-foreground"
+                )}
+                onClick={() => navigateToVFSPath(mount.mountPath)}
+              >
+                {getDriverIconElement(mount.driverType, "w-3.5 h-3.5 shrink-0")}
+                <span className="truncate">{mount.mountPath.replace(/^\/+/, '')}</span>
+                <span className={cn(
+                  "ml-auto w-1.5 h-1.5 rounded-full shrink-0",
+                  mount.isReadOnly ? "bg-amber-500" : "bg-emerald-500"
+                )} />
+              </motion.button>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
-import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField } from "./types";
+import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField, FileInfo } from "./types";
 import { WebDAVStorageDriver } from "./webdav-driver";
 
 const execAsync = promisify(exec);
@@ -303,7 +303,7 @@ export class MountStorageDriver implements StorageDriver {
     return existsSync(this.resolvePath(path));
   }
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     if (this.useWebDAV && this.webdavDelegate) {
       return this.webdavDelegate.listDir(path);
     }
@@ -311,15 +311,20 @@ export class MountStorageDriver implements StorageDriver {
     await this.mount();
     try {
       const entries = await readdir(this.resolvePath(path));
-      // Add "/" suffix for directories to match convention
-      const results: string[] = [];
+      const results: FileInfo[] = [];
       for (const entry of entries) {
         const fullPath = join(this.resolvePath(path), entry);
         try {
           const s = await stat(fullPath);
-          results.push(s.isDirectory() ? entry + "/" : entry);
+          results.push({
+            name: entry,
+            size: s.size,
+            isDir: s.isDirectory(),
+            lastModified: s.mtime,
+            created: s.birthtime,
+          });
         } catch {
-          results.push(entry);
+          results.push({ name: entry, size: 0, isDir: false });
         }
       }
       return results;

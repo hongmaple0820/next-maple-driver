@@ -9,7 +9,7 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField } from "./types";
+import type { StorageDriver, StorageDriverConfig, StorageDriverFactory, StorageDriverConfigField, FileInfo } from "./types";
 
 interface S3Config {
   endpoint?: string;
@@ -176,10 +176,10 @@ export class S3StorageDriver implements StorageDriver {
     }
   }
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     const prefix = this.getKey(path);
     const prefixWithSlash = prefix ? prefix + "/" : "";
-    const results: string[] = [];
+    const results: FileInfo[] = [];
     let continuationToken: string | undefined;
 
     do {
@@ -192,13 +192,18 @@ export class S3StorageDriver implements StorageDriver {
         })
       );
 
-      // Add files (CommonPrefixes are "directories")
+      // Add files
       if (response.Contents) {
         for (const obj of response.Contents) {
           if (obj.Key && obj.Key !== prefixWithSlash) {
             const name = obj.Key.replace(prefixWithSlash, "").replace(/\/$/, "");
             if (name && !name.includes("/")) {
-              results.push(name);
+              results.push({
+                name,
+                size: obj.Size ?? 0,
+                isDir: false,
+                lastModified: obj.LastModified,
+              });
             }
           }
         }
@@ -210,7 +215,11 @@ export class S3StorageDriver implements StorageDriver {
           if (prefix.Prefix) {
             const name = prefix.Prefix.replace(prefixWithSlash, "").replace(/\/$/, "");
             if (name) {
-              results.push(name + "/");
+              results.push({
+                name,
+                size: 0,
+                isDir: true,
+              });
             }
           }
         }

@@ -4,10 +4,27 @@ export type CloudAuthType = "oauth" | "password" | "sms" | "email" | "none";
 // Authentication status for cloud drivers
 export type CloudAuthStatus = "pending" | "authorized" | "expired" | "error";
 
+// Rich file info returned by listDir and stat operations
+export interface FileInfo {
+  name: string;
+  size: number;
+  isDir: boolean;
+  lastModified?: Date;
+  created?: Date;
+  mimeType?: string;
+  // Optional fields that some drivers can provide
+  id?: string;           // Provider-specific file ID (e.g., Baidu fs_id)
+  parentPath?: string;   // Parent directory path
+  extension?: string;    // File extension without dot
+  thumbnailUrl?: string; // Thumbnail URL for images/videos
+  downloadUrl?: string;  // Direct download URL (if available)
+  md5?: string;          // File MD5 hash (if available)
+}
+
 export interface StorageDriverConfig {
   id: string;
   name: string;
-  type: "local" | "webdav" | "s3" | "mount" | "baidu" | "aliyun" | "onedrive" | "google" | "115" | "quark";
+  type: "local" | "webdav" | "s3" | "mount" | "ftp" | "baidu" | "aliyun" | "onedrive" | "google" | "115" | "quark";
   config: Record<string, string>;
   isDefault: boolean;
   isEnabled: boolean;
@@ -22,24 +39,25 @@ export interface StorageDriverConfig {
   lastSyncAt?: Date;
 }
 
+// Extended StorageDriver interface with VFS support
 export interface StorageDriver {
   readonly type: string;
   readonly config: StorageDriverConfig;
 
-  // File operations
+  // File operations (enhanced)
   writeFile(path: string, data: Buffer): Promise<void>;
   readFile(path: string): Promise<Buffer>;
   deleteFile(path: string): Promise<void>;
   fileExists(path: string): Promise<boolean>;
   getFileSize(path: string): Promise<number>;
 
-  // Directory operations
+  // Directory operations (enhanced)
   createDir(path: string): Promise<void>;
   deleteDir(path: string): Promise<void>;
   dirExists(path: string): Promise<boolean>;
-  listDir(path: string): Promise<string[]>;
+  listDir(path: string): Promise<FileInfo[]>; // Changed from string[] to FileInfo[]
 
-  // URL generation (for direct access if supported)
+  // URL generation
   getPublicUrl?(path: string): Promise<string>;
 
   // Health check
@@ -47,6 +65,35 @@ export interface StorageDriver {
 
   // Storage info
   getStorageInfo(): Promise<{ used: number; total: number; available: number }>;
+
+  // NEW: Get file info/stat
+  getFileInfo?(path: string): Promise<FileInfo | null>;
+  
+  // NEW: Stream support for large files
+  createReadStream?(path: string, options?: { start?: number; end?: number }): Promise<ReadableStream<Uint8Array>>;
+  createWriteStream?(path: string): Promise<WritableStream>;
+  
+  // NEW: Get download link (for proxy or redirect)
+  getDownloadLink?(path: string): Promise<string>;
+  
+  // NEW: Copy within same driver
+  copyWithin?(sourcePath: string, destPath: string): Promise<void>;
+  
+  // NEW: Move within same driver
+  moveWithin?(sourcePath: string, destPath: string): Promise<void>;
+}
+
+// VFS Mount point configuration
+export interface VFSMountPoint {
+  id: string;               // Unique mount ID
+  driverId: string;          // StorageDriverConfig ID
+  mountPath: string;         // Virtual path where driver is mounted (e.g., "/baidu", "/aliyun/photos")
+  driverType: string;        // Driver type (local, s3, webdav, baidu, etc.)
+  driverSubPath?: string;    // Optional sub-path within the driver to start from
+  isReadOnly: boolean;       // Whether this mount is read-only
+  isEnabled: boolean;        // Whether this mount is active
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface StorageDriverFactory {

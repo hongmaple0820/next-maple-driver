@@ -38,6 +38,8 @@ interface DriverInfo {
   isDefault: boolean;
   basePath: string;
   config: string;
+  mountPath?: string;
+  isReadOnly?: boolean;
   healthy?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -71,6 +73,7 @@ const driverTypeIcons: Record<string, typeof Server> = {
   webdav: Globe,
   s3: Cloud,
   mount: Network,
+  ftp: Globe,
   baidu: Cloud,
   aliyun: Cloud,
   onedrive: Cloud,
@@ -142,6 +145,17 @@ const driverConfigFields: Record<string, {
     { key: "smsCode", label: "短信验证码（可选）", type: "text", placeholder: "123456", required: false, helpText: "短信验证码，点击「发送验证码」获取" },
     { key: "cookies", label: "Cookies（可选）", type: "password", placeholder: "已有的登录 cookies", required: false, helpText: "如已有 cookies 可直接填入，避免重复登录" },
   ],
+  ftp: [
+    { key: "protocol", label: "Protocol", type: "text", placeholder: "sftp", required: true, helpText: "Choose 'ftp' or 'sftp'" },
+    { key: "host", label: "Host", type: "text", placeholder: "ftp.example.com", required: true },
+    { key: "port", label: "Port", type: "number", placeholder: "21 (FTP) / 22 (SFTP)", required: false, helpText: "Default: 21 for FTP, 22 for SFTP" },
+    { key: "username", label: "Username", type: "text", placeholder: "user", required: true },
+    { key: "password", label: "Password", type: "password", placeholder: "••••••••", required: false, helpText: "Password for authentication" },
+    { key: "privateKey", label: "SSH Private Key Path (SFTP)", type: "text", placeholder: "/home/user/.ssh/id_rsa", required: false, helpText: "Path to SSH private key (SFTP alternative to password)" },
+    { key: "passphrase", label: "Private Key Passphrase", type: "password", placeholder: "••••••••", required: false, helpText: "Passphrase for the SSH private key" },
+    { key: "secure", label: "Use FTPS", type: "text", placeholder: "false", required: false, helpText: "Set to 'true' for FTP over TLS" },
+    { key: "pathPrefix", label: "Path Prefix", type: "text", placeholder: "/uploads", required: false, helpText: "Optional subdirectory within the FTP root" },
+  ],
   mount: [
     { key: "mountProtocol", label: "Mount Protocol", type: "text", placeholder: "webdav", required: true, helpText: "Protocol: webdav, nfs, or smb (select below)", defaultValue: "webdav" },
     { key: "serverUrl", label: "Server URL / Host", type: "url", placeholder: "https://nextcloud.example.com/dav/ or 192.168.1.100", required: true, helpText: "WebDAV: full endpoint URL. NFS/SMB: server hostname or IP" },
@@ -209,12 +223,15 @@ export function AdminDriversTab() {
     google: t.admin.googleDrive,
     "115": t.admin.drive115,
     quark: t.admin.quarkDrive,
+    ftp: "FTP / SFTP",
   };
 
   const [addDriverOpen, setAddDriverOpen] = useState(false);
   const [newDriverType, setNewDriverType] = useState("local");
   const [newDriverName, setNewDriverName] = useState("");
   const [newDriverBasePath, setNewDriverBasePath] = useState("./storage");
+  const [newDriverMountPath, setNewDriverMountPath] = useState("/local");
+  const [newDriverIsReadOnly, setNewDriverIsReadOnly] = useState(false);
   const [newDriverPriority, setNewDriverPriority] = useState(0);
   const [newDriverIsDefault, setNewDriverIsDefault] = useState(false);
   const [newDriverConfig, setNewDriverConfig] = useState<Record<string, string>>({});
@@ -230,11 +247,27 @@ export function AdminDriversTab() {
     } catch { /* ignore */ }
   }, []);
 
+  const defaultMountPaths: Record<string, string> = {
+    local: "/local",
+    s3: "/s3",
+    webdav: "/webdav",
+    mount: "/network",
+    ftp: "/ftp",
+    baidu: "/baidu",
+    aliyun: "/aliyun",
+    onedrive: "/onedrive",
+    google: "/google",
+    "115": "/115",
+    quark: "/quark",
+  };
+
   // Reset form when type changes
   const handleTypeChange = (type: string) => {
     setNewDriverType(type);
     setNewDriverConfig(type === "mount" ? { mountProtocol: "webdav" } : {});
     setNewDriverBasePath(type === "local" ? "./storage" : "");
+    setNewDriverMountPath(defaultMountPaths[type] || `/${type}`);
+    setNewDriverIsReadOnly(false);
   };
 
   const { data, isLoading } = useQuery({
@@ -255,6 +288,8 @@ export function AdminDriversTab() {
         name: newDriverName,
         type: newDriverType,
         basePath: newDriverBasePath,
+        mountPath: newDriverMountPath,
+        isReadOnly: newDriverIsReadOnly,
         priority: newDriverPriority,
         isDefault: newDriverIsDefault,
         config: newDriverConfig,
@@ -276,6 +311,8 @@ export function AdminDriversTab() {
       setNewDriverName("");
       setNewDriverType("local");
       setNewDriverBasePath("./storage");
+      setNewDriverMountPath("/local");
+      setNewDriverIsReadOnly(false);
       setNewDriverPriority(0);
       setNewDriverIsDefault(false);
       setNewDriverConfig({});
@@ -507,6 +544,7 @@ export function AdminDriversTab() {
     s3: "S3: Connect to Amazon S3 or S3-compatible storage (MinIO, etc.)",
     webdav: "WebDAV: Connect to WebDAV servers like Nextcloud or ownCloud",
     mount: "Network Mount: Mount NFS/SMB shared folders or WebDAV drives",
+    ftp: "FTP/SFTP: Connect to FTP or SFTP servers for file access",
     baidu: "Baidu Wangpan: Connect via OAuth to access your Baidu cloud files",
     aliyun: "Aliyun Drive: Connect via OAuth to access your Aliyun cloud files",
     onedrive: "OneDrive: Connect via OAuth to Microsoft OneDrive",
@@ -558,6 +596,7 @@ export function AdminDriversTab() {
                   { icon: "☁️", label: "S3", desc: "Amazon S3 compatible storage" },
                   { icon: "🌐", label: "WebDAV", desc: "Connect to WebDAV servers" },
                   { icon: "🔗", label: "Network Mount", desc: "NFS/SMB shared folders" },
+                  { icon: "📂", label: "FTP / SFTP", desc: "Connect to FTP or SFTP servers" },
                   { icon: "🔑", label: "Cloud Drives", desc: "Baidu, Aliyun, OneDrive, Google Drive (OAuth)" },
                   { icon: "🔐", label: "Account Drives", desc: "115, Quark (Password/SMS)" },
                 ].map((item) => (
@@ -616,6 +655,34 @@ export function AdminDriversTab() {
                   value={newDriverName}
                   onChange={(e) => setNewDriverName(e.target.value)}
                   placeholder={t.admin.primaryStorage}
+                />
+              </div>
+
+              {/* Mount Path (VFS) */}
+              <div className="space-y-2">
+                <Label htmlFor="driver-mount-path">Mount Path (VFS)</Label>
+                <Input
+                  id="driver-mount-path"
+                  value={newDriverMountPath}
+                  onChange={(e) => setNewDriverMountPath(e.target.value)}
+                  placeholder="/local"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This is the virtual path where the driver will be accessible in the unified file browser.
+                  E.g., "/baidu" means files will be at /baidu/... in the VFS.
+                </p>
+              </div>
+
+              {/* Read-only toggle */}
+              <div className="flex items-center justify-between gap-3 py-1">
+                <div className="space-y-0.5">
+                  <Label htmlFor="driver-readonly">Read-only mount</Label>
+                  <p className="text-xs text-muted-foreground">Prevent write operations on this storage driver</p>
+                </div>
+                <Switch
+                  id="driver-readonly"
+                  checked={newDriverIsReadOnly}
+                  onCheckedChange={(checked) => setNewDriverIsReadOnly(checked)}
                 />
               </div>
 
@@ -684,6 +751,20 @@ export function AdminDriversTab() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom">{driverTypeTooltips.mount}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={newDriverType === "ftp" ? "default" : "outline"}
+                          size="sm"
+                          className={cn(newDriverType === "ftp" && "bg-emerald-600 hover:bg-emerald-700")}
+                          onClick={() => handleTypeChange("ftp")}
+                        >
+                          <Globe className="w-4 h-4 mr-1.5" />
+                          FTP / SFTP
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{driverTypeTooltips.ftp}</TooltipContent>
                     </Tooltip>
                   </div>
                 </div>
@@ -1039,6 +1120,25 @@ export function AdminDriversTab() {
                         </div>
                         <div className="text-sm text-muted-foreground space-y-0.5">
                           <div>{t.admin.type}: {driverTypeLabels[driver.type] || driver.type} · {t.admin.priority}: {driver.priority}</div>
+                          {(driver as DriverInfo).mountPath && (
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="text-xs text-muted-foreground">Mount:</span>
+                              <code className="text-xs bg-muted px-1 py-0.5 rounded">{(driver as DriverInfo).mountPath}</code>
+                              {(driver as DriverInfo).isReadOnly && (
+                                <Badge variant="outline" className="text-[9px] gap-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 ml-1">
+                                  Read-only
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                          {!(driver as DriverInfo).mountPath && (driver as DriverInfo).isReadOnly && (
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="outline" className="text-[9px] gap-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                                Read-only
+                              </Badge>
+                            </div>
+                          )}
                           {renderDriverConfigInfo(driver)}
                           {/* Driver Capacity/Usage Display */}
                           <DriverCapacityDisplay driverId={driver.id} driverName={driver.name} driverType={driver.type} isHealthy={driver.healthy} />

@@ -5,6 +5,7 @@ import type {
   StorageDriverConfigField,
   CloudAuthType,
   CloudAuthStatus,
+  FileInfo,
 } from "./types";
 
 /**
@@ -122,11 +123,11 @@ export class QuarkDriver extends CookieAuthDriver {
 
   // --- Quark Drive-specific API stubs ---
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, GET https://pan.quark.cn/filelist
       void path;
-      return ["文件夹/", "视频/", "文档.doc"];
+      return [];
     });
   }
 

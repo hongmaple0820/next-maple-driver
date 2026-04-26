@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { existsSync } from 'fs';
 import { getDriverFactory } from '@/lib/storage-drivers';
+import { invalidateMountCache } from '@/lib/vfs';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -34,6 +35,8 @@ export async function GET() {
       isDefault: driver.isDefault,
       config: driver.config,
       basePath: driver.basePath,
+      mountPath: driver.mountPath,
+      isReadOnly: driver.isReadOnly,
       authType: driver.authType,
       authStatus: driver.authStatus,
       accessToken: driver.accessToken ? '••••••••' : null, // Mask in listing
@@ -76,7 +79,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { name, type, basePath, priority, isDefault, config } = await request.json();
+    const { name, type, basePath, priority, isDefault, config, mountPath, isReadOnly } = await request.json();
 
     if (!name || !type) {
       return NextResponse.json(
@@ -128,12 +131,17 @@ export async function POST(request: NextRequest) {
         basePath: basePath || '',
         priority: priority || 0,
         isDefault: isDefault || false,
+        mountPath: mountPath || '',
+        isReadOnly: isReadOnly || false,
         config: safeConfig ? JSON.stringify(safeConfig) : '{}',
         status: 'active',
         authType: factory.authType || 'none',
         authStatus: factory.authType ? 'pending' : 'none',
       },
     });
+
+    // Invalidate VFS mount cache after driver changes
+    invalidateMountCache();
 
     return NextResponse.json({
       id: driver.id,

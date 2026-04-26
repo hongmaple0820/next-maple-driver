@@ -3,6 +3,7 @@ import type {
   StorageDriverConfig,
   StorageDriverFactory,
   StorageDriverConfigField,
+  FileInfo,
 } from "./types";
 
 /**
@@ -55,11 +56,11 @@ export class Drive115Driver extends CookieAuthDriver {
 
   // --- 115-specific API stubs ---
 
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, GET https://webapi.115.com/files/filelist
       void path;
-      return ["我的接收/", "我的文件/", "test.doc"];
+      return [];
     });
   }
 

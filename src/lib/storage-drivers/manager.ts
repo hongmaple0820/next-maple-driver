@@ -9,6 +9,7 @@ import { onedriveDriverFactory } from "./onedrive-driver";
 import { googleDriverFactory } from "./google-driver";
 import { drive115DriverFactory } from "./115-driver";
 import { quarkDriverFactory } from "./quark-driver";
+import { ftpDriverFactory } from "./ftp-driver";
 
 // Registry of all available driver factories
 const driverFactories: Map<string, StorageDriverFactory> = new Map();
@@ -35,6 +36,7 @@ registerDriverFactory(onedriveDriverFactory);
 registerDriverFactory(googleDriverFactory);
 registerDriverFactory(drive115DriverFactory);
 registerDriverFactory(quarkDriverFactory);
+registerDriverFactory(ftpDriverFactory);
 
 export function getDriverFactory(type: string): StorageDriverFactory | undefined {
   return driverFactories.get(type);

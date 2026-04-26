@@ -121,6 +121,12 @@ interface FileStore {
   currentDriverName: string | null;
   setCurrentDriverId: (id: string | null, name?: string | null) => void;
 
+  // VFS browser mode
+  vfsMode: boolean;
+  vfsPath: string;
+  setVfsMode: (mode: boolean) => void;
+  setVfsPath: (path: string) => void;
+
   // Cross-driver move dialog
   crossDriverMoveOpen: boolean;
   setCrossDriverMoveOpen: (open: boolean) => void;
@@ -214,7 +220,7 @@ export const useFileStore = create<FileStore>((set) => ({
   // Section
   section: "files",
   setSection: (section) =>
-    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0, detailFile: null, currentDriverId: null, currentDriverName: null }),
+    set({ section, currentFolderId: "root", selectedFileIds: new Set(), searchQuery: "", typeFilter: "all" as FileTypeFilter, colorLabelFilter: "" as ColorLabelFilter, searchResultCount: 0, navigationHistory: ["root"], historyIndex: 0, detailFile: null, currentDriverId: null, currentDriverName: null, vfsMode: false, vfsPath: "/" }),
 
   // View mode
   viewMode: "grid",
@@ -322,6 +328,12 @@ export const useFileStore = create<FileStore>((set) => ({
   currentDriverId: null,
   currentDriverName: null,
   setCurrentDriverId: (id, name) => set({ currentDriverId: id, currentDriverName: name ?? null }),
+
+  // VFS browser mode
+  vfsMode: false,
+  vfsPath: "/",
+  setVfsMode: (mode) => set({ vfsMode: mode }),
+  setVfsPath: (path) => set({ vfsPath: path }),
 
   // Cross-driver move dialog
   crossDriverMoveOpen: false,

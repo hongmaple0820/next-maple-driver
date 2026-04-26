@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HardDrive, ArrowRight, Copy, Move, CheckCircle2, XCircle, Loader2, FolderOpen, ChevronRight, File, Folder, AlertTriangle } from "lucide-react";
+import { HardDrive, ArrowRight, Copy, Move, CheckCircle2, XCircle, Loader2, FolderOpen, ChevronRight, File, Folder, AlertTriangle, Server, Cloud, Globe, Network } from "lucide-react";
 import { useFileStore } from "@/store/file-store";
 import {
   Dialog,
@@ -22,6 +22,25 @@ import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { formatFileSize } from "@/lib/file-utils";
 
+const driverIconComponents: Record<string, typeof Server> = {
+  local: Server,
+  webdav: Globe,
+  s3: Cloud,
+  mount: Network,
+  ftp: Globe,
+  baidu: Cloud,
+  aliyun: Cloud,
+  onedrive: Cloud,
+  google: Cloud,
+  "115": HardDrive,
+  quark: HardDrive,
+};
+
+function getDriverIcon(type: string, size: string = "w-5 h-5") {
+  const Icon = driverIconComponents[type] || HardDrive;
+  return <Icon className={size} />;
+}
+
 interface DriverInfo {
   id: string;
   name: string;
@@ -30,6 +49,8 @@ interface DriverInfo {
   status: string;
   totalStorage: number;
   usedStorage: number;
+  mountPath?: string;
+  isReadOnly?: boolean;
 }
 
 interface FolderItem {
@@ -107,7 +128,6 @@ export function CrossDriverMoveDialog() {
       const res = await fetch(`/api/files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch folders");
       const allFiles = await res.json();
-      // Only show folders
       return allFiles.filter((f: FolderItem & { type: string }) => f.type === "folder");
     },
     enabled: showFolderBrowser && !!selectedDriverId,
@@ -230,7 +250,7 @@ export function CrossDriverMoveDialog() {
   }, [selectedDriverId, crossDriverMoveFileIds, targetParentId, mode, t, sourceDriverId]);
 
   const handleClose = useCallback(() => {
-    if (isTransferring) return; // Don't close during transfer
+    if (isTransferring) return;
     setCrossDriverMoveOpen(false);
   }, [isTransferring, setCrossDriverMoveOpen]);
 
@@ -248,22 +268,6 @@ export function CrossDriverMoveDialog() {
     setTargetParentId(targetFolder.id);
   }, [folderBreadcrumb]);
 
-  const getDriverIcon = (type: string) => {
-    switch (type) {
-      case "local": return "💾";
-      case "s3": return "☁️";
-      case "webdav": return "🌐";
-      case "mount": return "💿";
-      case "baidu": return "🔵";
-      case "aliyun": return "🟠";
-      case "onedrive": return "🔷";
-      case "google": return "🔶";
-      case "115": return "🟣";
-      case "quark": return "🟢";
-      default: return "📀";
-    }
-  };
-
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60) return `${seconds}s`;
@@ -272,11 +276,19 @@ export function CrossDriverMoveDialog() {
     return `${minutes}m ${remainingSeconds}s`;
   };
 
+  const formatSpeed = (bytesPerSecond: number): string => {
+    if (bytesPerSecond <= 0) return "0 B/s";
+    if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(0)} B/s`;
+    if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
+    if (bytesPerSecond < 1024 * 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+    return `${(bytesPerSecond / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
+  };
+
   // Filter drivers to exclude source driver
   const filteredDrivers = drivers.filter((d) => {
     const sourceNorm = sourceDriverId === "local-default" || !sourceDriverId ? "local-default" : sourceDriverId;
     const driverNorm = d.id === "local-default" || d.id === "default-local" ? "local-default" : d.id;
-    return driverNorm !== sourceNorm || drivers.length <= 1; // Show all if only one driver
+    return driverNorm !== sourceNorm || drivers.length <= 1;
   });
 
   // Find selected driver info
@@ -342,6 +354,14 @@ export function CrossDriverMoveDialog() {
 
                 <Progress value={transferStatus.progress} className="h-2" />
 
+                {/* Transfer speed and file progress */}
+                {isTransferring && (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{transferStatus.duration > 0 ? formatSpeed(transferStatus.transferredBytes / (transferStatus.duration / 1000)) : "Calculating..."}</span>
+                    <span>{transferStatus.processedFiles} / {transferStatus.totalFiles} files</span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="bg-muted/50 rounded-md p-2">
                     <div className="font-semibold text-sm">{transferStatus.totalFiles}</div>
@@ -384,7 +404,7 @@ export function CrossDriverMoveDialog() {
               <>
                 {/* Source info */}
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border/50">
-                  <span className="text-sm">{getDriverIcon(sourceDriverId === "local-default" || !sourceDriverId ? "local" : drivers.find(d => d.id === sourceDriverId)?.type || "local")}</span>
+                  <div className="shrink-0">{getDriverIcon(sourceDriverId === "local-default" || !sourceDriverId ? "local" : drivers.find(d => d.id === sourceDriverId)?.type || "local", "w-5 h-5")}</div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-muted-foreground">Source</div>
                     <div className="text-sm font-medium truncate">
@@ -403,9 +423,10 @@ export function CrossDriverMoveDialog() {
                     <p className="text-sm text-muted-foreground">{t.app.noDriversAvailable}</p>
                   ) : (
                     <RadioGroup value={selectedDriverId} onValueChange={(val) => { setSelectedDriverId(val); setShowFolderBrowser(false); }}>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
                         {filteredDrivers.map((driver) => {
                           const usagePercent = driver.totalStorage > 0 ? Math.round((driver.usedStorage / driver.totalStorage) * 100) : 0;
+                          const mountPath = driver.mountPath || `/${driver.type}-${driver.id.substring(0, 8)}`;
                           return (
                             <label
                               key={driver.id}
@@ -418,7 +439,7 @@ export function CrossDriverMoveDialog() {
                               )}
                             >
                               <RadioGroupItem value={driver.id} id={`driver-${driver.id}`} />
-                              <span className="text-lg">{getDriverIcon(driver.type)}</span>
+                              <div className="shrink-0">{getDriverIcon(driver.type, "w-4 h-4")}</div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-sm truncate">{driver.name}</span>
@@ -427,9 +448,17 @@ export function CrossDriverMoveDialog() {
                                       Default
                                     </span>
                                   )}
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({mountPath})
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className="text-xs text-muted-foreground capitalize">{driver.type}</span>
+                                  {driver.isReadOnly && (
+                                    <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+                                      Read-only
+                                    </span>
+                                  )}
                                   {driver.totalStorage > 0 && (
                                     <span className="text-xs text-muted-foreground">
                                       · {formatFileSize(driver.usedStorage)} / {formatFileSize(driver.totalStorage)}

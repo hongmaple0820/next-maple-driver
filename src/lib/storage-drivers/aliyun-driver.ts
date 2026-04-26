@@ -4,6 +4,7 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  FileInfo,
 } from "./types";
 
 /**
@@ -53,13 +54,13 @@ export class AliyunDriver extends CloudDriverBase {
    * List files in a directory on Aliyun Drive.
    * Uses Open API: /adrive/v1.0/openFile/list
    */
-  async listDir(path: string): Promise<string[]> {
+  async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
       // Stub: In production, call Aliyun Drive Open API
       // POST https://openapi.alipan.com/adrive/v1.0/openFile/list
       // Body: { drive_id, parent_file_id, ... }
       void path;
-      return ["我的文档/", "我的图片/", "notes.txt"];
+      return [];
     });
   }
 

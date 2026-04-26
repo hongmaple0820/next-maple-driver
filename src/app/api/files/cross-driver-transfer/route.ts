@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser, unauthorizedResponse } from '@/lib/auth-helpers';
 import { getDriver, getDefaultDriver } from '@/lib/storage-drivers/manager';
-import type { StorageDriverConfig } from '@/lib/storage-drivers/types';
-import type { StorageDriver } from '@/lib/storage-drivers/types';
+import type { StorageDriverConfig, StorageDriver } from '@/lib/storage-drivers/types';
 import {
   getTransferTasks,
   isLocalDefault,
@@ -201,9 +200,10 @@ export async function POST(request: NextRequest) {
     // Count total files (including those in folders)
     const { totalFiles, totalBytes } = await countFilesRecursively(fileIds);
 
-    // Create transfer task
+    // Create transfer task with AbortController for cancellation support
     const tasks = getTransferTasks();
     const taskId = crypto.randomUUID();
+    const abortController = new AbortController();
     const task: TransferTask = {
       id: taskId,
       status: 'pending',
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
     tasks.set(taskId, task);
 
     // Process transfers asynchronously (fire-and-forget)
-    processTransfer(task, fileIds, targetDriverId, resolvedTargetParentId, mode, userId, isAdmin).catch((err) => {
+    processTransfer(task, fileIds, targetDriverId, resolvedTargetParentId, mode, userId, isAdmin, abortController).catch((err) => {
       task.status = 'failed';
       task.errors.push({
         message: `Unexpected error: ${err instanceof Error ? err.message : 'Unknown'}`,
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ---- Core transfer processing ----
+// ---- Core transfer processing (with streaming support) ----
 
 async function processTransfer(
   task: TransferTask,
@@ -259,7 +259,8 @@ async function processTransfer(
   targetParentId: string | null,
   mode: TransferMode,
   userId: string,
-  isAdmin: boolean
+  isAdmin: boolean,
+  abortController: AbortController,
 ) {
   task.status = 'in_progress';
 
@@ -268,7 +269,10 @@ async function processTransfer(
 
   for (const fileId of fileIds) {
     // Check if task was cancelled
-    if (task.status === 'cancelled') break;
+    if (task.status === 'cancelled' || abortController.signal.aborted) {
+      task.status = 'cancelled';
+      break;
+    }
 
     try {
       const file = await db.fileItem.findUnique({ where: { id: fileId } });
@@ -293,10 +297,10 @@ async function processTransfer(
 
       if (file.type === 'folder') {
         // For folders, recursively transfer all children
-        await transferFolder(task, file, targetDriverId, targetDriver, targetParentId, mode, userId, isAdmin);
+        await transferFolder(task, file, targetDriverId, targetDriver, targetParentId, mode, userId, isAdmin, abortController);
       } else {
-        // For files, perform the actual data transfer
-        await transferFile(task, file, targetDriverId, targetDriver, targetParentId, mode);
+        // For files, perform the actual data transfer (with streaming support)
+        await transferFile(task, file, targetDriverId, targetDriver, targetParentId, mode, abortController);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -349,8 +353,11 @@ async function transferFolder(
   targetParentId: string | null,
   mode: TransferMode,
   userId: string,
-  isAdmin: boolean
+  isAdmin: boolean,
+  abortController: AbortController,
 ) {
+  if (task.status === 'cancelled' || abortController.signal.aborted) return;
+
   if (mode === 'copy') {
     // Create a new folder record at the target
     const newFolderName = await getUniqueName(folder.name, targetParentId);
@@ -371,16 +378,16 @@ async function transferFolder(
     });
 
     for (const child of children) {
-      if (task.status === 'cancelled') break;
+      if (task.status === 'cancelled' || abortController.signal.aborted) break;
 
       if (child.type === 'folder') {
         await transferFolder(
           task,
           { id: child.id, name: child.name, driverId: child.driverId, userId: child.userId, isTrashed: child.isTrashed },
-          targetDriverId, targetDriver, newFolder.id, mode, userId, isAdmin
+          targetDriverId, targetDriver, newFolder.id, mode, userId, isAdmin, abortController
         );
       } else {
-        await transferFile(task, child, targetDriverId, targetDriver, newFolder.id, mode);
+        await transferFile(task, child, targetDriverId, targetDriver, newFolder.id, mode, abortController);
       }
     }
   } else {
@@ -412,22 +419,22 @@ async function transferFolder(
     });
 
     for (const child of children) {
-      if (task.status === 'cancelled') break;
+      if (task.status === 'cancelled' || abortController.signal.aborted) break;
 
       if (child.type === 'folder') {
         await transferFolder(
           task,
           { id: child.id, name: child.name, driverId: child.driverId, userId: child.userId, isTrashed: child.isTrashed },
-          targetDriverId, targetDriver, folder.id, mode, userId, isAdmin
+          targetDriverId, targetDriver, folder.id, mode, userId, isAdmin, abortController
         );
       } else {
-        await transferFile(task, child, targetDriverId, targetDriver, folder.id, mode);
+        await transferFile(task, child, targetDriverId, targetDriver, folder.id, mode, abortController);
       }
     }
   }
 }
 
-// ---- Single file transfer ----
+// ---- Single file transfer (with streaming support) ----
 
 interface FileRecord {
   id: string;
@@ -445,8 +452,11 @@ async function transferFile(
   targetDriverId: string,
   targetDriver: StorageDriver,
   targetParentId: string | null,
-  mode: TransferMode
+  mode: TransferMode,
+  abortController: AbortController,
 ) {
+  if (task.status === 'cancelled' || abortController.signal.aborted) return;
+
   const sourceDriverId = normalizeDriverId(file.driverId);
   const targetNorm = normalizeDriverId(targetDriverId);
   const sameDriver = sourceDriverId === targetNorm;
@@ -464,18 +474,47 @@ async function transferFile(
   const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
   const newStoragePath = `${crypto.randomUUID()}${ext}`;
 
+  let bytesTransferred = 0;
+
   try {
-    if (sameDriver) {
-      // Same driver: we can optimize by reading/writing within the same driver
-      // This avoids unnecessary network round-trips for cloud drivers
+    // Resolve source driver
+    const sourceDriver = sameDriver
+      ? targetDriver
+      : (await getDriverInstance(sourceDriverId)).driver;
+
+    // ---- Streaming transfer when both drivers support it ----
+    const canStream = sourceDriver.createReadStream && targetDriver.createWriteStream;
+
+    if (canStream) {
+      try {
+        bytesTransferred = await streamingTransfer(
+          sourceDriver,
+          targetDriver,
+          file.storagePath,
+          newStoragePath,
+          task,
+          abortController,
+        );
+      } catch {
+        // Streaming failed — fall back to buffer-based transfer
+        const data = await sourceDriver.readFile(file.storagePath);
+        await targetDriver.writeFile(newStoragePath, data);
+        bytesTransferred = data.byteLength;
+      }
+    } else if (sameDriver) {
+      // Same driver without streaming: read/write within driver
       const data = await targetDriver.readFile(file.storagePath);
       await targetDriver.writeFile(newStoragePath, data);
+      bytesTransferred = data.byteLength;
     } else {
-      // Different drivers: read from source, write to target
-      const { driver: sourceDriver } = await getDriverInstance(sourceDriverId);
+      // Different drivers, no streaming: buffer-based transfer
       const data = await sourceDriver.readFile(file.storagePath);
       await targetDriver.writeFile(newStoragePath, data);
+      bytesTransferred = data.byteLength;
     }
+
+    // Update byte-level progress
+    task.transferredBytes += bytesTransferred;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Failed to read/write file data';
     const transferErr: TransferError = { fileId: file.id, fileName: file.name, message: errorMessage, timestamp: Date.now() };
@@ -546,10 +585,69 @@ async function transferFile(
   }
 
   // Update progress
-  task.transferredBytes += file.size || 0;
   task.succeededFiles++;
   task.processedFiles++;
-  task.fileResults.set(file.id, { fileId: file.id, fileName: file.name, status: 'success', bytesTransferred: file.size || 0 });
+  task.fileResults.set(file.id, { fileId: file.id, fileName: file.name, status: 'success', bytesTransferred });
+}
+
+// ---- Streaming transfer helper ----
+
+async function streamingTransfer(
+  sourceDriver: StorageDriver,
+  destDriver: StorageDriver,
+  sourcePath: string,
+  destPath: string,
+  task: TransferTask,
+  abortController: AbortController,
+): Promise<number> {
+  const readStream = await sourceDriver.createReadStream!(sourcePath);
+  const writeStream = await destDriver.createWriteStream!(destPath);
+
+  return new Promise<number>((resolve, reject) => {
+    let transferred = 0;
+    const reader = readStream.getReader();
+    const writer = writeStream.getWriter();
+
+    const pump = async () => {
+      try {
+        while (true) {
+          // Check for cancellation inside the pump loop
+          if (abortController.signal.aborted || task.status === 'cancelled') {
+            writer.abort();
+            reader.cancel();
+            resolve(transferred);
+            return;
+          }
+
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          await writer.write(value);
+          transferred += value.byteLength;
+          task.transferredBytes += value.byteLength;
+
+          // Calculate speed
+          const elapsed = (Date.now() - task.startedAt) / 1000;
+          const speed = elapsed > 0 ? task.transferredBytes / elapsed : 0;
+
+          // Update progress (store speed in the error message as a hack-free approach)
+          // We add it to the task object dynamically via a non-enumerated field
+          (task as Record<string, unknown>).speed = speed;
+          (task as Record<string, unknown>).progress =
+            task.totalBytes > 0
+              ? Math.round((task.transferredBytes / task.totalBytes) * 100)
+              : 0;
+        }
+
+        await writer.close();
+        resolve(transferred);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    pump();
+  });
 }
 
 // ---- GET: List available storage drivers for transfer ----
