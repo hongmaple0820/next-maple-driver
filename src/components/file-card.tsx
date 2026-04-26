@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive, HardDrive, ClipboardCopy } from "lucide-react";
+import { MoreVertical, Star, Download, Pencil, FolderInput, Share2, Trash2, RotateCcw, X, Copy, Archive, Info, Palette, Folder, File, FileArchive, HardDrive, ClipboardCopy, Cloud } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFileStore } from "@/store/file-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -194,7 +194,14 @@ export function FileCard({ file }: FileCardProps) {
     setCrossDriverMoveOpen,
     setCrossDriverMoveFileIds,
     setCopyToFile,
+    vfsMode,
+    vfsPath,
+    navigateToVfsPath,
+    currentDriverId,
   } = useFileStore();
+
+  // Cast to access VFS-specific fields
+  const vfsItem = file as FileItem & { _isVfsItem?: boolean; _vfsPath?: string };
 
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -214,15 +221,23 @@ export function FileCard({ file }: FileCardProps) {
 
   const handleClick = useCallback(() => {
     if (file.type === "folder") {
-      setCurrentFolderId(file.id);
+      if (vfsMode && vfsItem._vfsPath) {
+        navigateToVfsPath(vfsItem._vfsPath, currentDriverId ?? undefined);
+      } else {
+        setCurrentFolderId(file.id);
+      }
     } else {
       setDetailFile(file);
     }
-  }, [file, setCurrentFolderId, setDetailFile]);
+  }, [file, setCurrentFolderId, setDetailFile, vfsMode, vfsItem._vfsPath, navigateToVfsPath, currentDriverId]);
 
   const handleDoubleClick = useCallback(() => {
     if (file.type === "folder") {
-      setCurrentFolderId(file.id);
+      if (vfsMode && vfsItem._vfsPath) {
+        navigateToVfsPath(vfsItem._vfsPath, currentDriverId ?? undefined);
+      } else {
+        setCurrentFolderId(file.id);
+      }
     } else {
       setPreviewFile({
         id: file.id,
@@ -232,7 +247,7 @@ export function FileCard({ file }: FileCardProps) {
         url: file.url,
       });
     }
-  }, [file, setCurrentFolderId, setPreviewFile]);
+  }, [file, setCurrentFolderId, setPreviewFile, vfsMode, vfsItem._vfsPath, navigateToVfsPath, currentDriverId]);
 
   const handleStar = useCallback(async () => {
     const wasStarred = file.starred;
@@ -832,6 +847,20 @@ export function FileCard({ file }: FileCardProps) {
                         {formatRelativeTime(file.updatedAt)}
                       </p>
                     </>
+                  )}
+                  {/* Driver badge for cross-driver files */}
+                  {file.driverId && file.driverId !== "local-default" && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <HardDrive className="w-2.5 h-2.5 text-emerald-500" />
+                      <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium">{currentDriverName || "Remote"}</span>
+                    </div>
+                  )}
+                  {/* VFS item indicator */}
+                  {vfsItem._isVfsItem && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Cloud className="w-2.5 h-2.5 text-sky-500" />
+                      <span className="text-[9px] text-sky-600 dark:text-sky-400 font-medium">VFS</span>
+                    </div>
                   )}
                 </div>
               )}

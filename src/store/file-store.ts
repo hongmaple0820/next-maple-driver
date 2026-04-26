@@ -22,6 +22,24 @@ export interface ActivityItem {
   timestamp: number;
 }
 
+export interface MountedDriver {
+  id: string;
+  name: string;
+  type: string;
+  mountPath: string;
+  status: string;
+  authStatus: string;
+  isReadOnly: boolean;
+  isDefault?: boolean;
+}
+
+export interface VfsBreadcrumbItem {
+  name: string;
+  path: string;
+  driverId?: string;
+  driverType?: string;
+}
+
 interface FileStore {
   // Navigation
   currentFolderId: string;
@@ -126,6 +144,23 @@ interface FileStore {
   vfsPath: string;
   setVfsMode: (mode: boolean) => void;
   setVfsPath: (path: string) => void;
+
+  // Mounted drivers info
+  mountedDrivers: MountedDriver[];
+  setMountedDrivers: (drivers: MountedDriver[]) => void;
+
+  // VFS breadcrumb
+  vfsBreadcrumb: VfsBreadcrumbItem[];
+  navigateToVfsPath: (path: string, driverId?: string, driverType?: string) => void;
+  navigateToVfsRoot: () => void;
+  navigateToVfsParent: () => void;
+
+  // Browse driver files via VFS
+  browseDriver: (driverId: string, driverName: string, driverType: string, mountPath: string) => void;
+
+  // Transfer panel
+  transferPanelOpen: boolean;
+  setTransferPanelOpen: (open: boolean) => void;
 
   // Cross-driver move dialog
   crossDriverMoveOpen: boolean;
@@ -334,6 +369,89 @@ export const useFileStore = create<FileStore>((set) => ({
   vfsPath: "/",
   setVfsMode: (mode) => set({ vfsMode: mode }),
   setVfsPath: (path) => set({ vfsPath: path }),
+
+  // Mounted drivers info
+  mountedDrivers: [],
+  setMountedDrivers: (drivers) => set({ mountedDrivers: drivers }),
+
+  // VFS breadcrumb
+  vfsBreadcrumb: [{ name: "Drivers", path: "/" }],
+  navigateToVfsPath: (path, driverId, driverType) =>
+    set((state) => {
+      const segments = path.split("/").filter(Boolean);
+      const breadcrumb: VfsBreadcrumbItem[] = [{ name: "Drivers", path: "/" }];
+      let currentPath = "";
+      for (const segment of segments) {
+        currentPath += "/" + segment;
+        breadcrumb.push({
+          name: segment,
+          path: currentPath,
+          driverId: currentPath === path ? driverId : undefined,
+          driverType: currentPath === path ? driverType : undefined,
+        });
+      }
+      return {
+        vfsPath: path,
+        vfsMode: true,
+        vfsBreadcrumb: breadcrumb,
+        section: "files" as Section,
+        currentFolderId: "root",
+        currentDriverId: driverId ?? null,
+        currentDriverName: segments[0] ?? null,
+        selectedFileIds: new Set(),
+        detailFile: null,
+      };
+    }),
+  navigateToVfsRoot: () =>
+    set({
+      vfsPath: "/",
+      vfsMode: true,
+      vfsBreadcrumb: [{ name: "Drivers", path: "/" }],
+      currentFolderId: "root",
+      currentDriverId: null,
+      currentDriverName: null,
+      selectedFileIds: new Set(),
+      detailFile: null,
+    }),
+  navigateToVfsParent: () =>
+    set((state) => {
+      const segments = state.vfsPath.split("/").filter(Boolean);
+      if (segments.length <= 0) return state;
+      const parentPath = "/" + segments.slice(0, -1).join("/");
+      const newBreadcrumb = state.vfsBreadcrumb.slice(0, -1);
+      if (newBreadcrumb.length === 0) {
+        newBreadcrumb.push({ name: "Drivers", path: "/" });
+      }
+      return {
+        vfsPath: parentPath || "/",
+        vfsBreadcrumb: newBreadcrumb,
+        currentDriverId: newBreadcrumb.length <= 1 ? null : state.currentDriverId,
+        currentDriverName: newBreadcrumb.length <= 1 ? null : state.currentDriverName,
+        selectedFileIds: new Set(),
+        detailFile: null,
+      };
+    }),
+
+  // Browse driver files via VFS
+  browseDriver: (driverId, driverName, driverType, mountPath) =>
+    set({
+      vfsMode: true,
+      vfsPath: mountPath,
+      currentDriverId: driverId,
+      currentDriverName: driverName,
+      section: "files" as Section,
+      currentFolderId: "root",
+      selectedFileIds: new Set(),
+      detailFile: null,
+      vfsBreadcrumb: [
+        { name: "Drivers", path: "/" },
+        { name: driverName, path: mountPath, driverId, driverType },
+      ],
+    }),
+
+  // Transfer panel
+  transferPanelOpen: false,
+  setTransferPanelOpen: (open) => set({ transferPanelOpen: open }),
 
   // Cross-driver move dialog
   crossDriverMoveOpen: false,

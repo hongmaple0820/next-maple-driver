@@ -137,27 +137,25 @@ export abstract class CloudDriverBase implements StorageDriver {
       }
     }
 
-    // Stub: In production, this would make an actual HTTP request
-    // const response = await fetch(oauthConfig.tokenUrl, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    //   body: params.toString(),
-    // });
-    // const data = await response.json();
+    const response = await fetch(oauthConfig.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
 
-    const mockResponse: OAuthTokenResponse = {
-      access_token: `mock_access_${this.type}_${Date.now()}`,
-      refresh_token: `mock_refresh_${this.type}_${Date.now()}`,
-      expires_in: 2592000, // 30 days
-      token_type: "Bearer",
-    };
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OAuth token exchange failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json() as OAuthTokenResponse;
 
     // Update stored tokens
-    this.accessToken = mockResponse.access_token;
-    this.refreshToken = mockResponse.refresh_token;
-    this.tokenExpiresAt = new Date(Date.now() + mockResponse.expires_in * 1000);
+    this.accessToken = data.access_token;
+    this.refreshToken = data.refresh_token || this.refreshToken;
+    this.tokenExpiresAt = new Date(Date.now() + (data.expires_in || 3600) * 1000);
 
-    return mockResponse;
+    return data;
   }
 
   /**
@@ -172,25 +170,24 @@ export abstract class CloudDriverBase implements StorageDriver {
       client_secret: oauthConfig.clientSecret,
     });
 
-    // Stub: In production, this would make an actual HTTP request
-    // const response = await fetch(oauthConfig.tokenUrl, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    //   body: params.toString(),
-    // });
-    // const data = await response.json();
+    const response = await fetch(oauthConfig.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
 
-    const mockResponse: OAuthTokenResponse = {
-      access_token: `mock_access_${this.type}_${Date.now()}`,
-      refresh_token: this.refreshToken,
-      expires_in: 2592000,
-      token_type: "Bearer",
-    };
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OAuth token refresh failed: ${response.status} ${errorText}`);
+    }
 
-    this.accessToken = mockResponse.access_token;
-    this.tokenExpiresAt = new Date(Date.now() + mockResponse.expires_in * 1000);
+    const data = await response.json() as OAuthTokenResponse;
 
-    return mockResponse;
+    this.accessToken = data.access_token;
+    this.refreshToken = data.refresh_token || this.refreshToken;
+    this.tokenExpiresAt = new Date(Date.now() + (data.expires_in || 3600) * 1000);
+
+    return data;
   }
 
   /**
@@ -203,6 +200,31 @@ export abstract class CloudDriverBase implements StorageDriver {
       }
     }
     return this.accessToken;
+  }
+
+  /**
+   * Make an authenticated API request with automatic token refresh.
+   * Subclasses should use this for all API calls.
+   */
+  protected async apiRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    const token = await this.ensureValidToken();
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    if (response.status === 401) {
+      // Token expired, try to refresh
+      await this.refreshAccessToken();
+      const newToken = this.accessToken;
+      headers.set("Authorization", `Bearer ${newToken}`);
+      return fetch(url, { ...options, headers });
+    }
+
+    return response;
   }
 
   // --- Authentication Status ---
@@ -244,62 +266,52 @@ export abstract class CloudDriverBase implements StorageDriver {
 
   async writeFile(path: string, data: Buffer): Promise<void> {
     void path; void data;
-    // Stub: In production, upload file to cloud provider
-    return Promise.resolve();
+    throw new Error(`writeFile not implemented for ${this.type} driver`);
   }
 
   async readFile(path: string): Promise<Buffer> {
     void path;
-    // Stub: In production, download file from cloud provider
-    return Buffer.from(`Mock file content from ${this.type} driver`);
+    throw new Error(`readFile not implemented for ${this.type} driver`);
   }
 
   async deleteFile(path: string): Promise<void> {
     void path;
-    // Stub: In production, delete file from cloud provider
-    return Promise.resolve();
+    throw new Error(`deleteFile not implemented for ${this.type} driver`);
   }
 
   async fileExists(path: string): Promise<boolean> {
     void path;
-    // Stub: In production, check if file exists on cloud provider
-    return false;
+    throw new Error(`fileExists not implemented for ${this.type} driver`);
   }
 
   async getFileSize(path: string): Promise<number> {
     void path;
-    // Stub: In production, get file size from cloud provider
-    return 0;
+    throw new Error(`getFileSize not implemented for ${this.type} driver`);
   }
 
   async createDir(path: string): Promise<void> {
     void path;
-    // Stub: In production, create directory on cloud provider
-    return Promise.resolve();
+    throw new Error(`createDir not implemented for ${this.type} driver`);
   }
 
   async deleteDir(path: string): Promise<void> {
     void path;
-    // Stub: In production, delete directory from cloud provider
-    return Promise.resolve();
+    throw new Error(`deleteDir not implemented for ${this.type} driver`);
   }
 
   async dirExists(path: string): Promise<boolean> {
     void path;
-    // Stub: In production, check if directory exists on cloud provider
-    return false;
+    throw new Error(`dirExists not implemented for ${this.type} driver`);
   }
 
   async listDir(path: string): Promise<FileInfo[]> {
     void path;
-    // Stub: In production, list directory contents from cloud provider
-    return [];
+    throw new Error(`listDir not implemented for ${this.type} driver`);
   }
 
   async getPublicUrl(path: string): Promise<string> {
     void path;
-    // Stub: In production, generate a public/share URL
-    return `https://${this.type}-example.com/shared/${path}`;
+    throw new Error(`getPublicUrl not implemented for ${this.type} driver`);
   }
 
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
@@ -317,8 +329,7 @@ export abstract class CloudDriverBase implements StorageDriver {
   }
 
   async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
-    // Stub: In production, query cloud provider for storage info
-    return { used: 0, total: 0, available: 0 };
+    throw new Error(`getStorageInfo not implemented for ${this.type} driver`);
   }
 }
 
@@ -364,6 +375,31 @@ export abstract class CookieAuthDriver extends CloudDriverBase {
       this.cookies = await this.login();
     }
     return this.cookies;
+  }
+
+  /**
+   * Make an authenticated API request using cookies.
+   * For cookie-based drivers that don't use OAuth tokens.
+   */
+  protected async cookieRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    await this.ensureValidToken();
+    const headers = new Headers(options.headers || {});
+    headers.set("Cookie", this.cookies);
+    headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    // If 401 or auth error, try to re-login
+    if (response.status === 401 || response.status === 403) {
+      this.cookies = await this.login();
+      headers.set("Cookie", this.cookies);
+      return fetch(url, { ...options, headers });
+    }
+
+    return response;
   }
 
   getAuthStatus(): CloudAuthStatus {

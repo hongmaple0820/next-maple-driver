@@ -1,7 +1,7 @@
 "use client";
 
-import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package, Server, Globe, Network, Upload, Download, Pencil, Share2, FolderInput, Copy, FolderPlus } from "lucide-react";
-import { useFileStore, type Section } from "@/store/file-store";
+import { Folder, Star, Trash2, HardDrive, Cloud, Menu, X, Clock, Settings, LogOut, Shield, Zap, Package, Server, Globe, Network, Upload, Download, Pencil, Share2, FolderInput, Copy, FolderPlus, ChevronDown, ChevronRight, RefreshCw, Unplug } from "lucide-react";
+import { useFileStore, type Section, type MountedDriver, type VfsBreadcrumbItem } from "@/store/file-store";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,9 +35,31 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
+// Driver type display names
+const driverDisplayNames: Record<string, string> = {
+  local: "本地存储",
+  baidu: "百度网盘",
+  aliyun: "阿里云盘",
+  onedrive: "OneDrive",
+  google: "Google Drive",
+  s3: "S3 存储",
+  webdav: "WebDAV",
+  ftp: "FTP",
+  mount: "挂载盘",
+  "115": "115网盘",
+  quark: "夸克网盘",
+};
+
 function DriverStatusSection() {
+  const {
+    currentDriverId, setCurrentDriverId, setSection, vfsMode, vfsPath,
+    setVfsMode, setVfsPath, browseDriver, mountedDrivers, setMountedDrivers,
+    navigateToVfsPath,
+  } = useFileStore();
   const { t } = useI18n();
-  const { currentDriverId, setCurrentDriverId, setSection, vfsMode, vfsPath, setVfsMode, setVfsPath } = useFileStore();
+  const [expandedDrivers, setExpandedDrivers] = useState<Set<string>>(new Set());
+
+  // Fetch drivers from admin API
   const { data: driversData } = useQuery({
     queryKey: ["sidebar-drivers"],
     queryFn: async () => {
@@ -52,7 +74,22 @@ function DriverStatusSection() {
     refetchInterval: 60000,
   });
 
-  // Fetch VFS mount points
+  // Fetch storage stats for usage bars
+  const { data: storageStats } = useQuery<StorageStats>({
+    queryKey: ["storage-stats"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/files/stats");
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 60000,
+  });
+
+  // Fetch VFS mount points with enriched data
   const { data: vfsData } = useQuery({
     queryKey: ["vfs-mounts"],
     queryFn: async () => {
@@ -67,12 +104,30 @@ function DriverStatusSection() {
     refetchInterval: 30000,
   });
 
-  const drivers: { id: string; name: string; type: string; status: string; healthy?: boolean }[] = driversData?.drivers || [];
+  // Update mounted drivers in store
+  const vfsMounts = vfsData?.mounts || [];
+  const dbDrivers: { id: string; name: string; type: string; status: string; healthy?: boolean }[] = driversData?.drivers || [];
 
   // Always show at least the local default driver
-  const displayDrivers = drivers.length > 0 ? drivers : [
-    { id: "default-local", name: "Local Storage", type: "local", status: "active", healthy: true },
+  const displayDrivers = dbDrivers.length > 0 ? dbDrivers : [
+    { id: "default-local", name: "本地存储", type: "local", status: "active", healthy: true },
   ];
+
+  // Sync mounted drivers to store
+  const mounted: MountedDriver[] = vfsMounts.map((mount: any) => ({
+    id: mount.driverId,
+    name: mount.driverName || driverDisplayNames[mount.driverType] || mount.driverType,
+    type: mount.driverType,
+    mountPath: mount.mountPath,
+    status: mount.driverStatus || mount.status || "active",
+    authStatus: mount.authStatus || "authorized",
+    isReadOnly: mount.isReadOnly || false,
+    isDefault: mount.driverId === "local-default",
+  }));
+
+  if (mounted.length > 0 && mountedDrivers.length !== mounted.length) {
+    setMountedDrivers(mounted);
+  }
 
   const getDriverIcon = (type: string) => {
     switch (type) {
@@ -91,110 +146,229 @@ function DriverStatusSection() {
     }
   };
 
-  const getDriverIconElement = (type: string, className?: string) => {
-    const Icon = getDriverIcon(type);
-    return <Icon className={className || "w-3.5 h-3.5 shrink-0"} />;
-  };
-
-  const getStatusColor = (driver: { status: string; healthy?: boolean }) => {
-    if (driver.status === "active" && driver.healthy !== false) return "bg-emerald-500";
-    if (driver.status === "error" || driver.healthy === false) return "bg-red-500";
+  const getStatusColor = (driver: { status: string; healthy?: boolean; authStatus?: string }) => {
+    if (driver.status === "active" && driver.healthy !== false && driver.authStatus !== "expired" && driver.authStatus !== "error") return "bg-emerald-500";
+    if (driver.status === "error" || driver.healthy === false || driver.authStatus === "error") return "bg-red-500";
+    if (driver.authStatus === "expired") return "bg-amber-500";
     return "bg-gray-400";
   };
 
-  const handleDriverClick = (driver: { id: string; name: string }) => {
-    if (driver.id === "default-local") {
-      setCurrentDriverId(null);
-    } else {
-      setCurrentDriverId(driver.id, driver.name);
-    }
-    setSection("files");
+  const handleDriverClick = (driver: { id: string; name: string; type: string }) => {
+    const isDefault = driver.id === "default-local" || driver.id === "local-default";
+    const driverId = isDefault ? "local-default" : driver.id;
+    const driverName = driver.name || driverDisplayNames[driver.type] || driver.type;
+
+    // Find mount path for this driver
+    const mountInfo = vfsMounts.find((m: any) => m.driverId === driverId);
+    const mountPath = mountInfo?.mountPath || (isDefault ? "/local" : `/${driver.type}-${driver.id.substring(0, 8)}`);
+
+    // Toggle expand
+    setExpandedDrivers((prev) => {
+      const next = new Set(prev);
+      if (next.has(driverId)) {
+        next.delete(driverId);
+      } else {
+        next.add(driverId);
+      }
+      return next;
+    });
+
+    // Browse this driver's files
+    browseDriver(driverId, driverName, driver.type, mountPath);
   };
 
-  const navigateToVFSPath = (mountPath: string) => {
+  const handleVfsBrowse = (mountPath: string, driverId: string, driverType: string) => {
     setVfsMode(true);
     setVfsPath(mountPath);
     setSection("files");
   };
 
-  const currentVFSPath = vfsMode ? vfsPath : "";
+  const isDriverActive = (driverId: string) => {
+    const normalizedId = driverId === "default-local" ? "local-default" : driverId;
+    return currentDriverId === normalizedId || (currentDriverId === null && normalizedId === "local-default");
+  };
 
   return (
     <div className="border-t border-border/40 mx-3 pt-3 pb-1">
-      <div className="px-2 mb-1.5">
+      <div className="px-2 mb-1.5 flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{t.app.drivers}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium">
+              {vfsMounts.length} {vfsMounts.length === 1 ? "mount" : "mounts"}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {vfsMounts.length} storage driver{vfsMounts.length !== 1 ? "s" : ""} mounted in VFS
+          </TooltipContent>
+        </Tooltip>
       </div>
       <div className="space-y-0.5">
-        {displayDrivers.slice(0, 4).map((driver) => {
+        {displayDrivers.slice(0, 5).map((driver) => {
           const Icon = getDriverIcon(driver.type);
-          const isActive = currentDriverId === driver.id || (currentDriverId === null && driver.id === "default-local");
+          const isActive = isDriverActive(driver.id);
+          const isExpanded = expandedDrivers.has(driver.id === "default-local" ? "local-default" : driver.id);
+          const driverId = driver.id === "default-local" ? "local-default" : driver.id;
+          const mountInfo = vfsMounts.find((m: any) => m.driverId === driverId);
+          const displayName = driver.name || driverDisplayNames[driver.type] || driver.type;
+          const mountPath = mountInfo?.mountPath || (driverId === "local-default" ? "/local" : `/${driver.type}`);
+          const authStatus = (mountInfo as any)?.authStatus || "authorized";
+
           return (
-            <button
-              key={driver.id}
-              onClick={() => handleDriverClick(driver)}
-              className={cn(
-                "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-all duration-200 cursor-pointer",
-                isActive
-                  ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
-                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-            >
-              <div className="relative">
-                <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive && "text-emerald-600 dark:text-emerald-400")} />
-                <div className={cn(
-                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
-                  getStatusColor(driver)
-                )} />
-              </div>
-              <span className="truncate flex-1 text-left">{driver.name}</span>
-              {isActive && (
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              )}
-              {!isActive && (
-                <span className={cn(
-                  "text-[9px] font-medium",
-                  driver.status === "active" && driver.healthy !== false ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
-                )}>
-                  {driver.status === "active" && driver.healthy !== false ? t.app.driverActive : driver.status === "error" ? t.app.driverError : t.app.driverInactive}
-                </span>
-              )}
-            </button>
+            <div key={driver.id}>
+              <button
+                onClick={() => handleDriverClick(driver)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-all duration-200 cursor-pointer",
+                  isActive
+                    ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <div className="relative">
+                  <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive && "text-emerald-600 dark:text-emerald-400")} />
+                  <div className={cn(
+                    "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background",
+                    getStatusColor({ status: driver.status, healthy: driver.healthy, authStatus })
+                  )} />
+                </div>
+                <span className="truncate flex-1 text-left">{displayName}</span>
+                {isActive && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                )}
+                {!isActive && (
+                  <span className={cn(
+                    "text-[9px] font-medium",
+                    driver.status === "active" && driver.healthy !== false ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+                  )}>
+                    {authStatus === "expired" ? "Expired" :
+                     authStatus === "error" ? "Error" :
+                     driver.status === "active" && driver.healthy !== false ? t.app.driverActive : driver.status === "error" ? t.app.driverError : t.app.driverInactive}
+                  </span>
+                )}
+                {/* Expand/collapse chevron */}
+                <motion.div
+                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="shrink-0"
+                >
+                  <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                </motion.div>
+              </button>
+
+              {/* Expanded driver info */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="ml-5 pl-3 border-l border-border/30 space-y-0.5 py-1">
+                      {/* Mount path */}
+                      <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-muted-foreground">
+                        <FolderInput className="w-2.5 h-2.5" />
+                        <span className="truncate">Mount: {mountPath}</span>
+                      </div>
+
+                      {/* Read-only badge */}
+                      {mountInfo?.isReadOnly && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-amber-600">
+                          <Unplug className="w-2.5 h-2.5" />
+                          <span>Read-only</span>
+                        </div>
+                      )}
+
+                      {/* Browse files button */}
+                      <button
+                        onClick={() => handleVfsBrowse(mountPath, driverId, driver.type)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 w-full text-[10px] rounded transition-colors",
+                          "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                        )}
+                      >
+                        <Folder className="w-2.5 h-2.5" />
+                        <span>Browse Files</span>
+                      </button>
+
+                      {/* Driver type info */}
+                      <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-muted-foreground/60">
+                        <HardDrive className="w-2.5 h-2.5" />
+                        <span className="capitalize">{driverDisplayNames[driver.type] || driver.type}</span>
+                      </div>
+
+                      {/* Storage usage bar */}
+                      {(() => {
+                        const used = storageStats?.usedBytes ?? 0;
+                        const total = storageStats?.totalBytes ?? 10737418240;
+                        const pct = total > 0 ? (used / total) * 100 : 0;
+                        return (
+                          <div className="px-2 py-1 space-y-0.5">
+                            <div className="flex items-center justify-between text-[9px] text-muted-foreground/70">
+                              <span>Storage</span>
+                              <span>{formatFileSize(used)}/{formatFileSize(total)}</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-500",
+                                  pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500"
+                                )}
+                                style={{ width: `${Math.min(pct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           );
         })}
-        {drivers.length > 4 && (
-          <p className="text-[10px] text-muted-foreground/60 px-2">+{drivers.length - 4} more</p>
+        {displayDrivers.length > 5 && (
+          <p className="text-[10px] text-muted-foreground/60 px-2">+{displayDrivers.length - 5} more</p>
         )}
       </div>
 
       {/* VFS Mount Points */}
-      {vfsData?.mounts && vfsData.mounts.length > 0 && (
+      {vfsMounts.length > 0 && (
         <div className="mt-2 space-y-0.5">
-          <button className="flex items-center gap-2 w-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-            <HardDrive className="w-3 h-3" />
-            Storage Drives
-          </button>
+          <div className="flex items-center gap-1.5 px-2 py-1">
+            <HardDrive className="w-3 h-3 text-muted-foreground/60" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">VFS Mounts</span>
+          </div>
           <AnimatePresence>
-            {vfsData.mounts.map((mount: any) => (
-              <motion.button
-                key={mount.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-md",
-                  "hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer",
-                  currentVFSPath === mount.mountPath && "bg-accent text-accent-foreground"
-                )}
-                onClick={() => navigateToVFSPath(mount.mountPath)}
-              >
-                {getDriverIconElement(mount.driverType, "w-3.5 h-3.5 shrink-0")}
-                <span className="truncate">{mount.mountPath.replace(/^\/+/, '')}</span>
-                <span className={cn(
-                  "ml-auto w-1.5 h-1.5 rounded-full shrink-0",
-                  mount.isReadOnly ? "bg-amber-500" : "bg-emerald-500"
-                )} />
-              </motion.button>
-            ))}
+            {vfsMounts.map((mount: any) => {
+              const isCurrentVfsPath = vfsMode && vfsPath === mount.mountPath;
+              return (
+                <motion.button
+                  key={mount.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "flex items-center gap-2 w-full px-2 py-1.5 text-[11px] rounded-md transition-all",
+                    "hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground cursor-pointer",
+                    isCurrentVfsPath && "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                  )}
+                  onClick={() => navigateToVfsPath(mount.mountPath, mount.driverId, mount.driverType)}
+                >
+                  {(() => {
+                    const MIcon = getDriverIcon(mount.driverType);
+                    return <MIcon className="w-3.5 h-3.5 shrink-0" />;
+                  })()}
+                  <span className="truncate flex-1 text-left">{mount.mountPath.replace(/^\/+/, '')}</span>
+                  <span className={cn(
+                    "ml-auto w-1.5 h-1.5 rounded-full shrink-0",
+                    mount.isReadOnly ? "bg-amber-500" : "bg-emerald-500"
+                  )} />
+                </motion.button>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}
@@ -502,7 +676,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Storage Stats - More prominent */}
       <div className="border-t border-border/40" data-storage-section>
-        <button 
+        <button
           className="w-full px-4 py-4 hover:bg-sidebar-accent/50 transition-colors text-left"
           onClick={() => setShowStorageDetail(!showStorageDetail)}
         >
@@ -552,7 +726,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </p>
           </div>
         </button>
-        
+
         {/* Storage detail panel - expandable with animation */}
         <AnimatePresence initial={false}>
           {showStorageDetail && stats?.byType && (

@@ -19,6 +19,12 @@ import {
   X,
   ShieldCheck,
   AlertCircle,
+  HardDrive,
+  Pause,
+  Play,
+  RotateCcw,
+  ArrowRightLeft,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +34,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "next-auth/react";
+import { cn } from "@/lib/utils";
 import QRCode from "qrcode";
+
+// Cross-driver transfer task interface
+interface CrossDriverTransferTask {
+  id: string;
+  status: string;
+  operation: string;
+  totalFiles: number;
+  totalBytes: number;
+  progress: number;
+  currentFile: string | null;
+  speed: number;
+  startedAt: number | null;
+  completedAt: number | null;
+}
 
 interface TransferItem {
   id: string;
@@ -94,6 +116,21 @@ export function TransferPanel() {
     },
     enabled: isAuth,
     refetchInterval: 15000,
+  });
+
+  // Fetch active cross-driver transfer tasks
+  const { data: crossDriverTransfers } = useQuery<{ tasks: CrossDriverTransferTask[] }>({
+    queryKey: ["cross-driver-transfers"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/files/cross-driver-transfer/vfs");
+        if (!res.ok) return { tasks: [] };
+        return res.json();
+      } catch {
+        return { tasks: [] };
+      }
+    },
+    refetchInterval: 2000, // Poll frequently for active transfers
   });
 
   const handleUpload = useCallback(async (file: File) => {
@@ -510,6 +547,131 @@ export function TransferPanel() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Cross-Driver Transfers Section */}
+        {crossDriverTransfers && crossDriverTransfers.tasks && crossDriverTransfers.tasks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
+                  Cross-Driver Transfers
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {crossDriverTransfers.tasks.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="max-h-96">
+                  <div className="space-y-3">
+                    {crossDriverTransfers.tasks.map((task) => {
+                      const isActive = task.status === "running" || task.status === "pending";
+                      const isComplete = task.status === "completed";
+                      const isFailed = task.status === "failed" || task.status === "cancelled";
+
+                      const formatSpeed = (bytesPerSec: number) => {
+                        if (bytesPerSec <= 0) return "0 B/s";
+                        if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`;
+                        if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`;
+                        return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+                      };
+
+                      const formatDuration = (startedAt: number | null, completedAt: number | null) => {
+                        if (!startedAt) return "—";
+                        const end = completedAt || Date.now();
+                        const seconds = Math.floor((end - startedAt) / 1000);
+                        if (seconds < 60) return `${seconds}s`;
+                        const minutes = Math.floor(seconds / 60);
+                        return `${minutes}m ${seconds % 60}s`;
+                      };
+
+                      return (
+                        <motion.div
+                          key={task.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className={cn(
+                            "p-3 rounded-lg border transition-colors",
+                            isActive && "border-emerald-500/30 bg-emerald-500/5",
+                            isComplete && "border-emerald-500/20",
+                            isFailed && "border-red-500/20 bg-red-500/5"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                              isActive && "bg-emerald-500/10",
+                              isComplete && "bg-emerald-500/10",
+                              isFailed && "bg-red-500/10"
+                            )}>
+                              {isActive ? (
+                                <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                              ) : isComplete ? (
+                                <Check className="w-4 h-4 text-emerald-600" />
+                              ) : (
+                                <X className="w-4 h-4 text-red-500" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">
+                                  {task.operation === "move" ? "Move" : "Copy"} · {task.totalFiles} file{task.totalFiles !== 1 ? "s" : ""}
+                                </span>
+                                <Badge variant={isActive ? "default" : isComplete ? "secondary" : "destructive"} className="h-4 px-1.5 text-[9px]">
+                                  {task.status}
+                                </Badge>
+                              </div>
+                              {task.currentFile && isActive && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {task.currentFile}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-3 mt-1.5">
+                                <Progress value={task.progress} className="h-1.5 flex-1" />
+                                <span className="text-[10px] text-muted-foreground font-mono w-8 text-right">{task.progress}%</span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+                                {task.totalBytes > 0 && (
+                                  <span>{formatFileSize(task.totalBytes)}</span>
+                                )}
+                                {isActive && task.speed > 0 && (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">{formatSpeed(task.speed)}</span>
+                                )}
+                                <span>{formatDuration(task.startedAt, task.completedAt)}</span>
+                              </div>
+                            </div>
+                            {isActive && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={async () => {
+                                    try {
+                                      await fetch(`/api/files/cross-driver-transfer/${task.id}`, { method: "DELETE" });
+                                      queryClient.invalidateQueries({ queryKey: ["cross-driver-transfers"] });
+                                    } catch { /* silent */ }
+                                  }}
+                                  title="Cancel transfer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Transfer List (authenticated only) */}
         {isAuth && (

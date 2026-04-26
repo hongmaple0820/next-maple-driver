@@ -9,29 +9,35 @@ import type {
 
 /**
  * OneDrive Driver
- * 
+ *
  * Uses Microsoft Graph API with OAuth2 for authentication.
  * API docs: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/
- * 
+ *
  * OAuth2 Flow:
  * 1. User visits Microsoft authorization URL
  * 2. Microsoft redirects back with authorization code
  * 3. Exchange code for access token + refresh token
  * 4. Use access token to call Microsoft Graph API
- * 
+ *
  * Supports both personal (Microsoft account) and work/school (Azure AD) accounts.
  * The tenantId config field controls the account type:
  *   - "consumers" for personal Microsoft accounts only
  *   - "organizations" for work/school accounts only
  *   - "common" for both (default)
  *   - A specific tenant GUID for single-tenant Azure AD apps
+ *
+ * OneDrive uses path-based access via the Graph API:
+ *   - GET /me/drive/root:/{path}:/children — list directory
+ *   - PUT /me/drive/root:/{path}:/content — upload small file
+ *   - GET /me/drive/root:/{path}:/content — download file
+ *   - DELETE /me/drive/root:/{path} — delete file/folder
+ *   - POST /me/drive/root:/{parent-path}:/children — create folder
  */
 export class OneDriveDriver extends CloudDriverBase {
   readonly type = "onedrive";
 
   // Microsoft Graph API endpoints
   private static readonly GRAPH_API = "https://graph.microsoft.com/v1.0";
-  private static readonly GRAPH_API_BETA = "https://graph.microsoft.com/beta";
 
   private tenantId: string;
 
@@ -69,7 +75,47 @@ export class OneDriveDriver extends CloudDriverBase {
     return 150;
   }
 
-  // --- OneDrive-specific API stubs ---
+  /**
+   * Normalize a path for OneDrive Graph API.
+   * Removes leading/trailing slashes and encodes properly.
+   */
+  private normalizePath(path: string): string {
+    return path.replace(/^\/+|\/+$/g, "");
+  }
+
+  /**
+   * Get the Graph API path for a given file/folder path.
+   * For root: /me/drive/root
+   * For a path: /me/drive/root:/{path}:
+   */
+  private getItemPath(path: string): string {
+    const normalized = this.normalizePath(path);
+    if (!normalized) {
+      return "/me/drive/root";
+    }
+    return `/me/drive/root:/${normalized}:`;
+  }
+
+  /**
+   * Convert a Microsoft Graph API DriveItem to FileInfo.
+   */
+  private driveItemToFileInfo(item: DriveItem, parentPath: string): FileInfo {
+    const name = item.name || "unknown";
+    return {
+      name,
+      size: item.size || 0,
+      isDir: !!item.folder,
+      lastModified: item.lastModifiedDateTime ? new Date(item.lastModifiedDateTime) : undefined,
+      created: item.createdDateTime ? new Date(item.createdDateTime) : undefined,
+      id: item.id,
+      parentPath,
+      mimeType: item.file?.mimeType,
+      downloadUrl: item["@content.downloadUrl"],
+      thumbnailUrl: item.thumbnails?.[0]?.medium?.url,
+    };
+  }
+
+  // --- OneDrive Graph API implementations ---
 
   /**
    * List files in a directory on OneDrive.
@@ -77,10 +123,42 @@ export class OneDriveDriver extends CloudDriverBase {
    */
   async listDir(path: string): Promise<FileInfo[]> {
     return this.withRateLimit(async () => {
-      // Stub: In production, call Microsoft Graph API
-      // GET https://graph.microsoft.com/v1.0/me/drive/root:/{path}:/children
-      void path;
-      return [];
+      const normalizedPath = this.normalizePath(path);
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}/children?$top=200&$select=id,name,size,folder,file,lastModifiedDateTime,createdDateTime,@content.downloadUrl,thumbnails`;
+
+      const response = await this.apiRequest(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OneDrive listDir failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json() as {
+        value?: DriveItem[];
+        "@odata.nextLink"?: string;
+      };
+
+      const items = data.value || [];
+      let allItems = items.map((item) => this.driveItemToFileInfo(item, normalizedPath));
+
+      // Handle pagination
+      let nextLink = data["@odata.nextLink"];
+      while (nextLink) {
+        const nextResponse = await this.apiRequest(nextLink);
+        if (!nextResponse.ok) {
+          break;
+        }
+        const nextData = await nextResponse.json() as {
+          value?: DriveItem[];
+          "@odata.nextLink"?: string;
+        };
+        allItems = allItems.concat(
+          (nextData.value || []).map((item) => this.driveItemToFileInfo(item, normalizedPath))
+        );
+        nextLink = nextData["@odata.nextLink"];
+      }
+
+      return allItems;
     });
   }
 
@@ -91,11 +169,79 @@ export class OneDriveDriver extends CloudDriverBase {
    */
   async writeFile(path: string, data: Buffer): Promise<void> {
     return this.withRateLimit(async () => {
-      // Stub: In production, upload via Graph API
-      // Small files: PUT /me/drive/root:/{path}:/content
-      // Large files: POST /me/drive/root:/{path}:/createUploadSession
-      void path; void data;
+      const itemPath = this.getItemPath(path);
+
+      if (data.length < 4 * 1024 * 1024) {
+        // Small file: single PUT
+        const url = `${OneDriveDriver.GRAPH_API}${itemPath}:/content`;
+        const response = await this.apiRequest(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: data,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`OneDrive upload failed: ${response.status} ${errorText}`);
+        }
+      } else {
+        // Large file: resumable upload session
+        await this.uploadLargeFile(itemPath, data);
+      }
     });
+  }
+
+  /**
+   * Upload a large file using a resumable upload session.
+   */
+  private async uploadLargeFile(itemPath: string, data: Buffer): Promise<void> {
+    // Step 1: Create upload session
+    const sessionUrl = `${OneDriveDriver.GRAPH_API}${itemPath}:/createUploadSession`;
+    const sessionResponse = await this.apiRequest(sessionUrl, {
+      method: "POST",
+      body: JSON.stringify({
+        item: {
+          "@microsoft.graph.conflictBehavior": "overwrite",
+        },
+      }),
+    });
+
+    if (!sessionResponse.ok) {
+      const errorText = await sessionResponse.text();
+      throw new Error(`OneDrive createUploadSession failed: ${sessionResponse.status} ${errorText}`);
+    }
+
+    const sessionData = await sessionResponse.json() as {
+      uploadUrl?: string;
+    };
+
+    if (!sessionData.uploadUrl) {
+      throw new Error("OneDrive createUploadSession: no upload URL returned");
+    }
+
+    // Step 2: Upload chunks (10MB each)
+    const chunkSize = 10 * 1024 * 1024;
+    const totalChunks = Math.ceil(data.length / chunkSize);
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, data.length);
+      const chunkData = data.subarray(start, end);
+
+      const chunkResponse = await fetch(sessionData.uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Length": String(end - start),
+          "Content-Range": `bytes ${start}-${end - 1}/${data.length}`,
+        },
+        body: chunkData,
+      });
+
+      if (!chunkResponse.ok) {
+        const errorText = await chunkResponse.text();
+        throw new Error(`OneDrive chunk upload failed at ${start}-${end}: ${chunkResponse.status} ${errorText}`);
+      }
+    }
   }
 
   /**
@@ -104,61 +250,171 @@ export class OneDriveDriver extends CloudDriverBase {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      // Stub: In production, download via Graph API
-      // GET https://graph.microsoft.com/v1.0/me/drive/root:/{path}:/content
-      void path;
-      return Buffer.from("Mock OneDrive file content");
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}:/content`;
+
+      const response = await this.apiRequest(url, {
+        redirect: "manual", // Don't follow redirects automatically
+      });
+
+      // OneDrive returns a 302 redirect to the download URL
+      if (response.status === 302) {
+        const redirectUrl = response.headers.get("Location");
+        if (!redirectUrl) {
+          throw new Error("OneDrive readFile: redirect without Location header");
+        }
+
+        const downloadResponse = await fetch(redirectUrl);
+        if (!downloadResponse.ok) {
+          throw new Error(`OneDrive download failed: ${downloadResponse.status}`);
+        }
+
+        const arrayBuffer = await downloadResponse.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OneDrive readFile failed: ${response.status} ${errorText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
     });
   }
 
+  /**
+   * Delete a file from OneDrive.
+   * Uses Microsoft Graph API: DELETE /me/drive/root:/{path}
+   */
   async deleteFile(path: string): Promise<void> {
     return this.withRateLimit(async () => {
-      // Stub: DELETE /me/drive/root:/{path}
-      void path;
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}`;
+
+      const response = await this.apiRequest(url, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OneDrive deleteFile failed: ${response.status} ${errorText}`);
+      }
     });
   }
 
+  /**
+   * Check if a file exists on OneDrive.
+   */
   async fileExists(path: string): Promise<boolean> {
     return this.withRateLimit(async () => {
-      // Stub: GET /me/drive/root:/{path}
-      void path;
-      return false;
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}?$select=id`;
+
+      const response = await this.apiRequest(url);
+      return response.ok;
     });
   }
 
+  /**
+   * Get file size from OneDrive.
+   */
   async getFileSize(path: string): Promise<number> {
     return this.withRateLimit(async () => {
-      void path;
-      return 0;
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}?$select=size`;
+
+      const response = await this.apiRequest(url);
+      if (!response.ok) {
+        throw new Error(`OneDrive getFileSize failed: ${response.status}`);
+      }
+
+      const data = await response.json() as { size?: number };
+      return data.size || 0;
     });
   }
 
+  /**
+   * Create a directory on OneDrive.
+   * Uses POST /me/drive/root:/{parent-path}:/children
+   */
   async createDir(path: string): Promise<void> {
     return this.withRateLimit(async () => {
-      // Stub: POST /me/drive/root:/{parent-path}:/children with { "name": "dir", "folder": {} }
-      void path;
+      const normalizedPath = this.normalizePath(path);
+      const lastSlash = normalizedPath.lastIndexOf("/");
+      const dirName = normalizedPath.substring(lastSlash + 1);
+      const parentPath = normalizedPath.substring(0, lastSlash);
+
+      const parentItemPath = this.getItemPath(parentPath);
+      const url = `${OneDriveDriver.GRAPH_API}${parentItemPath}/children`;
+
+      const response = await this.apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({
+          name: dirName,
+          folder: {},
+          "@microsoft.graph.conflictBehavior": "rename",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OneDrive createDir failed: ${response.status} ${errorText}`);
+      }
     });
   }
 
+  /**
+   * Delete a directory from OneDrive.
+   * Uses the same DELETE endpoint as files.
+   */
   async deleteDir(path: string): Promise<void> {
-    return this.withRateLimit(async () => {
-      // Stub: DELETE /me/drive/root:/{path}
-      void path;
-    });
+    return this.deleteFile(path);
   }
 
+  /**
+   * Check if a directory exists on OneDrive.
+   */
   async dirExists(path: string): Promise<boolean> {
     return this.withRateLimit(async () => {
-      void path;
-      return false;
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}?$select=id,folder`;
+
+      const response = await this.apiRequest(url);
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json() as { folder?: Record<string, unknown> };
+      return !!data.folder;
     });
   }
 
+  /**
+   * Get storage info from OneDrive.
+   * Uses GET /me/drive
+   */
   async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
     return this.withRateLimit(async () => {
-      // Stub: In production, call GET /me/drive
-      // OneDrive free tier: 5GB
-      return { used: 0, total: 5368709120, available: 5368709120 }; // 5GB
+      const url = `${OneDriveDriver.GRAPH_API}/me/drive?$select=quota`;
+
+      const response = await this.apiRequest(url);
+      if (!response.ok) {
+        throw new Error(`OneDrive getStorageInfo failed: ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        quota?: {
+          used?: number;
+          total?: number;
+          remaining?: number;
+        };
+      };
+
+      const used = data.quota?.used || 0;
+      const total = data.quota?.total || 5368709120;
+      const available = data.quota?.remaining || (total - used);
+      return { used, total, available };
     });
   }
 
@@ -172,6 +428,21 @@ export class OneDriveDriver extends CloudDriverBase {
     }
     return { healthy: false, message: "OneDrive requires authorization" };
   }
+}
+
+/**
+ * Microsoft Graph API DriveItem type
+ */
+interface DriveItem {
+  id?: string;
+  name?: string;
+  size?: number;
+  folder?: Record<string, unknown>;
+  file?: { mimeType?: string };
+  lastModifiedDateTime?: string;
+  createdDateTime?: string;
+  "@content.downloadUrl"?: string;
+  thumbnails?: Array<{ medium?: { url?: string } }>;
 }
 
 export const onedriveDriverFactory: StorageDriverFactory = {

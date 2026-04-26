@@ -31,7 +31,9 @@ export function FileGrid() {
     setCreateFolderOpen, setSortBy, setSortDirection, clipboard, setClipboard, setSearchResultCount,
     compactMode, showExtensions, setBatchRenameOpen, colorLabelFilter,
     setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
-    currentDriverId,
+    currentDriverId, currentDriverName,
+    vfsMode, vfsPath, setVfsMode, setVfsPath,
+    navigateToVfsPath, navigateToVfsRoot, navigateToVfsParent,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -41,8 +43,31 @@ export function FileGrid() {
   const isSearch = searchQuery.trim().length > 0;
 
   const { data: files = [], isLoading } = useQuery<FileItem[]>({
-    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId],
+    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId, vfsMode, vfsPath],
     queryFn: async () => {
+      if (vfsMode && section === "files") {
+        // VFS browsing mode - fetch from VFS API
+        const res = await fetch(`/api/vfs?action=list&path=${encodeURIComponent(vfsPath)}`);
+        if (!res.ok) throw new Error("Failed to list VFS path");
+        const data = await res.json();
+        // Convert VFS FileInfo to FileItem format
+        return (data.items || []).map((item: any) => ({
+          id: item.id || item.name,
+          name: item.name,
+          type: item.isDir ? "folder" : "file",
+          size: item.size || 0,
+          mimeType: item.mimeType || "",
+          parentId: vfsPath,
+          driverId: currentDriverId,
+          isTrashed: false,
+          starred: false,
+          colorLabel: "",
+          createdAt: item.created || new Date().toISOString(),
+          updatedAt: item.lastModified || new Date().toISOString(),
+          _isVfsItem: true,
+          _vfsPath: vfsPath + "/" + item.name,
+        } as FileItem & { _isVfsItem?: boolean; _vfsPath?: string }));
+      }
       if (isSearch) {
         const res = await fetch(`/api/files/search?q=${encodeURIComponent(searchQuery)}`);
         if (!res.ok) throw new Error("Search failed");
@@ -104,10 +129,10 @@ export function FileGrid() {
   });
 
   // Update allFileIds whenever sorted files change
+  const allFileIdsValue = sortedFiles.map(f => f.id);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAllFileIds(sortedFiles.map(f => f.id));
-  }, [files, typeFilter, colorLabelFilter, sortBy, sortDirection]);
+    setAllFileIds(allFileIdsValue);
+  }, [allFileIdsValue]);
 
   // Update search result count
   useEffect(() => {
@@ -230,6 +255,12 @@ export function FileGrid() {
     setSortBy(field);
     setSortDirection("asc");
   }, [setSortBy, setSortDirection]);
+
+  // Handle VFS folder navigation
+  const handleVfsFolderClick = useCallback((fileName: string) => {
+    const newPath = vfsPath === "/" ? `/${fileName}` : `${vfsPath}/${fileName}`;
+    navigateToVfsPath(newPath, currentDriverId ?? undefined);
+  }, [vfsPath, navigateToVfsPath, currentDriverId]);
 
   // Hidden file input for upload
   const hiddenFileInput = (

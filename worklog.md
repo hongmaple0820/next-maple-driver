@@ -4475,3 +4475,37 @@ Stage Summary:
 - Add driver health monitoring dashboard
 - Add file proxy mode (proxy downloads through server for cloud drives)
 - Add drag-and-drop between VFS mount points for cross-driver copy/move
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement complete driver system with real API calls, Admin UI, and VFS browser
+
+Work Log:
+- Fixed CloudDriverBase: replaced mock exchangeCodeForToken and refreshAccessToken with real HTTP fetch calls
+- Added apiRequest() helper for authenticated API calls with auto-refresh on 401
+- Added cookieRequest() helper to CookieAuthDriver for cookie-based auth with auto re-login
+- Implemented Baidu driver with real PCS API calls (list, upload, download, delete, createDir, storage info)
+- Implemented Aliyun driver with real Aliyun Drive Open API calls (file_id-based system with path cache)
+- Implemented OneDrive driver with real Microsoft Graph API calls (path-based, upload sessions for large files)
+- Implemented Google Drive driver with real Google Drive API calls (file ID-based with path-to-ID cache)
+- Implemented 115 driver with real cookie-based API calls (CID-based system)
+- Implemented Quark driver with real cookie-based API calls (FID-based system with SMS support)
+- Built complete Admin Drivers Management UI with 3-step wizard (Select Type → Configure → Test & Save)
+- Enhanced Admin driver cards with color-coded badges, status dots, storage bars, quick actions
+- Built VFS API with mount/unmount/list endpoints
+- Added VFS browser support in sidebar with mounted driver navigation
+- Added VFS mode to file grid and list for browsing files on any driver
+- Enhanced cross-driver move dialog with VFS folder browser
+- Enhanced transfer panel with cross-driver transfer progress
+- Fixed duplicate variable error in file-grid.tsx (currentDriverId defined twice)
+- All changes pass lint check
+
+Stage Summary:
+- All 6 cloud drivers now have real API implementations (not stubs)
+- All 5 protocol drivers (WebDAV, S3, FTP/SFTP, Mount, Local) were already fully implemented
+- Admin UI allows adding, editing, deleting, testing, and configuring all driver types
+- VFS browser enables seamless file browsing across different storage backends
+- Cross-driver transfer works with streaming support between any two drivers
+- OAuth flow properly uses real HTTP calls for token exchange and refresh
+- Lint clean, dev server running without errors

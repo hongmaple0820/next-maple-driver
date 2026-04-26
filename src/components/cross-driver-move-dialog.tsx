@@ -119,9 +119,48 @@ export function CrossDriverMoveDialog() {
   });
 
   // Fetch folders in the browsing directory for the target driver
+  // Use VFS API for non-local drivers, regular API for local
   const { data: foldersData } = useQuery<FolderItem[]>({
     queryKey: ["cross-driver-folders", selectedDriverId, browsingFolderId],
     queryFn: async () => {
+      // For non-local drivers, try VFS first
+      if (selectedDriverId && selectedDriverId !== "local-default") {
+        const driverInfo = drivers.find(d => d.id === selectedDriverId);
+        const mountPath = driverInfo?.mountPath || `/${selectedDriverId}`;
+        // If browsing root, list mount point
+        if (browsingFolderId === "root") {
+          const vfsRes = await fetch(`/api/vfs?action=list&path=${encodeURIComponent(mountPath)}`);
+          if (vfsRes.ok) {
+            const vfsData = await vfsRes.json();
+            return (vfsData.items || [])
+              .filter((item: any) => item.isDir)
+              .map((item: any) => ({
+                id: item.id || item.name,
+                name: item.name,
+                parentId: mountPath,
+                childrenCount: 0,
+              }));
+          }
+        }
+        // Try to list VFS sub-paths for deeper browsing
+        const vfsPath = browsingFolderId !== "root" && browsingFolderId !== mountPath
+          ? `${mountPath}/${browsingFolderId}`
+          : mountPath;
+        const vfsRes = await fetch(`/api/vfs?action=list&path=${encodeURIComponent(vfsPath)}`);
+        if (vfsRes.ok) {
+          const vfsData = await vfsRes.json();
+          return (vfsData.items || [])
+            .filter((item: any) => item.isDir)
+            .map((item: any) => ({
+              id: item.id || item.name,
+              name: item.name,
+              parentId: vfsPath,
+              childrenCount: 0,
+            }));
+        }
+      }
+
+      // Fallback to regular files API
       const params = new URLSearchParams();
       params.set("parentId", browsingFolderId);
       params.set("trashed", "false");

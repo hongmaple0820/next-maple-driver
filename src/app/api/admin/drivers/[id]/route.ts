@@ -26,7 +26,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, status, priority, isDefault, basePath, config, authType, authStatus, mountPath, isReadOnly } = body;
+    const { name, status, priority, isDefault, basePath, config, authType, authStatus, mountPath, isReadOnly, accessToken, refreshToken, tokenExpiresAt } = body;
 
     const existing = await db.storageDriver.findUnique({ where: { id } });
     if (!existing) {
@@ -52,11 +52,17 @@ export async function PUT(
     if (authStatus !== undefined) updateData.authStatus = authStatus;
     if (mountPath !== undefined) updateData.mountPath = mountPath;
     if (isReadOnly !== undefined) updateData.isReadOnly = isReadOnly;
+    if (accessToken !== undefined) updateData.accessToken = accessToken;
+    if (refreshToken !== undefined) updateData.refreshToken = refreshToken;
+    if (tokenExpiresAt !== undefined) updateData.tokenExpiresAt = tokenExpiresAt ? new Date(tokenExpiresAt) : null;
 
     const driver = await db.storageDriver.update({
       where: { id },
       data: updateData,
     });
+
+    // Invalidate VFS mount cache after driver changes
+    invalidateMountCache();
 
     return NextResponse.json({
       id: driver.id,
@@ -69,6 +75,8 @@ export async function PUT(
       config: driver.config,
       authType: driver.authType,
       authStatus: driver.authStatus,
+      accessToken: driver.accessToken ? '••••••••' : null,
+      refreshToken: driver.refreshToken ? '••••••••' : null,
       tokenExpiresAt: driver.tokenExpiresAt?.toISOString() || null,
       lastSyncAt: driver.lastSyncAt?.toISOString() || null,
       createdAt: driver.createdAt.toISOString(),
@@ -77,9 +85,6 @@ export async function PUT(
       mountPath: driver.mountPath,
       isReadOnly: driver.isReadOnly,
     });
-
-    // Invalidate VFS mount cache after driver changes
-    invalidateMountCache();
   } catch (error) {
     console.error('Error updating driver:', error);
     return NextResponse.json({ error: 'Failed to update driver' }, { status: 500 });

@@ -183,8 +183,9 @@ export function FileList() {
     setPropertiesFile, setSearchResultCount, compactMode, showExtensions, setBatchRenameOpen,
     colorLabelFilter,
     setCrossDriverMoveOpen, setCrossDriverMoveFileIds,
-    currentDriverId,
+    currentDriverId, currentDriverName,
     setCopyToFile,
+    vfsMode, vfsPath, navigateToVfsPath,
   } = useFileStore();
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -197,8 +198,30 @@ export function FileList() {
   const isSearch = searchQuery.trim().length > 0;
 
   const { data: files = [], isLoading } = useQuery<FileItem[]>({
-    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId],
+    queryKey: ["files", currentFolderId, section, searchQuery, currentDriverId, vfsMode, vfsPath],
     queryFn: async () => {
+      if (vfsMode && section === "files") {
+        // VFS browsing mode - fetch from VFS API
+        const res = await fetch(`/api/vfs?action=list&path=${encodeURIComponent(vfsPath)}`);
+        if (!res.ok) throw new Error("Failed to list VFS path");
+        const data = await res.json();
+        return (data.items || []).map((item: any) => ({
+          id: item.id || item.name,
+          name: item.name,
+          type: item.isDir ? "folder" : "file",
+          size: item.size || 0,
+          mimeType: item.mimeType || "",
+          parentId: vfsPath,
+          driverId: currentDriverId,
+          isTrashed: false,
+          starred: false,
+          colorLabel: "",
+          createdAt: item.created || new Date().toISOString(),
+          updatedAt: item.lastModified || new Date().toISOString(),
+          _isVfsItem: true,
+          _vfsPath: vfsPath + "/" + item.name,
+        } as FileItem & { _isVfsItem?: boolean; _vfsPath?: string }));
+      }
       if (isSearch) {
         const res = await fetch(`/api/files/search?q=${encodeURIComponent(searchQuery)}`);
         if (!res.ok) throw new Error("Search failed");
@@ -403,19 +426,33 @@ export function FileList() {
 
   const handleRowClick = useCallback((file: FileItem) => {
     if (file.type === "folder") {
+      if (vfsMode) {
+        const vfsItem = file as FileItem & { _vfsPath?: string };
+        if (vfsItem._vfsPath) {
+          navigateToVfsPath(vfsItem._vfsPath, currentDriverId ?? undefined);
+          return;
+        }
+      }
       setCurrentFolderId(file.id);
     } else {
       setDetailFile(file);
     }
-  }, [setCurrentFolderId, setDetailFile]);
+  }, [setCurrentFolderId, setDetailFile, vfsMode, navigateToVfsPath, currentDriverId]);
 
   const handleRowDoubleClick = useCallback((file: FileItem) => {
     if (file.type === "folder") {
+      if (vfsMode) {
+        const vfsItem = file as FileItem & { _vfsPath?: string };
+        if (vfsItem._vfsPath) {
+          navigateToVfsPath(vfsItem._vfsPath, currentDriverId ?? undefined);
+          return;
+        }
+      }
       setCurrentFolderId(file.id);
     } else {
       setPreviewFile({ id: file.id, name: file.name, type: file.type, mimeType: file.mimeType, url: file.url });
     }
-  }, [setCurrentFolderId, setPreviewFile]);
+  }, [setCurrentFolderId, setPreviewFile, vfsMode, navigateToVfsPath, currentDriverId]);
 
   // Upload handler for context menu
   const handleUploadFromMenu = useCallback(() => {
