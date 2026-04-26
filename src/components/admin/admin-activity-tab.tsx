@@ -24,7 +24,6 @@ import { useI18n } from "@/lib/i18n";
 import { formatFileSize, formatRelativeTime } from "@/lib/file-utils";
 import { motion } from "framer-motion";
 import { Label as UILabel } from "@/components/ui/label";
-import { Label as UILabel } from "@/components/ui/label";
 
 // --- Types ---
 
