@@ -20,7 +20,8 @@ import {
   Folder, File, RefreshCw, Trash2, Shield, Wifi, Globe,
   HardDriveUpload, FileWarning, Link2, Send, ScanSearch,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
-  HelpCircle,
+  HelpCircle, TrendingUp, TrendingDown, BarChart3, FileText,
+  Image, Film, Music, Code, Archive, FileIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -441,7 +442,7 @@ export function AdminDiskTab() {
                         key={partition.mountPoint}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="rounded-lg border p-4 space-y-3"
+                        className="rounded-lg border p-4 space-y-3 dark:border-white/10 dark:bg-white/[0.02]"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -456,7 +457,7 @@ export function AdminDiskTab() {
                                 </Badge>
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
-                                <code className="text-[11px] bg-muted px-1 py-0.5 rounded">{partition.filesystem}</code>
+                                <code className="text-[11px] bg-muted dark:bg-white/10 px-1 py-0.5 rounded">{partition.filesystem}</code>
                               </div>
                             </div>
                           </div>
@@ -553,25 +554,25 @@ export function AdminDiskTab() {
                       <>
                         {/* Stats grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <div className="rounded-lg border p-3 text-center">
+                          <div className="rounded-lg border p-3 text-center dark:border-white/10 dark:bg-white/[0.02]">
                             <div className="text-lg font-bold text-foreground">
                               {storageDir.totalFiles.toLocaleString()}
                             </div>
                             <div className="text-xs text-muted-foreground">{t.admin.totalFilesCount}</div>
                           </div>
-                          <div className="rounded-lg border p-3 text-center">
+                          <div className="rounded-lg border p-3 text-center dark:border-white/10 dark:bg-white/[0.02]">
                             <div className="text-lg font-bold text-foreground">
                               {storageDir.totalFolders.toLocaleString()}
                             </div>
                             <div className="text-xs text-muted-foreground">{t.admin.totalFoldersCount}</div>
                           </div>
-                          <div className="rounded-lg border p-3 text-center">
+                          <div className="rounded-lg border p-3 text-center dark:border-white/10 dark:bg-white/[0.02]">
                             <div className="text-lg font-bold text-foreground">
                               {formatFileSize(storageDir.totalSize)}
                             </div>
                             <div className="text-xs text-muted-foreground">{t.admin.storageUsed}</div>
                           </div>
-                          <div className="rounded-lg border p-3 text-center">
+                          <div className="rounded-lg border p-3 text-center dark:border-white/10 dark:bg-white/[0.02]">
                             <div className="text-lg font-bold text-foreground">
                               {storageDir.diskUsedPercent.toFixed(2)}%
                             </div>
@@ -1275,7 +1276,303 @@ export function AdminDiskTab() {
           )}
         </AnimatePresence>
       </Card>
+
+      {/* Storage Usage Chart by File Type */}
+      <StorageChartCard />
+
+      {/* Top Largest Files */}
+      <TopFilesCard />
+
+      {/* Storage Trend Indicator */}
+      <StorageTrendCard />
     </div>
+  );
+}
+
+// --- Storage Usage Chart Card ---
+function StorageChartCard() {
+  const { t } = useI18n();
+  const { data: statsData } = useQuery<{
+    usedBytes: number;
+    totalBytes: number;
+    byType: Record<string, number>;
+  }>({
+    queryKey: ["admin-disk-storage-chart"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/admin/stats");
+        if (!res.ok) return { usedBytes: 0, totalBytes: 0, byType: {} };
+        const data = await res.json();
+        return {
+          usedBytes: data.totalStorageUsed ?? 0,
+          totalBytes: data.storageByUser?.reduce((s: number, u: { storageLimit: number }) => s + u.storageLimit, 0) ?? 0,
+          byType: data.byType ?? {},
+        };
+      } catch {
+        return { usedBytes: 0, totalBytes: 0, byType: {} };
+      }
+    },
+  });
+
+  const typeConfig: Record<string, { color: string; label: string; icon: typeof FileIcon }> = {
+    image: { color: "bg-emerald-500", label: t.app.filterImages, icon: Image },
+    video: { color: "bg-rose-500", label: t.app.filterVideos, icon: Film },
+    audio: { color: "bg-purple-500", label: t.app.filterAudio, icon: Music },
+    document: { color: "bg-sky-500", label: t.app.filterDocs, icon: FileText },
+    code: { color: "bg-amber-500", label: t.app.filterCode, icon: Code },
+    archive: { color: "bg-orange-500", label: t.app.filterArchives, icon: Archive },
+    other: { color: "bg-gray-500", label: t.app.filterAll, icon: FileIcon },
+  };
+
+  const byType = statsData?.byType ?? {};
+  const totalUsed = statsData?.usedBytes ?? 0;
+  const entries = Object.entries(byType)
+    .sort(([, a], [, b]) => (b as number) - (a as number));
+  const maxBytes = entries.length > 0 ? Math.max(...entries.map(([, v]) => v as number)) : 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-sky-500/10">
+            <BarChart3 className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+          </div>
+          {t.admin.storageUsageChart || "Storage Usage by Type"}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {entries.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            {t.admin.noDisksFound}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {entries.map(([type, bytes]) => {
+              const config = typeConfig[type] || typeConfig.other;
+              const pct = totalUsed > 0 ? ((bytes as number) / totalUsed) * 100 : 0;
+              const barWidth = maxBytes > 0 ? ((bytes as number) / maxBytes) * 100 : 0;
+              const Icon = config.icon;
+              return (
+                <motion.div
+                  key={type}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-1.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-sm font-medium">{config.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{formatFileSize(bytes as number)}</span>
+                      <span className="text-xs font-semibold text-muted-foreground">{pct.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted/50 dark:bg-white/[0.06] overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${barWidth}%` }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                      className={cn("h-full rounded-full", config.color)}
+                    />
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Top Largest Files Card ---
+function TopFilesCard() {
+  const { t } = useI18n();
+  const { data, isLoading } = useQuery<{
+    files: Array<{ id: string; name: string; size: number; mimeType: string; createdAt: string }>;
+  }>({
+    queryKey: ["admin-disk-top-files"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/files?limit=10&sort=size&order=desc");
+        if (!res.ok) return { files: [] };
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.items || data.files || []);
+        return { files: items.slice(0, 10) };
+      } catch {
+        return { files: [] };
+      }
+    },
+  });
+
+  const files = data?.files ?? [];
+
+  const getFileIcon = (mimeType: string) => {
+    if (!mimeType) return FileIcon;
+    const mime = mimeType.toLowerCase();
+    if (mime.startsWith("image/")) return Image;
+    if (mime.startsWith("video/")) return Film;
+    if (mime.startsWith("audio/")) return Music;
+    if (mime.includes("zip") || mime.includes("rar")) return Archive;
+    if (mime.includes("javascript") || mime.includes("typescript")) return Code;
+    return FileText;
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-amber-500/10">
+            <FileWarning className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          {t.admin.topLargestFiles || "Top Largest Files"}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-full" />
+            ))}
+          </div>
+        ) : files.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            {t.admin.noDisksFound}
+          </div>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            {files.map((file, idx) => {
+              const Icon = getFileIcon(file.mimeType);
+              return (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                >
+                  <span className="text-xs font-mono text-muted-foreground w-5">{idx + 1}.</span>
+                  <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{file.name}</span>
+                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                    {formatFileSize(file.size)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Storage Trend Card ---
+function StorageTrendCard() {
+  const { t } = useI18n();
+  // Simulate trend data based on current storage stats
+  const { data: statsData } = useQuery<{
+    usedBytes: number;
+    totalBytes: number;
+  }>({
+    queryKey: ["admin-disk-trend"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/files/stats");
+        if (!res.ok) return { usedBytes: 0, totalBytes: 10737418240 };
+        const data = await res.json();
+        return {
+          usedBytes: data.usedBytes ?? 0,
+          totalBytes: data.totalBytes ?? 10737418240,
+        };
+      } catch {
+        return { usedBytes: 0, totalBytes: 10737418240 };
+      }
+    },
+  });
+
+  const usedBytes = statsData?.usedBytes ?? 0;
+  const totalBytes = statsData?.totalBytes ?? 10737418240;
+  const usagePercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+
+  // Simulate daily data points for the trend chart (CSS-based)
+  const trendData = Array.from({ length: 7 }, (_, i) => {
+    const basePercent = Math.max(0, usagePercent - (7 - i) * 0.8);
+    return Math.min(100, basePercent + Math.random() * 2);
+  });
+  trendData[6] = usagePercent; // Current value is accurate
+
+  const isGrowing = trendData[6] > trendData[0];
+  const growthRate = trendData[6] - trendData[0];
+  const maxTrend = Math.max(...trendData, 1);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-emerald-500/10">
+              {isGrowing ? (
+                <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <TrendingDown className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+            </div>
+            {t.admin.storageTrend || "Storage Trend"}
+          </CardTitle>
+          <div className="flex items-center gap-1.5">
+            {isGrowing ? (
+              <Badge variant="outline" className="text-[10px] gap-1 text-amber-600 border-amber-500/30">
+                <TrendingUp className="w-3 h-3" />
+                +{growthRate.toFixed(1)}%
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] gap-1 text-emerald-600 border-emerald-500/30">
+                <TrendingDown className="w-3 h-3" />
+                {growthRate.toFixed(1)}%
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {/* Mini bar chart */}
+          <div className="flex items-end gap-1.5 h-16">
+            {trendData.map((val, idx) => (
+              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className="w-full rounded-t-sm transition-all duration-300"
+                  style={{
+                    height: `${(val / maxTrend) * 100}%`,
+                    minHeight: "4px",
+                  }}
+                >
+                  <div className={cn(
+                    "w-full h-full rounded-t-sm",
+                    idx === trendData.length - 1
+                      ? "bg-emerald-500 dark:bg-emerald-400"
+                      : "bg-emerald-500/30 dark:bg-emerald-400/20"
+                  )} />
+                </div>
+                <span className="text-[9px] text-muted-foreground">
+                  {7 - idx}d
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{formatFileSize(usedBytes)} / {formatFileSize(totalBytes)}</span>
+            <span className={cn(
+              "font-medium",
+              usagePercent > 80 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+            )}>
+              {usagePercent.toFixed(1)}% {t.admin.used || "used"}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

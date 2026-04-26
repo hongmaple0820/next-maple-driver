@@ -4014,3 +4014,141 @@ Stage Summary:
 - New Folder dialog has color picker, live icon preview, and animation
 - Welcome tooltip guides first-time users to the Upload button
 - Lint clean, no errors
+
+---
+Task ID: 5
+Agent: Style & Animation Agent
+Task: Comprehensive style optimization and animation improvements
+
+Work Log:
+- 1. Enhanced File Toolbar Animations (file-toolbar.tsx)
+  - Added staggered entrance animation variants (toolbarButtonVariants) for toolbar buttons with 0.04s delay between each
+  - Added shimmer effect on Upload button using `upload-shimmer` CSS class with infinite translateX animation
+  - Changed search bar to use framer-motion `motion.div` with smooth width animation (256px → 320px on focus)
+  - Added AnimatePresence for color label filter toggle: dot scales in/out with spring animation when filter changes, label animates width
+  - Changed all button active:scale from 0.95 to 0.97 for subtle press effect
+
+- 2. Enhanced Sidebar Animations (file-sidebar.tsx)
+  - Added `nav-item-glow` CSS class for hover glow effect on active nav items
+  - Added AnimatePresence with spring scale animation for starred/trashed badge count changes
+  - Added framer-motion `motion.div` wrapper for user profile area with whileHover scale (1.01) effect
+  - Replaced CSS transition on storage detail chevron with framer-motion rotation animation
+  - Changed storage bar pulse from `animate-pulse` to custom `animate-storage-pulse` animation for better visual effect
+
+- 3. Added Page Transition Animations (cloud-drive-app.tsx)
+  - Created sectionVariants map with direction-specific transitions:
+    - Files → Starred: slide left (x: 60 → 0)
+    - Starred → Files: slide right (x: -60 → 0)
+    - Files → Trash: slide down (y: 40 → 0)
+    - Trash → Files: slide up (y: -40 → 0)
+    - Files → Quick Transfer: fade + scale (scale: 0.95 → 1)
+    - Quick Transfer → Files: reverse scale
+    - Files → Recent: subtle slide (x: 30)
+    - Files → Transfer Station: slide left
+  - Added getTransitionVariant() function to resolve section-to-section transitions
+  - Wrapped QuickTransferPanel and TransferStationPanel with AnimatePresence + motion.div for animated transitions
+  - File content area uses y-axis slide animation (y: 8 → 0) for folder navigation
+
+- 4. Enhanced Dialog Animations (dialog.tsx + individual dialogs)
+  - Created DialogAnimationVariant type: "default" | "spring" | "slide-up" | "scale-fade" | "slide-right"
+  - Created dialogAnimations config map with 5 variants:
+    - default: opacity + scale(0.95) with 0.2s ease
+    - spring: opacity + scale(0.9) with spring physics (stiffness: 400, damping: 25)
+    - slide-up: opacity + y(40) with 0.25s ease
+    - scale-fade: opacity + scale(0.85) with 0.25s ease
+    - slide-right: opacity + x(60) with 0.25s ease
+  - DialogOverlay now includes backdrop-blur-[2px] for subtle blur effect
+  - DialogContent wraps children in AnimatePresence + motion.div with configurable animation variant
+  - Create folder dialog → spring animation
+  - Rename dialog → slide-up animation
+  - Share dialog → scale-fade animation
+  - Move dialog → slide-right animation
+  - Exported DialogAnimationVariant type for external use
+
+- 5. Added Micro-interactions Throughout
+  - File selection checkbox: Added `motion.div` with `whileTap={{ scale: 0.85 }}` for bounce effect; check mark SVG animates with pathLength + scale spring animation
+  - Button press effect: Changed all `active:scale-95` to `active:scale-[0.97]` for subtle press
+  - Drag and drop zone: Replaced `animate-border-dash` with `animate-drag-pulse` for pulsing border + box-shadow effect when dragging files over
+  - Progress bars: Added `progress-shimmer` CSS overlay with animated gradient shimmer effect
+
+- 6. Improved File Status Bar (file-status-bar.tsx)
+  - Created `AnimatedNumber` component with requestAnimationFrame-based smooth counting animation (ease-out cubic, 300ms duration)
+  - File counts, storage percentage, and selected count all use AnimatedNumber for smooth transitions
+  - Added AnimatePresence with slide animation (y: 4 → 0) when bar content changes
+  - Upload indicator and selected count badges now animate in/out with spring scale
+  - Progress bar has shimmer overlay using `progress-shimmer` CSS class
+
+- 7. Added Global CSS Animations (globals.css)
+  - `@keyframes shimmer` + `.animate-shimmer`: background-position animation for shimmer effects
+  - `@keyframes upload-shimmer` + `.upload-shimmer::after`: translateX shimmer for upload button
+  - `@keyframes progress-shimmer` + `.progress-shimmer::after`: animated gradient for progress bars
+  - `@keyframes drag-pulse` + `.animate-drag-pulse`: pulsing border + box-shadow for drag zone
+  - `@keyframes storage-pulse` + `.animate-storage-pulse`: opacity pulse for storage warning
+  - `@keyframes backdrop-blur-in/out`: dialog backdrop blur animation
+  - `.btn-press`: button active press effect (scale 0.97)
+  - `.nav-item-glow`: nav item hover/active glow shadow
+
+- Lint: 0 errors, 5 warnings (pre-existing alt-text warnings in search-suggestions.tsx)
+- Dev server running without errors
+
+Stage Summary:
+- 7 areas of animation/style improvements implemented
+- 8 files modified: globals.css, file-toolbar.tsx, file-sidebar.tsx, cloud-drive-app.tsx, dialog.tsx, create-folder-dialog.tsx, rename-dialog.tsx, share-dialog.tsx, move-dialog.tsx, file-card.tsx, upload-zone.tsx, file-status-bar.tsx
+- Comprehensive animation system: page transitions, dialog variants, micro-interactions, counting animations
+- All animations use framer-motion for consistency and performance
+- Custom CSS keyframes for shimmer, pulse, and glow effects
+- Lint clean (0 errors)
+
+---
+
+## Task 2: Enhanced File Search Functionality
+
+### Search API Enhancement
+- `src/app/api/files/search/route.ts` - Complete rewrite with advanced filtering
+  - Type filter (images, videos, audio, documents, code, archives)
+  - Date range filter (today, week, month, year)
+  - Size range filter (small <1MB, medium 1-100MB, large >100MB)
+  - Combined criteria support
+  - Grouped results mode with per-type counts
+  - MIME type + extension matching for type classification
+
+### New Components
+- `src/components/search-suggestions.tsx` - Search suggestions dropdown
+  - Recent searches from localStorage (max 8)
+  - Quick filters by type, date, size
+  - Smart type suggestions based on query keywords
+  - Keyboard navigation (up/down/Enter/Escape)
+  - Framer Motion animations
+  - Remove individual/clear all recent searches
+
+- `src/components/search-results-panel.tsx` - Search results display panel
+  - Type-filtered tabs with result counts
+  - Highlighted matched text in file names (emerald)
+  - File path breadcrumbs for each result
+  - File size and relative time display
+  - Star indicator for starred files
+  - Folder navigation and file preview on click
+  - Active filter badges
+  - Loading/error states
+  - Staggered entry animations
+
+### Toolbar Integration
+- `src/components/file-toolbar.tsx` - Integrated new search features
+  - Search suggestions dropdown on search focus
+  - Advanced search toggle button (SlidersHorizontal icon)
+  - Advanced filters row (type, date, size pills)
+  - Search results panel below toolbar
+  - Mobile search suggestions support
+  - Clear search resets all advanced filters
+
+### i18n
+- `src/lib/i18n/translations.ts` - Added zh/en keys for:
+  - advancedSearch, searchFor, recentSearches
+  - filterByType, filterByDate, filterBySize
+  - searchToday, searchThisWeek, searchThisMonth, searchThisYear
+  - searchSmallFiles, searchMediumFiles, searchLargeFiles
+  - searching, searchFailed, other
+
+### Quality
+- Lint: 0 errors, 0 warnings on new code
+- Dev server running without errors

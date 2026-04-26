@@ -268,8 +268,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   className={cn(
                     "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
                     isActive
-                      ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground hover:translate-x-0.5"
+                      ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10 nav-item-glow active"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground hover:translate-x-0.5 nav-item-glow"
                   )}
                 >
                   {/* Active indicator bar */}
@@ -295,14 +295,34 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     </div>
                   )}
                   {item.id === "starred" && (stats?.starredCount ?? 0) > 0 && (
-                    <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
-                      {stats.starredCount}
-                    </Badge>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={stats.starredCount}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                      >
+                        <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                          {stats.starredCount}
+                        </Badge>
+                      </motion.div>
+                    </AnimatePresence>
                   )}
                   {item.id === "trash" && (stats?.trashedCount ?? 0) > 0 && (
-                    <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
-                      {stats.trashedCount}
-                    </Badge>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={stats.trashedCount}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                      >
+                        <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+                          {stats.trashedCount}
+                        </Badge>
+                      </motion.div>
+                    </AnimatePresence>
                   )}
                 </button>
               );
@@ -340,7 +360,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* User Profile Area */}
       <div className="border-t border-border/40 px-3 py-3">
-        <div
+        <motion.div
+          whileHover={{ scale: 1.01, backgroundColor: "rgba(0,0,0,0.03)" }}
           className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-sidebar-accent/50 transition-all duration-200 cursor-pointer"
           onClick={() => setPreferencesOpen(true)}
         >
@@ -374,7 +395,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {t.app.preferences}
             </TooltipContent>
           </Tooltip>
-        </div>
+        </motion.div>
         {/* Theme toggle row */}
         <div className="flex items-center justify-between gap-2 mt-1.5 px-3">
           <div className="flex items-center gap-2">
@@ -384,7 +405,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex items-center gap-1.5">
             <Switch
               checked={theme === "dark"}
-              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+              onCheckedChange={(checked) => {
+                document.documentElement.classList.add("theme-transitioning");
+                setTheme(checked ? "dark" : "light");
+                setTimeout(() => {
+                  document.documentElement.classList.remove("theme-transitioning");
+                }, 350);
+              }}
               className="scale-90"
             />
           </div>
@@ -416,9 +443,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex items-center gap-2 mb-2.5">
             <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="text-xs font-bold uppercase tracking-wider">{t.app.storage}</span>
-            <ChevronIcon className={cn("w-3.5 h-3.5 ml-auto text-muted-foreground transition-transform duration-200", showStorageDetail && "rotate-180")} />
+            <motion.div
+            animate={{ rotate: showStorageDetail ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="ml-auto"
+          >
+            <ChevronIcon className="w-3.5 h-3.5 text-muted-foreground" />
+          </motion.div>
           </div>
-          <Progress value={usagePercent} className={cn("h-1.5 mb-2", usagePercent > 80 && "animate-pulse")} />
+          <Progress value={usagePercent} className={cn("h-1.5 mb-2", usagePercent > 80 && "animate-storage-pulse")} />
           {stats?.byType && Object.keys(stats.byType).length > 0 && (
             <div className="flex h-1 rounded-full overflow-hidden bg-muted/50">
               {Object.entries(stats.byType)

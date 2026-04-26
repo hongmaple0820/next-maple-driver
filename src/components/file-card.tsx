@@ -668,18 +668,28 @@ export function FileCard({ file }: FileCardProps) {
               )}
               onClick={(e) => { e.stopPropagation(); toggleSelect(file.id); }}
             >
-              <div className={cn(
-                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
-                isSelected
-                  ? "bg-emerald-500 border-emerald-500 shadow-sm shadow-emerald-500/30"
-                  : "border-muted-foreground/40 bg-background/80 backdrop-blur-sm hover:border-emerald-500/60"
-              )}>
-                {isSelected && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
+              <motion.div
+                whileTap={{ scale: 0.85 }}
+                transition={{ type: "spring", stiffness: 500, damping: 25 }}
+              >
+                <div className={cn(
+                  "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 cursor-pointer",
+                  isSelected
+                    ? "bg-emerald-500 border-emerald-500 shadow-sm shadow-emerald-500/30"
+                    : "border-muted-foreground/40 bg-background/80 backdrop-blur-sm hover:border-emerald-500/60"
+                )}>
+                  {isSelected && (
+                    <motion.svg
+                      initial={{ scale: 0, pathLength: 0 }}
+                      animate={{ scale: 1, pathLength: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                      className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </motion.svg>
+                  )}
+                </div>
+              </motion.div>
             </div>
 
             {/* Star badge with animation */}

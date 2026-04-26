@@ -9,7 +9,8 @@ import { AdminUsersTab } from "@/components/admin/admin-users-tab";
 import { AdminSystemTab } from "@/components/admin/admin-system-tab";
 import { AdminDriversTab } from "@/components/admin/admin-drivers-tab";
 import { AdminDiskTab } from "@/components/admin/admin-disk-tab";
-import { Shield, Users, Activity, HardDrive, Database, Server, Cloud, CheckCircle2, XCircle } from "lucide-react";
+import { AdminActivityTab } from "@/components/admin/admin-activity-tab";
+import { Shield, Users, Activity, HardDrive, Database, Server, Cloud, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -196,6 +197,13 @@ export function AdminPanel() {
                 <Database className="w-3.5 h-3.5" />
                 {t.admin.disk}
               </TabsTrigger>
+              <TabsTrigger
+                value="activity"
+                className="data-[state=active]:bg-emerald-600/10 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 rounded-md px-3 h-8 gap-1.5 text-sm"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                {t.admin.activity || "Activity"}
+              </TabsTrigger>
             </TabsList>
           </div>
           <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-130px)]">
@@ -215,6 +223,9 @@ export function AdminPanel() {
                 </TabsContent>
                 <TabsContent value="disk" className="mt-4">
                   <AdminDiskTab />
+                </TabsContent>
+                <TabsContent value="activity" className="mt-4">
+                  <AdminActivityTab />
                 </TabsContent>
               </>
             )}

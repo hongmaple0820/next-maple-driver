@@ -153,7 +153,7 @@ export function MoveDialog() {
 
   return (
     <Dialog open={!!moveFile} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" animation="slide-right">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderInput className="w-5 h-5 text-emerald-600" />

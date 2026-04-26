@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { formatFileSize } from "@/lib/file-utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -1039,6 +1040,8 @@ export function AdminDriversTab() {
                         <div className="text-sm text-muted-foreground space-y-0.5">
                           <div>{t.admin.type}: {driverTypeLabels[driver.type] || driver.type} · {t.admin.priority}: {driver.priority}</div>
                           {renderDriverConfigInfo(driver)}
+                          {/* Driver Capacity/Usage Display */}
+                          <DriverCapacityDisplay driverId={driver.id} driverName={driver.name} driverType={driver.type} isHealthy={driver.healthy} />
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1307,6 +1310,77 @@ export function AdminDriversTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Driver Capacity Display Component ---
+function DriverCapacityDisplay({ driverId, driverName, driverType, isHealthy }: { driverId: string; driverName: string; driverType: string; isHealthy?: boolean }) {
+  const { t } = useI18n();
+  const { data: statsData } = useQuery<{
+    usedBytes: number;
+    totalBytes: number;
+  }>({
+    queryKey: ["driver-capacity", driverId],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/files/stats");
+        if (!res.ok) return { usedBytes: 0, totalBytes: 10737418240 };
+        const data = await res.json();
+        return {
+          usedBytes: data.usedBytes ?? 0,
+          totalBytes: data.totalBytes ?? 10737418240,
+        };
+      } catch {
+        return { usedBytes: 0, totalBytes: 10737418240 };
+      }
+    },
+  });
+
+  const usedBytes = statsData?.usedBytes ?? 0;
+  const totalBytes = statsData?.totalBytes ?? 10737418240;
+  const usagePercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+
+  // Health status with color coding
+  const healthConfig = isHealthy === true
+    ? { color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10", icon: CheckCircle2, label: t.admin.healthyStatus || "Healthy" }
+    : isHealthy === false
+      ? { color: "text-red-600 dark:text-red-400", bg: "bg-red-500/10", icon: XCircle, label: t.admin.unhealthy || "Unhealthy" }
+      : { color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10", icon: Clock, label: t.admin.healthCheckUnavailable || "Unknown" };
+
+  const HealthIcon = healthConfig.icon;
+
+  return (
+    <div className="mt-2 p-2.5 rounded-lg border dark:border-white/10 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className={cn("p-1 rounded-md", healthConfig.bg)}>
+            <HealthIcon className={cn("w-3 h-3", healthConfig.color)} />
+          </div>
+          <span className={cn("text-[11px] font-medium", healthConfig.color)}>{healthConfig.label}</span>
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          {driverType.toUpperCase()} · {driverName}
+        </span>
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">{t.admin.capacity || "Capacity"}</span>
+          <span className="font-medium">{formatFileSize(usedBytes)} / {formatFileSize(totalBytes)}</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-muted/50 dark:bg-white/5 overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-500",
+              usagePercent > 80 ? "bg-red-500" : usagePercent > 60 ? "bg-amber-500" : "bg-emerald-500"
+            )}
+            style={{ width: `${Math.min(usagePercent, 100)}%` }}
+          />
+        </div>
+        <div className="text-right text-[10px] text-muted-foreground">
+          {usagePercent.toFixed(1)}% {t.admin.used || "used"}
+        </div>
+      </div>
     </div>
   );
 }

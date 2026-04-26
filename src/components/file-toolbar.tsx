@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home, FolderUp, HardDrive } from "lucide-react";
+import { Search, LayoutGrid, List, FolderPlus, ChevronRight, ChevronLeft, Trash2, ArrowUpDown, Image, Film, Music, FileText, FileCode, Archive, Keyboard, X, Palette, CloudUpload, Home, FolderUp, HardDrive, SlidersHorizontal } from "lucide-react";
 import { useFileStore, type SortField, type FileTypeFilter, type ColorLabelFilter } from "@/store/file-store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -50,6 +50,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { SearchSuggestions, addRecentSearch } from "@/components/search-suggestions";
+import type { SuggestionItem } from "@/components/search-suggestions";
+import { SearchResultsPanel } from "@/components/search-results-panel";
+
+const toolbarButtonVariants = {
+  hidden: { opacity: 0, y: -6 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.04,
+      duration: 0.25,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    },
+  }),
+};
 
 export function FileToolbar() {
   const {
@@ -94,6 +110,11 @@ export function FileToolbar() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchInputValue, setSearchInputValue] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [suggestionsVisible, setSuggestionsVisible] = useState(false);
+  const [searchTypeFilter, setSearchTypeFilter] = useState("");
+  const [searchDateFilter, setSearchDateFilter] = useState("");
+  const [searchSizeFilter, setSearchSizeFilter] = useState("");
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
 
   // Fetch storage stats (for trash count)
   const { data: stats } = useQuery<StorageStats>({
@@ -132,7 +153,45 @@ export function FileToolbar() {
   const handleClearSearch = useCallback(() => {
     setSearchInputValue("");
     setSearchQuery("");
+    setSearchTypeFilter("");
+    setSearchDateFilter("");
+    setSearchSizeFilter("");
+    setSuggestionsVisible(false);
   }, [setSearchQuery]);
+
+  const handleSuggestionSelect = useCallback(
+    (item: SuggestionItem) => {
+      if (item.type === "recent" || item.type === "query") {
+        setSearchInputValue(item.value);
+        setSearchQuery(item.value);
+        addRecentSearch(item.value);
+      } else if (item.filterKey === "type") {
+        setSearchTypeFilter(item.value);
+        setSearchQuery(searchInputValue || "*");
+      } else if (item.filterKey === "date") {
+        setSearchDateFilter(item.value);
+        setSearchQuery(searchInputValue || "*");
+      } else if (item.filterKey === "size") {
+        setSearchSizeFilter(item.value);
+        setSearchQuery(searchInputValue || "*");
+      }
+      setSuggestionsVisible(false);
+    },
+    [setSearchQuery, searchInputValue]
+  );
+
+  const handleSearchResultClick = useCallback(
+    (file: { id: string; name: string; type: string; mimeType?: string }) => {
+      const { setPreviewFile } = useFileStore.getState();
+      setPreviewFile({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        mimeType: file.mimeType,
+      });
+    },
+    []
+  );
 
   // "/" keyboard shortcut to focus search
   useEffect(() => {
@@ -262,7 +321,7 @@ export function FileToolbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                className="h-7 w-7 transition-all duration-150 active:scale-[0.97]"
                 disabled={!canGoBack}
                 onClick={() => navigateBack()}
               >
@@ -278,7 +337,7 @@ export function FileToolbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                className="h-7 w-7 transition-all duration-150 active:scale-[0.97]"
                 disabled={!canGoForward}
                 onClick={() => navigateForward()}
               >
@@ -294,7 +353,7 @@ export function FileToolbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 transition-all duration-150 active:scale-95"
+                className="h-7 w-7 transition-all duration-150 active:scale-[0.97]"
                 disabled={currentFolderId === "root"}
                 onClick={() => setCurrentFolderId("root")}
               >
@@ -381,56 +440,93 @@ export function FileToolbar() {
         </div>
 
         {/* Desktop Search */}
-        <div className="relative hidden sm:block w-64">
-          <Search className={cn(
-            "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none transition-transform duration-200",
-            searchFocused && "rotate-12"
-          )} />
-          <Input
-            ref={searchInputRef}
-            placeholder={t.app.search}
-            value={searchInputValue}
-            className={cn(
-              "pl-9 h-9 transition-all duration-200 focus:w-80",
-              "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50",
-              "focus-visible:shadow-[0_0_0_3px_rgba(16,185,129,0.1)]",
-              !searchInputValue && !searchFocused && "pr-9"
-            )}
-            onChange={(e) => handleSearch(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
-          {!searchInputValue && !searchFocused && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-              <kbd className="text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono text-muted-foreground">⌘K</kbd>
-              <span className="text-[10px] text-muted-foreground/50">or</span>
-              <kbd className="text-[10px] bg-muted border rounded px-1 py-0.5 font-mono text-muted-foreground">/</kbd>
+        <div className="relative hidden sm:block">
+          <motion.div animate={{ width: searchFocused || searchInputValue ? 320 : 256 }} transition={{ duration: 0.25, ease: "easeInOut" }}>
+            <Search className={cn(
+              "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none transition-transform duration-200 z-10",
+              searchFocused && "rotate-12"
+            )} />
+            <Input
+              ref={searchInputRef}
+              placeholder={t.app.search}
+              value={searchInputValue}
+              className={cn(
+                "pl-9 h-9 w-full transition-all duration-200",
+                "focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50",
+                "focus-visible:shadow-[0_0_0_3px_rgba(16,185,129,0.1)]",
+                !searchInputValue && !searchFocused && "pr-9"
+              )}
+              onChange={(e) => {
+                handleSearch(e.target.value);
+                setSuggestionsVisible(true);
+              }}
+              onFocus={() => {
+                setSearchFocused(true);
+                setSuggestionsVisible(true);
+              }}
+              onBlur={() => {
+                setSearchFocused(false);
+                // Delay hiding suggestions so clicks register
+                setTimeout(() => setSuggestionsVisible(false), 200);
+              }}
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {!searchInputValue && !searchFocused && (
+                <div className="flex items-center gap-1 pointer-events-none">
+                  <kbd className="text-[10px] bg-muted border rounded px-1.5 py-0.5 font-mono text-muted-foreground">⌘K</kbd>
+                  <span className="text-[10px] text-muted-foreground/50">or</span>
+                  <kbd className="text-[10px] bg-muted border rounded px-1 py-0.5 font-mono text-muted-foreground">/</kbd>
+                </div>
+              )}
+              {searchInputValue && (
+                <button
+                  onClick={handleClearSearch}
+                  className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          )}
-          {searchInputValue && (
-            <button
-              onClick={handleClearSearch}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {isSearchActive && searchResultCount > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute -bottom-5 left-0 text-[11px] text-muted-foreground"
-            >
-              {searchResultCount} {t.app.resultsFound}
-            </motion.div>
-          )}
+          </motion.div>
+
+          {/* Search suggestions dropdown */}
+          <SearchSuggestions
+            query={searchInputValue}
+            visible={suggestionsVisible && searchFocused}
+            onSelect={handleSuggestionSelect}
+            onClose={() => setSuggestionsVisible(false)}
+          />
         </div>
+
+        {/* Advanced search toggle */}
+        {isSearchActive && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 transition-all duration-150 hidden sm:flex",
+                  showAdvancedSearch
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    : "hover:bg-accent/50"
+                )}
+                onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {t.app.advancedSearch}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Mobile Search Toggle */}
         <Button
           variant="ghost"
           size="icon"
-          className="sm:hidden h-9 w-9 transition-all duration-150 active:scale-95"
+          className="sm:hidden h-9 w-9 transition-all duration-150 active:scale-[0.97]"
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
         >
           {mobileSearchOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
@@ -454,7 +550,12 @@ export function FileToolbar() {
                   placeholder={t.app.search}
                   value={searchInputValue}
                   className="pl-9 pr-9 h-9 w-full focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/50"
-                  onChange={(e) => handleSearch(e.target.value)}
+                  onChange={(e) => {
+                    handleSearch(e.target.value);
+                    setSuggestionsVisible(true);
+                  }}
+                  onFocus={() => setSuggestionsVisible(true)}
+                  onBlur={() => setTimeout(() => setSuggestionsVisible(false), 200)}
                   autoFocus
                 />
                 {searchInputValue && (
@@ -465,14 +566,124 @@ export function FileToolbar() {
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
+                <SearchSuggestions
+                  query={searchInputValue}
+                  visible={suggestionsVisible}
+                  onSelect={handleSuggestionSelect}
+                  onClose={() => setSuggestionsVisible(false)}
+                />
               </div>
-              {isSearchActive && searchResultCount > 0 && (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  {searchResultCount} {t.app.resultsFound}
-                </p>
-              )}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Advanced Search Filters Row */}
+      <AnimatePresence>
+        {showAdvancedSearch && isSearchActive && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2 px-4 py-2 border-t border-border/40 bg-muted/10 flex-wrap">
+              {/* Type filter */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium">{t.app.type}:</span>
+                {[
+                  { id: "", label: t.app.filterAll },
+                  { id: "images", label: t.app.filterImages },
+                  { id: "videos", label: t.app.filterVideos },
+                  { id: "audio", label: t.app.filterAudio },
+                  { id: "documents", label: t.app.filterDocs },
+                  { id: "code", label: t.app.filterCode },
+                  { id: "archives", label: t.app.filterArchives },
+                ].map((tf) => (
+                  <button
+                    key={tf.id}
+                    onClick={() => setSearchTypeFilter(tf.id)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium transition-all",
+                      searchTypeFilter === tf.id
+                        ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                        : "text-muted-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    {tf.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-px h-4 bg-border/50" />
+
+              {/* Date filter */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium">{t.app.modified}:</span>
+                {[
+                  { id: "", label: t.app.filterAll },
+                  { id: "today", label: t.app.searchToday },
+                  { id: "week", label: t.app.searchThisWeek },
+                  { id: "month", label: t.app.searchThisMonth },
+                  { id: "year", label: t.app.searchThisYear },
+                ].map((df) => (
+                  <button
+                    key={df.id}
+                    onClick={() => setSearchDateFilter(df.id)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium transition-all",
+                      searchDateFilter === df.id
+                        ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                        : "text-muted-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    {df.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-px h-4 bg-border/50" />
+
+              {/* Size filter */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium">{t.app.size}:</span>
+                {[
+                  { id: "", label: t.app.filterAll },
+                  { id: "small", label: t.app.searchSmallFiles },
+                  { id: "medium", label: t.app.searchMediumFiles },
+                  { id: "large", label: t.app.searchLargeFiles },
+                ].map((sf) => (
+                  <button
+                    key={sf.id}
+                    onClick={() => setSearchSizeFilter(sf.id)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] font-medium transition-all",
+                      searchSizeFilter === sf.id
+                        ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                        : "text-muted-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    {sf.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Search Results Panel */}
+      <AnimatePresence>
+        {isSearchActive && (
+          <SearchResultsPanel
+            query={searchQuery === "*" ? "" : searchQuery}
+            typeFilter={searchTypeFilter}
+            dateFilter={searchDateFilter}
+            sizeFilter={searchSizeFilter}
+            onFileClick={handleSearchResultClick}
+            onClearFilters={handleClearSearch}
+          />
         )}
       </AnimatePresence>
 
@@ -487,7 +698,7 @@ export function FileToolbar() {
                     <Button
                       size="sm"
                       onClick={handleUploadClick}
-                      className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20"
+                      className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-[0.97] bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20 upload-shimmer overflow-hidden"
                     >
                       <CloudUpload className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">{t.app.upload}</span>
@@ -501,7 +712,7 @@ export function FileToolbar() {
                     variant="outline"
                     size="sm"
                     onClick={handleFolderUploadClick}
-                    className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                    className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-[0.97] hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
                   >
                     <FolderUp className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">{t.app.uploadFolder}</span>
@@ -513,7 +724,7 @@ export function FileToolbar() {
                 variant="outline"
                 size="sm"
                 onClick={() => setCreateFolderOpen(true)}
-                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-[0.97] hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">{t.app.newFolder}</span>
@@ -527,7 +738,7 @@ export function FileToolbar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-95 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
+                  className="gap-1.5 h-8 text-xs transition-all duration-150 active:scale-[0.97] hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-500/5"
                   onClick={() => {
                     setCrossDriverMoveFileIds(Array.from(selectedFileIds));
                     setCrossDriverMoveOpen(true);
@@ -545,7 +756,7 @@ export function FileToolbar() {
           {section === "trash" && (stats?.trashedCount ?? 0) > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-150 active:scale-95">
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive transition-all duration-150 active:scale-[0.97]">
                   <Trash2 className="w-4 h-4" />
                   <span className="hidden sm:inline">{t.app.emptyTrash}</span>
                 </Button>
@@ -588,18 +799,35 @@ export function FileToolbar() {
                 variant="outline"
                 size="sm"
                 className={cn(
-                  "h-8 gap-1.5 text-xs transition-all duration-150 active:scale-95",
+                  "h-8 gap-1.5 text-xs transition-all duration-150 active:scale-[0.97]",
                   colorLabelFilter
                     ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5"
                     : "hover:border-emerald-500/30 hover:bg-accent/50"
                 )}
               >
                 <Palette className="w-3.5 h-3.5" />
-                {colorLabelFilter ? (
-                  <span className={cn("w-2.5 h-2.5 rounded-full", COLOR_LABELS[colorLabelFilter]?.dot)} />
-                ) : (
-                  <span className="hidden sm:inline">{t.app.colorLabelFilter}</span>
-                )}
+                <AnimatePresence mode="wait">
+                  {colorLabelFilter ? (
+                    <motion.span
+                      key="dot"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                      className={cn("w-2.5 h-2.5 rounded-full inline-block", COLOR_LABELS[colorLabelFilter]?.dot)}
+                    />
+                  ) : (
+                    <motion.span
+                      key="label"
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: "auto", opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      className="hidden sm:inline overflow-hidden whitespace-nowrap"
+                    >
+                      {t.app.colorLabelFilter}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
@@ -628,7 +856,7 @@ export function FileToolbar() {
               setSortBy(val as SortField);
             }}
           >
-            <SelectTrigger className="h-9 w-[140px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:border-emerald-500/30">
+            <SelectTrigger className="h-9 w-[140px] text-xs max-[400px]:w-9 max-[400px]:px-0 max-[400px]:justify-center transition-all duration-150 active:scale-[0.97] hover:bg-accent/50 hover:border-emerald-500/30">
               <ArrowUpDown className="w-4 h-4 mr-1.5 max-[400px]:mr-0" />
               <SelectValue className="max-[400px]:hidden" />
             </SelectTrigger>
@@ -642,7 +870,7 @@ export function FileToolbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
+            className="h-9 w-9 transition-all duration-150 active:scale-[0.97] hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
             onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
           >
             <ArrowUpDown className={cn("w-4 h-4 transition-transform", sortDirection === "desc" && "rotate-180")} />
@@ -653,7 +881,7 @@ export function FileToolbar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 transition-all duration-150 active:scale-95 hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
+          className="h-9 w-9 transition-all duration-150 active:scale-[0.97] hover:bg-accent/50 hover:text-emerald-700 dark:hover:text-emerald-400"
           onClick={() => setShortcutsOpen(true)}
           title={`${t.app.shortcuts} (?)`}
         >

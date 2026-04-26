@@ -159,7 +159,7 @@ export function ShareDialog() {
 
   return (
     <Dialog open={!!shareFile} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" animation="scale-fade">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="w-5 h-5 text-emerald-600" />

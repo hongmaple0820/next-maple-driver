@@ -72,7 +72,7 @@ export function RenameDialog() {
 
   return (
     <Dialog open={!!renameFile} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" animation="slide-up">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="w-5 h-5 text-emerald-600" />

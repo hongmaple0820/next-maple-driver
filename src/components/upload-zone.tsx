@@ -310,7 +310,7 @@ export function UploadZone({ children }: { children: React.ReactNode }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-emerald-500/5 border-[3px] border-dashed border-emerald-400/50 rounded-lg backdrop-blur-[2px] animate-border-dash"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-emerald-500/5 border-[3px] border-dashed border-emerald-400/50 rounded-lg backdrop-blur-[2px] animate-drag-pulse"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}

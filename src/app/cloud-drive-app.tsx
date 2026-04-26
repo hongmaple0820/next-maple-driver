@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileSidebar } from "@/components/file-sidebar";
 import { FileToolbar } from "@/components/file-toolbar";
@@ -20,12 +20,76 @@ import { TransferPanel } from "@/components/transfer-panel";
 import { QuickTransferPanel } from "@/components/quick-transfer-panel";
 import { TransferStationPanel } from "@/components/transfer-station-panel";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { useFileStore } from "@/store/file-store";
+import { useFileStore, type Section } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { type StorageStats } from "@/lib/file-utils";
 import { HardDrive } from "lucide-react";
+
+// Section transition variants
+const sectionVariants: Record<string, { initial: Record<string, number>; animate: Record<string, number>; exit: Record<string, number> }> = {
+  "files-starred": {
+    initial: { x: 60, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: -60, opacity: 0 },
+  },
+  "starred-files": {
+    initial: { x: -60, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: 60, opacity: 0 },
+  },
+  "files-trash": {
+    initial: { y: 40, opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: -40, opacity: 0 },
+  },
+  "trash-files": {
+    initial: { y: -40, opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: 40, opacity: 0 },
+  },
+  "files-quick-transfer": {
+    initial: { scale: 0.95, opacity: 0 },
+    animate: { scale: 1, opacity: 1 },
+    exit: { scale: 1.05, opacity: 0 },
+  },
+  "quick-transfer-files": {
+    initial: { scale: 1.05, opacity: 0 },
+    animate: { scale: 1, opacity: 1 },
+    exit: { scale: 0.95, opacity: 0 },
+  },
+  "files-recent": {
+    initial: { x: 30, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: -30, opacity: 0 },
+  },
+  "recent-files": {
+    initial: { x: -30, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: 30, opacity: 0 },
+  },
+  "files-transfer-station": {
+    initial: { x: 60, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: -60, opacity: 0 },
+  },
+  "transfer-station-files": {
+    initial: { x: -60, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: 60, opacity: 0 },
+  },
+  default: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+  },
+};
+
+function getTransitionVariant(from: Section, to: Section) {
+  const key = `${from}-${to}`;
+  return sectionVariants[key] || sectionVariants.default;
+}
 
 export default function CloudDriveApp() {
   const {
@@ -35,6 +99,15 @@ export default function CloudDriveApp() {
     setViewMode, setSortBy, setSortDirection, setCompactMode, setShowExtensions,
     navigateBack, navigateForward, setCurrentFolderId,
   } = useFileStore();
+
+  // Track previous section for transition direction
+  const [prevSection, setPrevSection] = useState<Section>(section);
+  const prevFolderRef = useRef(currentFolderId);
+
+  // Update prevSection when section changes
+  useEffect(() => {
+    setPrevSection(section);
+  }, [section]);
 
   const prefs = useUserPreferences();
 
@@ -250,9 +323,27 @@ export default function CloudDriveApp() {
 
           {/* Quick Transfer Panel */}
           {section === "quick-transfer" ? (
-            <QuickTransferPanel />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="quick-transfer"
+                {...getTransitionVariant(prevSection, section)}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="flex-1 min-h-0"
+              >
+                <QuickTransferPanel />
+              </motion.div>
+            </AnimatePresence>
           ) : section === "transfer-station" ? (
-            <TransferStationPanel />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="transfer-station"
+                {...getTransitionVariant(prevSection, section)}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="flex-1 min-h-0"
+              >
+                <TransferStationPanel />
+              </motion.div>
+            </AnimatePresence>
           ) : (
             /* File area with upload zone */
             <UploadZone>
@@ -260,10 +351,10 @@ export default function CloudDriveApp() {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={`${section}-${currentFolderId}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
                     className="flex-1 overflow-y-auto"
                   >
                     {viewMode === "grid" ? <FileGrid /> : <FileList />}

@@ -79,36 +79,36 @@
 }
 
 .dark {
-  --background: oklch(0.11 0.005 155);
-  --foreground: oklch(0.985 0.003 155);
-  --card: oklch(0.16 0.005 155);
-  --card-foreground: oklch(0.985 0.003 155);
-  --popover: oklch(0.16 0.005 155);
-  --popover-foreground: oklch(0.985 0.003 155);
+  --background: oklch(0.085 0.004 155);
+  --foreground: oklch(0.965 0.004 155);
+  --card: oklch(0.155 0.008 155);
+  --card-foreground: oklch(0.965 0.004 155);
+  --popover: oklch(0.155 0.008 155);
+  --popover-foreground: oklch(0.965 0.004 155);
   --primary: oklch(0.608 0.17 160);
-  --primary-foreground: oklch(0.11 0.005 155);
-  --secondary: oklch(0.22 0.01 155);
-  --secondary-foreground: oklch(0.985 0.003 155);
-  --muted: oklch(0.22 0.01 155);
-  --muted-foreground: oklch(0.65 0.02 155);
-  --accent: oklch(0.22 0.015 155);
-  --accent-foreground: oklch(0.985 0.003 155);
+  --primary-foreground: oklch(0.10 0.005 155);
+  --secondary: oklch(0.215 0.012 155);
+  --secondary-foreground: oklch(0.935 0.006 155);
+  --muted: oklch(0.215 0.012 155);
+  --muted-foreground: oklch(0.72 0.016 155);
+  --accent: oklch(0.215 0.018 155);
+  --accent-foreground: oklch(0.935 0.006 155);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
   --ring: oklch(0.608 0.17 160);
   --chart-1: oklch(0.608 0.17 160);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.14 0.005 155);
-  --sidebar-foreground: oklch(0.985 0.003 155);
+  --sidebar: oklch(0.06 0.004 155);
+  --sidebar-foreground: oklch(0.965 0.004 155);
   --sidebar-primary: oklch(0.608 0.17 160);
-  --sidebar-primary-foreground: oklch(0.985 0.003 155);
-  --sidebar-accent: oklch(0.22 0.015 155);
-  --sidebar-accent-foreground: oklch(0.985 0.003 155);
-  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-primary-foreground: oklch(0.965 0.004 155);
+  --sidebar-accent: oklch(0.155 0.015 155);
+  --sidebar-accent-foreground: oklch(0.935 0.006 155);
+  --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.608 0.17 160);
 }
 
@@ -116,9 +116,87 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Dark mode specific enhancements */
+.dark {
+  /* Make cards more distinct from background */
+  .card-border-boost {
+    border-color: oklch(1 0 0 / 18%);
+  }
+  /* Card elevation effect in dark mode */
+  [data-slot="card"] {
+    box-shadow: 0 1px 3px oklch(0 0 0 / 20%), 0 1px 2px oklch(0 0 0 / 15%);
+    border-color: oklch(1 0 0 / 10%);
+  }
+  /* Improve progress bar visibility in dark mode */
+  [role="progressbar"] > div {
+    box-shadow: 0 0 8px oklch(0.608 0.17 160 / 25%);
+  }
+  /* Toast notification readability in dark mode */
+  [data-sonner-toast] {
+    background: oklch(0.18 0.006 155) !important;
+    border: 1px solid oklch(1 0 0 / 14%) !important;
+    color: oklch(0.965 0.004 155) !important;
+    box-shadow: 0 8px 32px oklch(0 0 0 / 50%) !important;
+  }
+  /* Subtle shadows for depth in dark mode */
+  .shadow-dark-elevated {
+    box-shadow: 0 4px 16px oklch(0 0 0 / 35%), 0 1px 3px oklch(0 0 0 / 25%);
+  }
+  /* File item hover in dark mode */
+  .hover\:bg-muted\/50:hover {
+    background-color: oklch(1 0 0 / 8%);
+  }
+  /* Make storage progress bar more visible */
+  .progress-bar-glow > div {
+    box-shadow: 0 0 12px oklch(0.508 0.15 160 / 35%);
+  }
+  /* Improve table row contrast in dark mode */
+  [data-slot="table-row"]:hover {
+    background-color: oklch(1 0 0 / 6%);
+  }
+  /* Better border visibility for inner bordered elements */
+  .dark-border-boost {
+    border-color: oklch(1 0 0 / 16%);
+  }
+  /* Badge contrast in dark mode */
+  [data-slot="badge"][data-variant="outline"] {
+    border-color: oklch(1 0 0 / 18%);
+  }
+  /* Input focus ring in dark mode */
+  input:focus, textarea:focus, select:focus {
+    border-color: oklch(0.608 0.17 160 / 60%);
+    box-shadow: 0 0 0 2px oklch(0.608 0.17 160 / 20%);
+  }
+  /* Separator/Divider visibility */
+  [data-orientation="horizontal"] {
+    background-color: oklch(1 0 0 / 12%);
+  }
+  /* Improve skeleton visibility in dark mode */
+  .skeleton-dark-boost {
+    background: oklch(1 0 0 / 8%);
+  }
+}
+
+/* Theme transition animation */
+.theme-transitioning,
+.theme-transitioning * {
+  transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease, fill 0.3s ease, stroke 0.3s ease !important;
+}
+
+/* Smooth theme transition on root element */
+html {
+  transition: background-color 0.35s ease, color 0.25s ease;
+}
+html.dark {
+  transition: background-color 0.35s ease, color 0.25s ease;
 }
 
 /* Animated dashed border for upload zone */
@@ -143,6 +221,113 @@
   animation: pulse-once 0.5s ease-in-out 1;
 }
 
+/* Shimmer effect for upload button and progress bars */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+/* Upload button shimmer overlay */
+@keyframes upload-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.upload-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+  animation: upload-shimmer 2.5s ease-in-out infinite;
+}
+
+/* Progress bar shimmer */
+@keyframes progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.progress-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 33%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: progress-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Drag zone pulsing border */
+@keyframes drag-pulse {
+  0%, 100% {
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    border-color: rgba(16, 185, 129, 0.8);
+    box-shadow: 0 0 20px 4px rgba(16, 185, 129, 0.15);
+  }
+}
+
+.animate-drag-pulse {
+  animation: drag-pulse 1.2s ease-in-out infinite;
+}
+
+/* Storage bar warning pulse */
+@keyframes storage-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-storage-pulse {
+  animation: storage-pulse 1.5s ease-in-out infinite;
+}
+
+/* Dialog backdrop blur animation */
+@keyframes backdrop-blur-in {
+  0% { backdrop-filter: blur(0px); opacity: 0; }
+  100% { backdrop-filter: blur(4px); opacity: 1; }
+}
+
+@keyframes backdrop-blur-out {
+  0% { backdrop-filter: blur(4px); opacity: 1; }
+  100% { backdrop-filter: blur(0px); opacity: 0; }
+}
+
+/* Button active press effect */
+.btn-press {
+  transition: transform 0.1s ease;
+}
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Nav item glow */
+.nav-item-glow {
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  transition: box-shadow 0.3s ease;
+}
+.nav-item-glow:hover,
+.nav-item-glow.active {
+  box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.15);
+}
+
 /* Custom scrollbar */
 @layer base {
   ::-webkit-scrollbar {
@@ -159,10 +344,13 @@
   ::-webkit-scrollbar-thumb:hover {
     background: oklch(0.6 0 0 / 50%);
   }
+  .dark ::-webkit-scrollbar-track {
+    background: oklch(0 0 0 / 10%);
+  }
   .dark ::-webkit-scrollbar-thumb {
-    background: oklch(0.4 0 0 / 30%);
+    background: oklch(0.55 0 0 / 40%);
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.5 0 0 / 50%);
+    background: oklch(0.60 0 0 / 60%);
   }
 }
