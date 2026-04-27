@@ -2,10 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
-import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/components/auth-provider";
 import { SessionWrapper } from "@/components/session-wrapper";
 import { I18nProvider } from "@/lib/i18n";
 
@@ -25,14 +23,10 @@ export default function Home() {
   return (
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
-            <TooltipProvider>
-              <SessionWrapper />
-              <Toaster />
-            </TooltipProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <TooltipProvider>
+          <SessionWrapper />
+          <Toaster />
+        </TooltipProvider>
       </QueryClientProvider>
     </I18nProvider>
   );

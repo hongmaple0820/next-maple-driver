@@ -1,25 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileSidebar } from "@/components/file-sidebar";
 import { FileToolbar } from "@/components/file-toolbar";
-import { FileGrid } from "@/components/file-grid";
-import { FileList } from "@/components/file-list";
 import { UploadZone } from "@/components/upload-zone";
-import { FileActions } from "@/components/file-actions";
-import { BatchActions } from "@/components/batch-actions";
-import { BatchMoveDialog, BatchCopyDialog } from "@/components/batch-move-copy-dialog";
 import { FileStatusBar } from "@/components/file-status-bar";
-import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
-import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
-import { AdminPanel } from "@/components/admin-panel";
-import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
-import { MyDrivesPanel } from "@/components/my-drives-panel";
-import { TaskManagerPanel } from "@/components/task-manager-panel";
-import { TransferPanel } from "@/components/transfer-panel";
-import { QuickTransferPanel } from "@/components/quick-transfer-panel";
-import { TransferStationPanel } from "@/components/transfer-station-panel";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useFileStore, type Section } from "@/store/file-store";
 import { useUserPreferences } from "@/lib/user-preferences";
@@ -27,6 +14,22 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { type StorageStats } from "@/lib/file-utils";
 import { HardDrive } from "lucide-react";
+
+// Dynamic imports for heavy components to reduce initial bundle size
+const FileGrid = dynamic(() => import("@/components/file-grid").then((m) => ({ default: m.FileGrid })), { ssr: false });
+const FileList = dynamic(() => import("@/components/file-list").then((m) => ({ default: m.FileList })), { ssr: false });
+const FileActions = dynamic(() => import("@/components/file-actions").then((m) => ({ default: m.FileActions })), { ssr: false });
+const BatchActions = dynamic(() => import("@/components/batch-actions").then((m) => ({ default: m.BatchActions })), { ssr: false });
+const BatchMoveDialog = dynamic(() => import("@/components/batch-move-copy-dialog").then((m) => ({ default: m.BatchMoveDialog })), { ssr: false });
+const BatchCopyDialog = dynamic(() => import("@/components/batch-move-copy-dialog").then((m) => ({ default: m.BatchCopyDialog })), { ssr: false });
+const KeyboardShortcutsDialog = dynamic(() => import("@/components/keyboard-shortcuts-dialog").then((m) => ({ default: m.KeyboardShortcutsDialog })), { ssr: false });
+const UserPreferencesDialog = dynamic(() => import("@/components/user-preferences-dialog").then((m) => ({ default: m.UserPreferencesDialog })), { ssr: false });
+const AdminPanel = dynamic(() => import("@/components/admin-panel").then((m) => ({ default: m.AdminPanel })), { ssr: false });
+const UploadProgressOverlay = dynamic(() => import("@/components/upload-progress-overlay").then((m) => ({ default: m.UploadProgressOverlay })), { ssr: false });
+const MyDrivesPanel = dynamic(() => import("@/components/my-drives-panel").then((m) => ({ default: m.MyDrivesPanel })), { ssr: false });
+const TaskManagerPanel = dynamic(() => import("@/components/task-manager-panel").then((m) => ({ default: m.TaskManagerPanel })), { ssr: false });
+const QuickTransferPanel = dynamic(() => import("@/components/quick-transfer-panel").then((m) => ({ default: m.QuickTransferPanel })), { ssr: false });
+const TransferStationPanel = dynamic(() => import("@/components/transfer-station-panel").then((m) => ({ default: m.TransferStationPanel })), { ssr: false });
 
 // Section transition variants
 const sectionVariants: Record<string, { initial: Record<string, number>; animate: Record<string, number>; exit: Record<string, number> }> = {
