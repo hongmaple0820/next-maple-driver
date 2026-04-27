@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getDriverFactory, isOAuthDriver } from '@/lib/storage-drivers/manager';
+import { getDriverFactory, isOAuthDriver, invalidateDriver } from '@/lib/storage-drivers/manager';
 import { CloudDriverBase } from '@/lib/storage-drivers/cloud-driver-base';
+import { invalidateMountCache } from '@/lib/vfs';
+import type { StorageDriverConfig } from '@/lib/storage-drivers/types';
 
 /**
  * OAuth Callback Route
  * Handles OAuth2 callbacks from all cloud providers.
  * Exchanges the authorization code for tokens and stores them.
- * 
+ *
  * URL: /api/auth/cloud-oauth/callback?code=xxx&state=xxx
  */
 export async function GET(request: NextRequest) {
@@ -75,21 +77,27 @@ export async function GET(request: NextRequest) {
     // Parse the stored config
     const parsedConfig = JSON.parse(driverConfig.config || '{}');
 
+    // Build the callback URL for our OAuth callback endpoint (same as what was used in authorize)
+    const callbackUrl = new URL('/api/auth/cloud-oauth/callback', request.url).toString();
+    if (!parsedConfig.redirectUri) {
+      parsedConfig.redirectUri = callbackUrl;
+    }
+
     // Create a StorageDriverConfig from the DB record
-    const storageConfig = {
+    const storageConfig: StorageDriverConfig = {
       id: driverConfig.id,
       name: driverConfig.name,
-      type: driverConfig.type as "baidu" | "aliyun" | "onedrive" | "google",
+      type: driverConfig.type as StorageDriverConfig['type'],
       config: parsedConfig,
       isDefault: driverConfig.isDefault,
-      isEnabled: driverConfig.status === 'active',
+      isEnabled: driverConfig.isEnabled,
       createdAt: driverConfig.createdAt,
       updatedAt: driverConfig.updatedAt,
-      authType: (driverConfig as Record<string, unknown>).authType as "oauth" | undefined,
-      authStatus: (driverConfig as Record<string, unknown>).authStatus as "pending" | "authorized" | "expired" | "error" | undefined,
-      accessToken: (driverConfig as Record<string, unknown>).accessToken as string | undefined,
-      refreshToken: (driverConfig as Record<string, unknown>).refreshToken as string | undefined,
-      tokenExpiresAt: (driverConfig as Record<string, unknown>).tokenExpiresAt as Date | undefined,
+      authType: 'oauth',
+      authStatus: driverConfig.authStatus as StorageDriverConfig['authStatus'],
+      accessToken: driverConfig.accessToken || undefined,
+      refreshToken: driverConfig.refreshToken || undefined,
+      tokenExpiresAt: driverConfig.tokenExpiresAt || undefined,
     };
 
     // Create driver instance and exchange code for token
@@ -112,13 +120,14 @@ export async function GET(request: NextRequest) {
     await db.storageDriver.update({
       where: { id: driverId },
       data: {
-        // Store tokens in the new auth fields
+        // Store tokens in the auth fields
         accessToken: tokenResponse.access_token,
         refreshToken: tokenResponse.refresh_token,
         tokenExpiresAt,
         authType: 'oauth',
         authStatus: 'authorized',
-        // Also update the config JSON with refresh token for backward compatibility
+        lastSyncAt: new Date(),
+        // Also update the config JSON with tokens for backward compatibility
         config: JSON.stringify({
           ...parsedConfig,
           refreshToken: tokenResponse.refresh_token,
@@ -128,7 +137,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Redirect back to admin panel with success
+    // Invalidate cached driver instance and VFS mount cache
+    invalidateDriver(driverId);
+    invalidateMountCache();
+
+    // Redirect back to the app with success
     return NextResponse.redirect(
       new URL('/?oauth_success=true', request.url)
     );

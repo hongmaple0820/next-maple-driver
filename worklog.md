@@ -4509,3 +4509,126 @@ Stage Summary:
 - Cross-driver transfer works with streaming support between any two drivers
 - OAuth flow properly uses real HTTP calls for token exchange and refresh
 - Lint clean, dev server running without errors
+
+
+---
+Task ID: 3-a
+Agent: Driver Management API Agent
+Task: Create and improve driver management API routes
+
+Work Log:
+- Created 6 new API route files and updated 1 existing file for comprehensive driver management
+- Route 1: /api/drivers/route.ts - User Drivers API
+  - GET: List all storage drivers with masked tokens (accessToken/refreshToken show "••••••••")
+  - POST: Create new driver with type validation, required field validation, auto authType from factory
+- Route 2: /api/drivers/[id]/route.ts - User Driver Detail API
+  - GET: Get single driver details with masked tokens
+  - PUT: Update driver config with selective field updates
+  - DELETE: Delete driver (prevents deleting default driver)
+- Route 3: /api/drivers/[id]/authorize/route.ts - Driver Auth API
+  - POST: Initiate authorization - OAuth drivers get authorization URL, non-OAuth drivers (quark/115) perform credential login
+  - DELETE: De-authorize driver (clear tokens, cookies, set authStatus to pending)
+- Route 4: /api/drivers/[id]/sms-code/route.ts - SMS Code Request
+  - POST: Request SMS verification code for Quark driver via QuarkDriver.requestSmsCode()
+- Route 5: /api/drivers/[id]/health/route.ts - Driver Health Check
+  - GET: Run health check, update authStatus/status in DB based on result
+  - Local/mount drivers use existsSync, cloud drivers use driver.healthCheck()
+- Route 6: /api/drivers/types/route.ts - Available Driver Types
+  - GET: Return all driver factory info (displayName, description, authType, configFields)
+- Updated: /api/auth/cloud-oauth/callback/route.ts
+  - Added invalidateDriver() and invalidateMountCache() after token exchange
+  - Added lastSyncAt update on successful authorization
+  - Used proper StorageDriverConfig type instead of inline type casting
+  - Added redirectUri auto-detection from request URL
+
+Key design decisions:
+- All routes require authentication (getServerSession + authOptions)
+- Sensitive tokens always masked in responses
+- Driver instance cache and VFS mount cache invalidated after changes
+- Non-OAuth login: credentials → driver.login() → save cookies to DB → authStatus = authorized
+- OAuth flow: POST /authorize → authorizationUrl → callback → exchange code → save tokens
+- Health check updates DB authStatus based on result
+- SMS code is separate step for Quark driver
+
+All files pass lint check. Dev server running without errors.
+
+---
+Task ID: 3-b
+Agent: My Drives Panel Agent
+Task: Build frontend "My Drives" panel with real login/bind functionality and cloud drive browser
+
+Work Log:
+- Added `myDrivesOpen` and `setMyDrivesOpen` state to file-store.ts for managing the My Drives panel open/close
+- Created new component: `src/components/my-drives-panel.tsx` with:
+  - **MyDrivesPanel**: Right-side Sheet component containing:
+    - Available Drive Types: Grid of driver type cards (Baidu, Aliyun, OneDrive, Google Drive, 115, Quark, WebDAV, S3, FTP) with icon, name, auth type label, and color coding
+    - Bound Drives List: Shows user's drivers with name, type icon, auth status badge, mount path, and expandable action buttons
+    - Driver cards show auth status (authorized=green, pending=yellow, expired=orange, error=red) with appropriate icons
+    - Footer shows total driver count and authorized count
+  - **AddDriveDialog**: Full-featured dialog for adding new drives with:
+    - For OAuth types (Baidu, Aliyun, OneDrive, Google): Shows info about OAuth flow, "Create & Authorize" button that opens OAuth URL in popup
+    - For Quark: Phone input + password/SMS code toggle + "Send Code" button + "Login" button
+    - For 115: Account + password inputs + "Login" button
+    - For WebDAV/S3/FTP/Local: Dynamic config fields from the driver factory's configFields API, with fallback static fields if API not loaded
+    - Name input and Mount Path input for all types
+    - Proper mutation flow: Create driver → Authorize (if needed) → Invalidate queries
+  - **DriverCard**: Expandable card showing driver info and actions:
+    - Re-authorize button (for auth-required drivers)
+    - Health Check button
+    - De-authorize button
+    - Unbind/Delete button
+  - Mutations: deleteDriverMutation, healthCheckMutation, reauthMutation, deauthMutation, sendSmsMutation
+  - Color-coded driver types: Baidu=blue, Aliyun=orange, OneDrive=blue, Google=red, 115=amber, Quark=purple, WebDAV=teal, S3=amber, FTP=sky
+  - Chinese labels for Chinese-specific items (夸克网盘, 115网盘, 百度网盘, 阿里云盘)
+  - English labels for international items (OneDrive, Google Drive, WebDAV, S3, FTP)
+  - Uses TanStack Query for data fetching and mutations
+  - Uses framer-motion for animations (card entry/exit, expand/collapse)
+  - Uses sonner toasts for feedback
+- Added "我的驱动" (My Drives) button to file-sidebar.tsx:
+  - Placed below main nav items and above Admin Panel button
+  - Uses HardDrive icon with purple accent color
+  - Opens MyDrivesPanel Sheet on click
+  - ChevronRight indicator showing it's a panel opener
+- Added MyDrivesPanel import and render to cloud-drive-app.tsx
+
+Files modified:
+- src/store/file-store.ts - Added myDrivesOpen/setMyDrivesOpen state
+- src/components/my-drives-panel.tsx - New file (complete My Drives panel with Add Drive dialog)
+- src/components/file-sidebar.tsx - Added "我的驱动" button, setMyDrivesOpen
+- src/app/cloud-drive-app.tsx - Added MyDrivesPanel import and render
+
+All files pass lint check. Dev server running without errors.
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix build errors, create driver APIs, build My Drives panel
+
+Work Log:
+- Created missing local-driver.ts to fix Module Not Found build errors
+- Fixed infinite render loop in file-sidebar.tsx (setMountedDrivers was called directly in render body, causing Maximum update depth exceeded error)
+- Wrapped setMountedDrivers call in useEffect to prevent render loop
+- Added useEffect import to file-sidebar.tsx
+- Backend driver management API routes created by subagent (6 new files):
+  - /api/drivers/route.ts - GET/POST user drivers
+  - /api/drivers/[id]/route.ts - GET/PUT/DELETE driver detail
+  - /api/drivers/[id]/authorize/route.ts - POST/DELETE auth flow
+  - /api/drivers/[id]/sms-code/route.ts - POST SMS code request
+  - /api/drivers/[id]/health/route.ts - GET health check
+  - /api/drivers/types/route.ts - GET available driver types
+  - Updated /api/auth/cloud-oauth/callback/route.ts
+- Frontend My Drives panel created by subagent:
+  - src/components/my-drives-panel.tsx - Full-featured Sheet panel with driver type grid, bound drivers list, add drive dialog
+  - Updated file-sidebar.tsx with "我的驱动" button and DriverStatusSection
+  - Updated cloud-drive-app.tsx to include MyDrivesPanel
+  - Added myDrivesOpen/setMyDrivesOpen to file-store
+- Lint passes clean
+
+Stage Summary:
+- Build errors fixed (local-driver.ts missing)
+- Infinite loop bug fixed (render-time setState → useEffect)
+- Driver CRUD + auth API fully implemented (7 routes)
+- My Drives panel UI with driver type grid, login forms for Quark/115, OAuth flow
+- Server runs and responds to API requests
+- Dev server may crash under heavy load (Turbopack memory issue)
+

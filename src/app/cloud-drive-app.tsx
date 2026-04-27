@@ -15,6 +15,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { UserPreferencesDialog } from "@/components/user-preferences-dialog";
 import { AdminPanel } from "@/components/admin-panel";
 import { UploadProgressOverlay } from "@/components/upload-progress-overlay";
+import { MyDrivesPanel } from "@/components/my-drives-panel";
 import { TaskManagerPanel } from "@/components/task-manager-panel";
 import { TransferPanel } from "@/components/transfer-panel";
 import { QuickTransferPanel } from "@/components/quick-transfer-panel";
@@ -390,6 +391,9 @@ export default function CloudDriveApp() {
 
         {/* Admin Panel */}
         <AdminPanel />
+
+        {/* My Drives Panel */}
+        <MyDrivesPanel />
       </motion.div>
     </ErrorBoundary>
   );

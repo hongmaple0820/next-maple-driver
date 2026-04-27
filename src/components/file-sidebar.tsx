@@ -15,7 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatFileSize, type StorageStats } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Tooltip,
@@ -125,9 +125,12 @@ function DriverStatusSection() {
     isDefault: mount.driverId === "local-default",
   }));
 
-  if (mounted.length > 0 && mountedDrivers.length !== mounted.length) {
-    setMountedDrivers(mounted);
-  }
+  // Sync mounted drivers to store (using useEffect to avoid render-loop)
+  useEffect(() => {
+    if (mounted.length > 0 && mountedDrivers.length !== mounted.length) {
+      setMountedDrivers(mounted);
+    }
+  }, [mounted.length, mountedDrivers.length]);
 
   const getDriverIcon = (type: string) => {
     switch (type) {
@@ -433,7 +436,7 @@ function RecentActivityList() {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen, currentDriverId, currentDriverName, setCurrentDriverId } = useFileStore();
+  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen, currentDriverId, currentDriverName, setCurrentDriverId, setMyDrivesOpen } = useFileStore();
   const { theme, setTheme } = useTheme();
   const { data: sessionData } = useSession();
   const isAdmin = (sessionData?.user as Record<string, unknown>)?.role === "admin";
@@ -568,6 +571,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               );
             })}
           </nav>
+          {/* My Drives button */}
+          <div className="px-3 pt-2">
+            <button
+              onClick={() => {
+                setMyDrivesOpen(true);
+                onNavigate?.();
+              }}
+              className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-purple-600/10 hover:text-purple-700 dark:hover:text-purple-400 hover:translate-x-0.5"
+            >
+              <HardDrive className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              我的驱动
+              <ChevronRight className="w-3.5 h-3.5 ml-auto text-muted-foreground/50" />
+            </button>
+          </div>
           {/* Admin Panel Button inside scroll area - clearly separated */}
           {isAdmin && (
             <div className="border-t border-border/60 px-4 py-3 mt-3 mx-1">

@@ -158,6 +158,10 @@ interface FileStore {
   // Browse driver files via VFS
   browseDriver: (driverId: string, driverName: string, driverType: string, mountPath: string) => void;
 
+  // My Drives panel
+  myDrivesOpen: boolean;
+  setMyDrivesOpen: (open: boolean) => void;
+
   // Transfer panel
   transferPanelOpen: boolean;
   setTransferPanelOpen: (open: boolean) => void;
@@ -448,6 +452,10 @@ export const useFileStore = create<FileStore>((set) => ({
         { name: driverName, path: mountPath, driverId, driverType },
       ],
     }),
+
+  // My Drives panel
+  myDrivesOpen: false,
+  setMyDrivesOpen: (open) => set({ myDrivesOpen: open }),
 
   // Transfer panel
   transferPanelOpen: false,
