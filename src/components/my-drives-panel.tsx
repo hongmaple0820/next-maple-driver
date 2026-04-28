@@ -7,7 +7,7 @@ import {
   Cloud, HardDrive, Globe, Server, Network, Plus, X, RefreshCw,
   ShieldCheck, ShieldAlert, ShieldX, ShieldQuestion, Trash2,
   ExternalLink, Phone, KeyRound, Mail, Loader2, ChevronRight,
-  FolderInput, Unplug, CheckCircle2, XCircle, AlertCircle,
+  FolderInput, Unplug, CheckCircle2, XCircle, AlertCircle, Folder,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -1185,6 +1185,7 @@ function DriverCard({
   deleteLoading: boolean;
   onDeauth: (id: string) => void;
 }) {
+  const { browseDriver, setMyDrivesOpen } = useFileStore();
   const [showActions, setShowActions] = useState(false);
   const cfg = DRIVER_TYPE_CONFIG[driver.type] || {
     icon: Cloud,
@@ -1279,6 +1280,20 @@ function DriverCard({
             className="overflow-hidden"
           >
             <div className="flex flex-wrap gap-1.5 pt-3 mt-3 border-t border-border/30">
+              {/* Browse Files */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                onClick={() => {
+                  browseDriver(driver.id, driver.name, driver.type, driver.mountPath || `/${driver.type}`);
+                  setMyDrivesOpen(false);
+                }}
+              >
+                <Folder className="w-3.5 h-3.5 mr-1.5" />
+                浏览文件
+              </Button>
+
               {/* Re-authorize */}
               {needsAuth && !isDefault && (
                 <Button

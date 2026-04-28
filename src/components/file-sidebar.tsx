@@ -59,14 +59,18 @@ function DriverStatusSection() {
   const { t } = useI18n();
   const [expandedDrivers, setExpandedDrivers] = useState<Set<string>>(new Set());
 
-  // Fetch drivers from admin API
+  // Fetch drivers - try user-level API first, fallback to admin API
   const { data: driversData } = useQuery({
     queryKey: ["sidebar-drivers"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/admin/drivers");
-        if (!res.ok) return null;
-        return res.json();
+        // Try user-level API first
+        const res = await fetch("/api/drivers");
+        if (res.ok) return res.json();
+        // Fallback to admin API
+        const adminRes = await fetch("/api/admin/drivers");
+        if (adminRes.ok) return adminRes.json();
+        return null;
       } catch {
         return null;
       }

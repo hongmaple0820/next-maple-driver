@@ -128,6 +128,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-create VFS mount for this driver
+    const finalMountPath = body.mountPath || `/${driver.type}-${driver.id.substring(0, 8)}`;
+    await db.vFSNode.upsert({
+      where: { path: finalMountPath },
+      update: {
+        driverId: driver.id,
+        driverPath: '/',
+        name: finalMountPath.split('/').pop() || driver.name,
+        isReadOnly: isReadOnly || false,
+      },
+      create: {
+        name: finalMountPath.split('/').pop() || driver.name,
+        path: finalMountPath,
+        driverId: driver.id,
+        driverPath: '/',
+        isDir: true,
+        isReadOnly: isReadOnly || false,
+      },
+    });
+
+    // Also update the driver's mountPath
+    await db.storageDriver.update({
+      where: { id: driver.id },
+      data: { mountPath: finalMountPath },
+    });
+
     // Invalidate VFS mount cache after driver changes
     invalidateMountCache();
 
@@ -140,7 +166,7 @@ export async function POST(request: NextRequest) {
         priority: driver.priority,
         isDefault: driver.isDefault,
         basePath: driver.basePath,
-        mountPath: driver.mountPath,
+        mountPath: finalMountPath,
         isReadOnly: driver.isReadOnly,
         config: driver.config,
         authType: driver.authType,

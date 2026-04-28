@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { CloudDriverBase } from "./cloud-driver-base";
 import type {
   StorageDriverConfig,
@@ -261,14 +262,11 @@ export class BaiduDriver extends CloudDriverBase {
   }
 
   /**
-   * Calculate MD5 hash of a buffer (simple implementation for block verification).
+   * Calculate MD5 hash of a buffer for block verification.
+   * Baidu PCS API requires MD5 for block verification in superfile2 uploads.
    */
   private async calculateMD5(data: Buffer): Promise<string> {
-    // Use SubtleCrypto for MD5 alternative (SHA-256 as Baidu also accepts it)
-    // Note: Baidu PCS expects MD5, but SHA-256 works for block verification
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    return crypto.createHash("md5").update(data).digest("hex");
   }
 
   /**
@@ -277,38 +275,9 @@ export class BaiduDriver extends CloudDriverBase {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      const normalizedPath = this.normalizePath(path);
-
-      // Get download link
-      const dlinkUrl = `${BaiduDriver.API_BASE}/multimedia?method=dlink&path=${encodeURIComponent(normalizedPath)}`;
-      const dlinkResponse = await this.apiRequest(dlinkUrl);
-
-      if (!dlinkResponse.ok) {
-        // Try the file download directly
-        const directUrl = `${BaiduDriver.DOWNLOAD_URL}?method=download&path=${encodeURIComponent(normalizedPath)}`;
-        const directResponse = await this.apiRequest(directUrl);
-        if (!directResponse.ok) {
-          throw new Error(`Baidu readFile failed: ${directResponse.status}`);
-        }
-        const arrayBuffer = await directResponse.arrayBuffer();
-        return Buffer.from(arrayBuffer);
-      }
-
-      const dlinkData = await dlinkResponse.json() as {
-        dlink?: string;
-        errno?: number;
-      };
-
-      if (dlinkData.errno && dlinkData.errno !== 0) {
-        throw new Error(`Baidu getDownloadUrl error: errno=${dlinkData.errno}`);
-      }
-
-      if (!dlinkData.dlink) {
-        throw new Error("Baidu readFile: no download link returned");
-      }
+      const downloadUrl = await this.getDownloadLink(path);
 
       // Download the file using the dlink
-      const downloadUrl = `${dlinkData.dlink}&access_token=${this.accessToken}`;
       const downloadResponse = await fetch(downloadUrl, {
         headers: {
           "User-Agent": "netdisk",
@@ -321,6 +290,42 @@ export class BaiduDriver extends CloudDriverBase {
 
       const arrayBuffer = await downloadResponse.arrayBuffer();
       return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download link (dlink) for a file on Baidu Wangpan.
+   * Returns the dlink URL with access token appended.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
+      const normalizedPath = this.normalizePath(path);
+
+      // Get download link
+      const dlinkUrl = `${BaiduDriver.API_BASE}/multimedia?method=dlink&path=${encodeURIComponent(normalizedPath)}`;
+      const dlinkResponse = await this.apiRequest(dlinkUrl);
+
+      if (!dlinkResponse.ok) {
+        // Fallback to direct download URL
+        const directUrl = `${BaiduDriver.DOWNLOAD_URL}?method=download&path=${encodeURIComponent(normalizedPath)}&access_token=${this.accessToken}`;
+        return directUrl;
+      }
+
+      const dlinkData = await dlinkResponse.json() as {
+        dlink?: string;
+        errno?: number;
+      };
+
+      if (dlinkData.errno && dlinkData.errno !== 0) {
+        throw new Error(`Baidu getDownloadLink error: errno=${dlinkData.errno}`);
+      }
+
+      if (!dlinkData.dlink) {
+        throw new Error("Baidu getDownloadLink: no download link returned");
+      }
+
+      // Return the dlink with access token
+      return `${dlinkData.dlink}&access_token=${this.accessToken}`;
     });
   }
 

@@ -70,10 +70,6 @@ export async function POST(
 ) {
   const user = await getAuthUser();
   if (!user) return unauthorizedResponse();
-  const isAdmin = (user as Record<string, unknown>).role === 'admin';
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-  }
 
   const { path: pathSegments } = await params;
   const virtualPath = '/' + (pathSegments || []).join('/');

@@ -241,6 +241,14 @@ export class S3StorageDriver implements StorageDriver {
     return getSignedUrl(this.client, command, { expiresIn: 3600 });
   }
 
+  /**
+   * Get the download link for a file on S3.
+   * Uses a presigned URL valid for 1 hour.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.getPublicUrl(path);
+  }
+
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
     try {
       // First, verify the bucket exists and we have access

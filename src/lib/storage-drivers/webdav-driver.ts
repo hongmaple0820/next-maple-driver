@@ -261,6 +261,14 @@ export class WebDAVStorageDriver implements StorageDriver {
     return Buffer.from(arrayBuffer);
   }
 
+  /**
+   * Get the download link for a file on WebDAV.
+   * Constructs the direct URL to the file on the WebDAV server.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.getUrl(path);
+  }
+
   async deleteFile(path: string): Promise<void> {
     const url = this.getUrl(path);
     try {

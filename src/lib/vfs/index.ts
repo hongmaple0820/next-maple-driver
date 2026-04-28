@@ -67,6 +67,26 @@ async function refreshMountCache(): Promise<VFSMountPoint[]> {
     });
   }
 
+  // Ensure VFSNode exists in DB for local-default mount
+  try {
+    const localNode = await db.vFSNode.findUnique({ where: { path: '/local' } });
+    if (!localNode) {
+      await db.vFSNode.create({
+        data: {
+          name: 'local',
+          path: '/local',
+          driverId: null,
+          driverPath: '/',
+          isDir: true,
+          isReadOnly: false,
+        },
+      });
+    }
+  } catch (e) {
+    // Non-critical: DB may not be available yet
+    console.warn('Failed to ensure local-default VFSNode:', e);
+  }
+
   mountCacheTime = now;
   return mountCache;
 }

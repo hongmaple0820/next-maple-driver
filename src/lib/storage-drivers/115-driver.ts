@@ -319,37 +319,7 @@ export class Drive115Driver extends CookieAuthDriver {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      const normalizedPath = path.replace(/^\/+|\/+$/g, "");
-      const lastSlash = normalizedPath.lastIndexOf("/");
-      const parentPath = normalizedPath.substring(0, lastSlash) || "/";
-      const fileName = normalizedPath.substring(lastSlash + 1);
-
-      // Find the file in the parent directory
-      const files = await this.listDir(parentPath);
-      const file = files.find((f) => f.name === fileName && !f.isDir);
-
-      if (!file || !file.id) {
-        throw new Error(`115 readFile: file "${fileName}" not found`);
-      }
-
-      // Get download URL
-      const downloadUrl = `${Drive115Driver.API_BASE}/files/download?pickcode=${file.id}`;
-      const downloadResponse = await this.cookieRequest(downloadUrl);
-
-      if (!downloadResponse.ok) {
-        const errorText = await downloadResponse.text();
-        throw new Error(`115 getDownloadUrl failed: ${downloadResponse.status} ${errorText}`);
-      }
-
-      const downloadData = await downloadResponse.json() as {
-        file_url?: string;
-        FileUrl?: string;
-      };
-
-      const fileUrl = downloadData.file_url || downloadData.FileUrl;
-      if (!fileUrl) {
-        throw new Error("115 readFile: no download URL returned");
-      }
+      const fileUrl = await this.getDownloadLink(path);
 
       // Download the file content
       const fileResponse = await fetch(fileUrl, {
@@ -365,6 +335,48 @@ export class Drive115Driver extends CookieAuthDriver {
 
       const arrayBuffer = await fileResponse.arrayBuffer();
       return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download URL for a file on 115 Wangpan.
+   * Returns the download URL from the 115 API.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
+      const normalizedPath = path.replace(/^\/+|\/+$/g, "");
+      const lastSlash = normalizedPath.lastIndexOf("/");
+      const parentPath = normalizedPath.substring(0, lastSlash) || "/";
+      const fileName = normalizedPath.substring(lastSlash + 1);
+
+      // Find the file in the parent directory
+      const files = await this.listDir(parentPath);
+      const file = files.find((f) => f.name === fileName && !f.isDir);
+
+      if (!file || !file.id) {
+        throw new Error(`115 getDownloadLink: file "${fileName}" not found`);
+      }
+
+      // Get download URL
+      const downloadUrl = `${Drive115Driver.API_BASE}/files/download?pickcode=${file.id}`;
+      const downloadResponse = await this.cookieRequest(downloadUrl);
+
+      if (!downloadResponse.ok) {
+        const errorText = await downloadResponse.text();
+        throw new Error(`115 getDownloadLink failed: ${downloadResponse.status} ${errorText}`);
+      }
+
+      const downloadData = await downloadResponse.json() as {
+        file_url?: string;
+        FileUrl?: string;
+      };
+
+      const fileUrl = downloadData.file_url || downloadData.FileUrl;
+      if (!fileUrl) {
+        throw new Error("115 getDownloadLink: no download URL returned");
+      }
+
+      return fileUrl;
     });
   }
 

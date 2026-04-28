@@ -470,48 +470,7 @@ export class QuarkDriver extends CookieAuthDriver {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      const normalizedPath = path.replace(/^\/+|\/+$/g, "");
-      const lastSlash = normalizedPath.lastIndexOf("/");
-      const parentPath = normalizedPath.substring(0, lastSlash) || "/";
-      const fileName = normalizedPath.substring(lastSlash + 1);
-
-      // Find the file in the parent directory
-      const files = await this.listDir(parentPath);
-      const file = files.find((f) => f.name === fileName && !f.isDir);
-
-      if (!file || !file.id) {
-        throw new Error(`Quark readFile: file "${fileName}" not found`);
-      }
-
-      // Get download URL
-      const downloadUrl = `${QuarkDriver.API_BASE}/file/download`;
-      const downloadBody = JSON.stringify({
-        fid: file.id,
-      });
-
-      const downloadResponse = await this.cookieRequest(downloadUrl, {
-        method: "POST",
-        body: downloadBody,
-      });
-
-      if (!downloadResponse.ok) {
-        const errorText = await downloadResponse.text();
-        throw new Error(`Quark getDownloadUrl failed: ${downloadResponse.status} ${errorText}`);
-      }
-
-      const downloadData = await downloadResponse.json() as {
-        status?: number;
-        data?: {
-          download_url?: string;
-          url?: string;
-        };
-        message?: string;
-      };
-
-      const fileUrl = downloadData.data?.download_url || downloadData.data?.url;
-      if (!fileUrl) {
-        throw new Error("Quark readFile: no download URL returned");
-      }
+      const fileUrl = await this.getDownloadLink(path);
 
       // Download the file content
       const fileResponse = await fetch(fileUrl, {
@@ -527,6 +486,59 @@ export class QuarkDriver extends CookieAuthDriver {
 
       const arrayBuffer = await fileResponse.arrayBuffer();
       return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download URL for a file on Quark Drive.
+   * Returns the download URL from the Quark API.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
+      const normalizedPath = path.replace(/^\/+|\/+$/g, "");
+      const lastSlash = normalizedPath.lastIndexOf("/");
+      const parentPath = normalizedPath.substring(0, lastSlash) || "/";
+      const fileName = normalizedPath.substring(lastSlash + 1);
+
+      // Find the file in the parent directory
+      const files = await this.listDir(parentPath);
+      const file = files.find((f) => f.name === fileName && !f.isDir);
+
+      if (!file || !file.id) {
+        throw new Error(`Quark getDownloadLink: file "${fileName}" not found`);
+      }
+
+      // Get download URL
+      const downloadUrl = `${QuarkDriver.API_BASE}/file/download`;
+      const downloadBody = JSON.stringify({
+        fid: file.id,
+      });
+
+      const downloadResponse = await this.cookieRequest(downloadUrl, {
+        method: "POST",
+        body: downloadBody,
+      });
+
+      if (!downloadResponse.ok) {
+        const errorText = await downloadResponse.text();
+        throw new Error(`Quark getDownloadLink failed: ${downloadResponse.status} ${errorText}`);
+      }
+
+      const downloadData = await downloadResponse.json() as {
+        status?: number;
+        data?: {
+          download_url?: string;
+          url?: string;
+        };
+        message?: string;
+      };
+
+      const fileUrl = downloadData.data?.download_url || downloadData.data?.url;
+      if (!fileUrl) {
+        throw new Error("Quark getDownloadLink: no download URL returned");
+      }
+
+      return fileUrl;
     });
   }
 

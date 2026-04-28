@@ -270,24 +270,30 @@ export class GoogleDriver extends CloudDriverBase {
       return;
     }
 
-    // Create new file with multipart upload
+    // Create new file with multipart upload using binary-safe Buffer construction
     const boundary = "-------314159265358979323846";
-    const delimiter = `\r\n--${boundary}\r\n`;
-    const closeDelim = `\r\n--${boundary}--`;
 
     const metadata = JSON.stringify({
       name,
       parents: [parentId],
     });
 
-    const body =
-      delimiter +
-      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-      metadata +
-      delimiter +
-      "Content-Type: application/octet-stream\r\n\r\n" +
-      new TextDecoder().decode(data) +
-      closeDelim;
+    // Build multipart body using Buffers to avoid corrupting binary data
+    const partDelimiter = Buffer.from(`\r\n--${boundary}\r\n`);
+    const closeDelim = Buffer.from(`\r\n--${boundary}--`);
+    const metadataHeader = Buffer.from("Content-Type: application/json; charset=UTF-8\r\n\r\n");
+    const metadataBody = Buffer.from(metadata, "utf-8");
+    const dataHeader = Buffer.from("Content-Type: application/octet-stream\r\n\r\n");
+
+    const body = Buffer.concat([
+      partDelimiter,
+      metadataHeader,
+      metadataBody,
+      partDelimiter,
+      dataHeader,
+      data,
+      closeDelim,
+    ]);
 
     const url = `${GoogleDriver.UPLOAD_URL}/files?uploadType=multipart`;
     const response = await this.apiRequest(url, {
@@ -359,10 +365,9 @@ export class GoogleDriver extends CloudDriverBase {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      const fileId = await this.resolvePathToFileId(path);
-      const url = `${GoogleDriver.API_BASE}/files/${fileId}?alt=media`;
+      const downloadUrl = await this.getDownloadLink(path);
 
-      const response = await this.apiRequest(url);
+      const response = await this.apiRequest(downloadUrl);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Google readFile failed: ${response.status} ${errorText}`);
@@ -370,6 +375,17 @@ export class GoogleDriver extends CloudDriverBase {
 
       const arrayBuffer = await response.arrayBuffer();
       return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download link for a file on Google Drive.
+   * Returns the alt=media URL for the file.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
+      const fileId = await this.resolvePathToFileId(path);
+      return `${GoogleDriver.API_BASE}/files/${fileId}?alt=media`;
     });
   }
 

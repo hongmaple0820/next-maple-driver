@@ -250,36 +250,42 @@ export class OneDriveDriver extends CloudDriverBase {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
-      const itemPath = this.getItemPath(path);
-      const url = `${OneDriveDriver.GRAPH_API}${itemPath}:/content`;
+      const downloadUrl = await this.getDownloadLink(path);
 
-      const response = await this.apiRequest(url, {
-        redirect: "manual", // Don't follow redirects automatically
-      });
-
-      // OneDrive returns a 302 redirect to the download URL
-      if (response.status === 302) {
-        const redirectUrl = response.headers.get("Location");
-        if (!redirectUrl) {
-          throw new Error("OneDrive readFile: redirect without Location header");
-        }
-
-        const downloadResponse = await fetch(redirectUrl);
-        if (!downloadResponse.ok) {
-          throw new Error(`OneDrive download failed: ${downloadResponse.status}`);
-        }
-
-        const arrayBuffer = await downloadResponse.arrayBuffer();
-        return Buffer.from(arrayBuffer);
+      const downloadResponse = await fetch(downloadUrl);
+      if (!downloadResponse.ok) {
+        throw new Error(`OneDrive download failed: ${downloadResponse.status}`);
       }
 
+      const arrayBuffer = await downloadResponse.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download link for a file on OneDrive.
+   * Returns the @microsoft.graph.downloadUrl from the Graph API.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
+      const itemPath = this.getItemPath(path);
+      const url = `${OneDriveDriver.GRAPH_API}${itemPath}?$select=@microsoft.graph.downloadUrl`;
+
+      const response = await this.apiRequest(url);
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`OneDrive readFile failed: ${response.status} ${errorText}`);
+        throw new Error(`OneDrive getDownloadLink failed: ${response.status} ${errorText}`);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      const data = await response.json() as {
+        "@microsoft.graph.downloadUrl"?: string;
+      };
+
+      if (!data["@microsoft.graph.downloadUrl"]) {
+        throw new Error("OneDrive getDownloadLink: no download URL returned");
+      }
+
+      return data["@microsoft.graph.downloadUrl"];
     });
   }
 

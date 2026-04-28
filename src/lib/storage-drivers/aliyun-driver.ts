@@ -350,6 +350,25 @@ export class AliyunDriver extends CloudDriverBase {
    */
   async readFile(path: string): Promise<Buffer> {
     return this.withRateLimit(async () => {
+      const downloadUrl = await this.getDownloadLink(path);
+
+      // Download the file content
+      const fileResponse = await fetch(downloadUrl);
+      if (!fileResponse.ok) {
+        throw new Error(`Aliyun file download failed: ${fileResponse.status}`);
+      }
+
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    });
+  }
+
+  /**
+   * Get the download URL for a file on Aliyun Drive.
+   * Returns the download_url from the Aliyun Open API.
+   */
+  async getDownloadLink(path: string): Promise<string> {
+    return this.withRateLimit(async () => {
       const fileId = await this.resolvePathToFileId(path);
       const driveId = await this.getDriveId();
 
@@ -365,7 +384,7 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!downloadResponse.ok) {
         const errorText = await downloadResponse.text();
-        throw new Error(`Aliyun getDownloadUrl failed: ${downloadResponse.status} ${errorText}`);
+        throw new Error(`Aliyun getDownloadLink failed: ${downloadResponse.status} ${errorText}`);
       }
 
       const downloadData = await downloadResponse.json() as {
@@ -374,17 +393,10 @@ export class AliyunDriver extends CloudDriverBase {
       };
 
       if (!downloadData.url) {
-        throw new Error("Aliyun readFile: no download URL returned");
+        throw new Error("Aliyun getDownloadLink: no download URL returned");
       }
 
-      // Download the file content
-      const fileResponse = await fetch(downloadData.url);
-      if (!fileResponse.ok) {
-        throw new Error(`Aliyun file download failed: ${fileResponse.status}`);
-      }
-
-      const arrayBuffer = await fileResponse.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      return downloadData.url;
     });
   }
 
