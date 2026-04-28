@@ -69,6 +69,14 @@ export function LoginPage() {
       });
 
       if (result?.error) {
+        // Map specific error types to better messages
+        if (result.error === "CredentialsSignin") {
+          setError(t.auth.invalidCredentials);
+        } else {
+          setError(t.auth.unexpectedError);
+        }
+      } else if (result?.ok === false) {
+        // Handle case where no error string but login failed
         setError(t.auth.invalidCredentials);
       } else {
         router.push("/");

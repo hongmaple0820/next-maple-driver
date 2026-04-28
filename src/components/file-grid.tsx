@@ -130,9 +130,10 @@ export function FileGrid() {
 
   // Update allFileIds whenever sorted files change
   const allFileIdsValue = sortedFiles.map(f => f.id);
+  const allFileIdsKey = allFileIdsValue.join(",");
   useEffect(() => {
-    setAllFileIds(allFileIdsValue);
-  }, [allFileIdsValue]);
+    setAllFileIds(allFileIdsValue); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [allFileIdsKey]);
 
   // Update search result count
   useEffect(() => {

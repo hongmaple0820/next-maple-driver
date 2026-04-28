@@ -411,6 +411,7 @@ export const useFileStore = create<FileStore>((set) => ({
       vfsPath: "/",
       vfsMode: true,
       vfsBreadcrumb: [{ name: "Drivers", path: "/" }],
+      section: "files" as Section,
       currentFolderId: "root",
       currentDriverId: null,
       currentDriverName: null,

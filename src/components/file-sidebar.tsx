@@ -52,8 +52,8 @@ const driverDisplayNames: Record<string, string> = {
 
 function DriverStatusSection() {
   const {
-    currentDriverId, setCurrentDriverId, setSection, vfsMode, vfsPath,
-    setVfsMode, setVfsPath, browseDriver, mountedDrivers, setMountedDrivers,
+    currentDriverId, vfsMode, vfsPath,
+    browseDriver, setMountedDrivers,
     navigateToVfsPath,
   } = useFileStore();
   const { t } = useI18n();
@@ -126,11 +126,14 @@ function DriverStatusSection() {
   }));
 
   // Sync mounted drivers to store (using useEffect to avoid render-loop)
+  // Use JSON stringification to detect content changes, not just length
+  const mountedJson = JSON.stringify(mounted);
   useEffect(() => {
-    if (mounted.length > 0 && mountedDrivers.length !== mounted.length) {
-      setMountedDrivers(mounted);
+    const parsed = JSON.parse(mountedJson) as MountedDriver[];
+    if (parsed.length > 0) {
+      setMountedDrivers(parsed);
     }
-  }, [mounted.length, mountedDrivers.length]);
+  }, [mountedJson, setMountedDrivers]);
 
   const getDriverIcon = (type: string) => {
     switch (type) {
@@ -181,9 +184,8 @@ function DriverStatusSection() {
   };
 
   const handleVfsBrowse = (mountPath: string, driverId: string, driverType: string) => {
-    setVfsMode(true);
-    setVfsPath(mountPath);
-    setSection("files");
+    // Use navigateToVfsPath to properly set up VFS breadcrumb and state
+    navigateToVfsPath(mountPath, driverId, driverType);
   };
 
   const isDriverActive = (driverId: string) => {
@@ -436,7 +438,7 @@ function RecentActivityList() {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen, currentDriverId, currentDriverName, setCurrentDriverId, setMyDrivesOpen } = useFileStore();
+  const { section, setSection, sidebarOpen, setSidebarOpen, setPreferencesOpen, setAdminPanelOpen, currentDriverId, currentDriverName, setCurrentDriverId, setMyDrivesOpen, vfsMode, navigateToVfsRoot, set: storeSet } = useFileStore();
   const { theme, setTheme } = useTheme();
   const { data: sessionData } = useSession();
   const isAdmin = (sessionData?.user as Record<string, unknown>)?.role === "admin";
@@ -500,11 +502,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <nav className="space-y-0.5 px-3">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = section === item.id;
+              // "All Files" is only active when not in VFS mode
+              const isActive = item.id === "files" ? section === "files" && !vfsMode : section === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => {
+                    if (item.id === "files" && vfsMode) {
+                      // Exit VFS mode when clicking All Files
+                      storeSet({ vfsMode: false, vfsPath: "/", currentDriverId: null, currentDriverName: null, vfsBreadcrumb: [] });
+                    }
                     setSection(item.id);
                     onNavigate?.();
                   }}
@@ -571,8 +578,36 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               );
             })}
           </nav>
+          {/* Drives browser button - navigates to VFS browser */}
+          <div className="px-3 pt-1.5">
+            <button
+              onClick={() => {
+                navigateToVfsRoot();
+                onNavigate?.();
+              }}
+              className={cn(
+                "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
+                vfsMode && section === "files"
+                  ? "bg-gradient-to-r from-emerald-600/10 to-emerald-600/5 text-emerald-700 dark:text-emerald-400 shadow-sm shadow-emerald-500/10"
+                  : "text-sidebar-foreground/70 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:translate-x-0.5"
+              )}
+            >
+              {vfsMode && (
+                <motion.div
+                  layoutId="sidebar-drives-indicator"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-600 dark:bg-emerald-400"
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+              <HardDrive className={cn(
+                "w-5 h-5 transition-colors",
+                vfsMode ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-600 dark:text-emerald-400"
+              )} />
+              {t.app.drives || "Drives"}
+            </button>
+          </div>
           {/* My Drives button */}
-          <div className="px-3 pt-2">
+          <div className="px-3 pt-1">
             <button
               onClick={() => {
                 setMyDrivesOpen(true);
@@ -580,8 +615,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               }}
               className="relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 hover:scale-[1.01] text-sidebar-foreground/70 hover:bg-purple-600/10 hover:text-purple-700 dark:hover:text-purple-400 hover:translate-x-0.5"
             >
-              <HardDrive className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              我的驱动
+              <Settings className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              {t.app.myDrives || "My Drives"}
               <ChevronRight className="w-3.5 h-3.5 ml-auto text-muted-foreground/50" />
             </button>
           </div>
