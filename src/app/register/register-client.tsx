@@ -30,7 +30,7 @@ function getPasswordStrength(password: string): { level: number; color: string }
 }
 
 export function RegisterPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const { t } = useI18n();
 
@@ -50,7 +50,26 @@ export function RegisterPage() {
     }
   }, [status, router]);
 
-  if (status === "authenticated") return null;
+  // Show loading state while session is being resolved to prevent flash
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+            <Cloud className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return null;
+  }
 
   const features = [
     { icon: Shield, title: t.auth.secureStorage, description: t.auth.secureStorageDesc },

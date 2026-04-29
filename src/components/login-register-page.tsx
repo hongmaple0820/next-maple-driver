@@ -19,7 +19,6 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import Link from "next/link";
-import QRCode from "qrcode";
 
 // Floating particle component for the left panel background
 function FloatingParticles() {
@@ -83,7 +82,7 @@ function getPasswordStrength(password: string): { level: number; label: string; 
 }
 
 export function LoginRegisterPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const { t } = useI18n();
 
@@ -119,90 +118,7 @@ export function LoginRegisterPage() {
     }
   }, [status, router]);
 
-  const features = [
-    { icon: Shield, title: t.auth.secureStorage, description: t.auth.secureStorageDesc },
-    { icon: Zap, title: t.auth.lightningFast, description: t.auth.lightningFastDesc },
-    { icon: Globe, title: t.auth.accessAnywhere, description: t.auth.accessAnywhereDesc },
-  ];
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      const result = await signIn("credentials", {
-        email: loginEmail,
-        password: loginPassword,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError(t.auth.invalidCredentials);
-      } else {
-        router.push("/");
-      }
-    } catch {
-      setError(t.auth.unexpectedError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (registerPassword !== registerConfirmPassword) {
-      setError(t.auth.passwordMismatch);
-      return;
-    }
-
-    if (registerPassword.length < 6) {
-      setError(t.auth.passwordTooShort);
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: registerName,
-          email: registerEmail,
-          password: registerPassword,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.error?.includes("already") || data.error?.includes("exists")) {
-          setError(t.auth.emailExists);
-        } else {
-          setError(data.error || t.auth.registrationFailed);
-        }
-        return;
-      }
-
-      // Auto sign in after successful registration
-      await signIn("credentials", {
-        email: registerEmail,
-        password: registerPassword,
-        redirect: false,
-      });
-
-      router.push("/");
-    } catch {
-      setError(t.auth.unexpectedError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // QR Login: Generate a new QR session
+  // QR Login: Generate a new QR session (dynamic import)
   const generateQrSession = useCallback(async () => {
     setQrLoginState("loading");
     setQrDataUrl("");
@@ -221,6 +137,8 @@ export function LoginRegisterPage() {
       setQrSessionId(data.sessionId);
       setExpiresIn(300);
 
+      // Dynamic import to reduce initial bundle size
+      const QRCode = (await import("qrcode")).default;
       const qrUrl = await QRCode.toDataURL(data.qrData, {
         width: 200,
         margin: 2,
@@ -328,6 +246,110 @@ export function LoginRegisterPage() {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
+
+  // Show loading state while session is being resolved to prevent flash
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+            <Cloud className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return null;
+  }
+
+  const features = [
+    { icon: Shield, title: t.auth.secureStorage, description: t.auth.secureStorageDesc },
+    { icon: Zap, title: t.auth.lightningFast, description: t.auth.lightningFastDesc },
+    { icon: Globe, title: t.auth.accessAnywhere, description: t.auth.accessAnywhereDesc },
+  ];
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email: loginEmail,
+        password: loginPassword,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError(t.auth.invalidCredentials);
+      } else {
+        router.push("/");
+      }
+    } catch {
+      setError(t.auth.unexpectedError);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (registerPassword !== registerConfirmPassword) {
+      setError(t.auth.passwordMismatch);
+      return;
+    }
+
+    if (registerPassword.length < 6) {
+      setError(t.auth.passwordTooShort);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: registerName,
+          email: registerEmail,
+          password: registerPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error?.includes("already") || data.error?.includes("exists")) {
+          setError(t.auth.emailExists);
+        } else {
+          setError(data.error || t.auth.registrationFailed);
+        }
+        return;
+      }
+
+      // Auto sign in after successful registration
+      await signIn("credentials", {
+        email: registerEmail,
+        password: registerPassword,
+        redirect: false,
+      });
+
+      router.push("/");
+    } catch {
+      setError(t.auth.unexpectedError);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const switchTab = (tab: "login" | "register" | "qrcode") => {
     setActiveTab(tab);

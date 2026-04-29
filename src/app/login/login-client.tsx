@@ -18,12 +18,28 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import QRCode from "qrcode";
 
 type QrLoginState = "idle" | "loading" | "pending" | "scanned" | "confirmed" | "expired" | "error";
 
+// Loading screen component to prevent flash
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+          <Cloud className="w-7 h-7 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Loading...</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LoginPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const { t } = useI18n();
 
@@ -43,52 +59,16 @@ export function LoginPage() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Redirect if already authenticated
+  // ALL hooks must be called before any early returns
+
+  // Redirect if already authenticated - use replace to avoid back-button loop
   useEffect(() => {
     if (status === "authenticated") {
       router.replace("/");
     }
   }, [status, router]);
 
-  const features = [
-    { icon: Shield, title: t.auth.secureStorage, description: t.auth.secureStorageDesc },
-    { icon: Zap, title: t.auth.lightningFast, description: t.auth.lightningFastDesc },
-    { icon: Globe, title: t.auth.accessAnywhere, description: t.auth.accessAnywhereDesc },
-  ];
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        // Map specific error types to better messages
-        if (result.error === "CredentialsSignin") {
-          setError(t.auth.invalidCredentials);
-        } else {
-          setError(t.auth.unexpectedError);
-        }
-      } else if (result?.ok === false) {
-        // Handle case where no error string but login failed
-        setError(t.auth.invalidCredentials);
-      } else {
-        router.push("/");
-      }
-    } catch {
-      setError(t.auth.unexpectedError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // QR Login: Generate a new QR session
+  // QR Login: Generate a new QR session (with dynamic import to avoid heavy bundle on initial load)
   const generateQrSession = useCallback(async () => {
     setQrLoginState("loading");
     setQrDataUrl("");
@@ -107,7 +87,8 @@ export function LoginPage() {
       setSessionId(data.sessionId);
       setExpiresIn(300);
 
-      // Generate QR code as data URL
+      // Dynamically import QRCode to avoid heavy initial bundle
+      const QRCode = (await import("qrcode")).default;
       const qrUrl = await QRCode.toDataURL(data.qrData, {
         width: 220,
         margin: 2,
@@ -217,8 +198,55 @@ export function LoginPage() {
     };
   }, []);
 
-  // Don't render if already authenticated (redirect handled by useEffect)
-  if (status === "authenticated") return null;
+  // NOW we can do early returns after all hooks
+
+  // Show loading state while session is being resolved to prevent flash
+  if (status === "loading") {
+    return <LoadingScreen />;
+  }
+
+  // Don't render the login form if already authenticated (redirect is handled by useEffect)
+  if (status === "authenticated") {
+    return null;
+  }
+
+  const features = [
+    { icon: Shield, title: t.auth.secureStorage, description: t.auth.secureStorageDesc },
+    { icon: Zap, title: t.auth.lightningFast, description: t.auth.lightningFastDesc },
+    { icon: Globe, title: t.auth.accessAnywhere, description: t.auth.accessAnywhereDesc },
+  ];
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        // Map specific error types to better messages
+        if (result.error === "CredentialsSignin") {
+          setError(t.auth.invalidCredentials);
+        } else {
+          setError(t.auth.unexpectedError);
+        }
+      } else if (result?.ok === false) {
+        // Handle case where no error string but login failed
+        setError(t.auth.invalidCredentials);
+      } else {
+        router.push("/");
+      }
+    } catch {
+      setError(t.auth.unexpectedError);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-background">

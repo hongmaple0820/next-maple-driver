@@ -117,3 +117,26 @@
 - 认证状态检查和友好错误提示
 - 更新VFS API路由
 - 更新VFS浏览器组件，添加驱动状态徽章和中文名称
+
+### Task ID: 10 - 登录页狂闪Bug修复
+
+**问题诊断**: 用户报告登录页面"狂闪"，经分析发现以下根本原因：
+1. **双重SessionProvider嵌套** - layout.tsx已有AuthProvider(SessionProvider)，但login/register/qr-auth页面又重复嵌套了AuthProvider，导致session状态不一致和闪烁
+2. **缺少loading状态** - 登录页在session获取期间(status=loading)直接渲染完整表单，导致状态切换时闪烁
+3. **React Hooks顺序违规** - 在early return之后调用useCallback/useEffect，违反hooks规则
+4. **QRCode静态导入** - qrcode包静态导入导致初始加载缓慢
+5. **SessionWrapper返回null** - 未认证时返回null导致空白闪烁
+
+**修复内容**:
+- 移除login/register/qr-auth页面中重复的AuthProvider包裹
+- 在login-client.tsx、login-register-page.tsx、register-client.tsx中添加status==="loading"时的loading界面
+- 修复所有hooks顺序：将useCallback和所有useEffect移至early return之前
+- 将QRCode改为动态导入：`const QRCode = (await import("qrcode")).default`
+- 改进SessionWrapper：未认证时显示"Redirecting to login..."而不是空白null
+- 移除Next.js 16中已废弃的middleware.ts（Next.js 16使用proxy替代）
+
+**验证结果**:
+- ✅ `bun run lint` 零错误通过
+- ✅ agent-browser端到端测试：登录页正常渲染，表单可交互
+- ✅ 登录失败后正确跳转到error页面
+- ✅ 不再出现闪烁问题
