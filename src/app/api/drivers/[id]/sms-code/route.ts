@@ -39,7 +39,7 @@ export async function POST(
     }
 
     // Get the factory and create a driver instance
-    const factory = getDriverFactory('quark');
+    const factory = await getDriverFactory('quark');
     if (!factory) {
       return NextResponse.json(
         { error: 'Quark driver factory not found' },

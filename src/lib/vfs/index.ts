@@ -161,7 +161,7 @@ export async function resolveVirtualPath(virtualPath: string): Promise<ResolvedP
       tokenExpiresAt: driverRecord.tokenExpiresAt || undefined,
     };
 
-    driver = getDriver(config);
+    driver = await getDriver(config);
   }
 
   return {

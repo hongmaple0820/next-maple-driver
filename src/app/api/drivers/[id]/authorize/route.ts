@@ -98,7 +98,7 @@ async function handleOAuthAuthorize(
   driverRecord: Record<string, unknown>,
   request: NextRequest
 ) {
-  const factory = getDriverFactory(driverRecord.type as string);
+  const factory = await getDriverFactory(driverRecord.type as string);
   if (!factory) {
     return NextResponse.json(
       { error: `Unknown driver type: ${driverRecord.type}` },
@@ -176,7 +176,7 @@ async function handleCredentialLogin(
 ) {
   const driverType = driverRecord.type as string;
   const driverId = driverRecord.id as string;
-  const factory = getDriverFactory(driverType);
+  const factory = await getDriverFactory(driverType);
   if (!factory) {
     return NextResponse.json(
       { error: `Unknown driver type: ${driverType}` },

@@ -167,7 +167,7 @@ async function getDriverById(
     tokenExpiresAt: driverRecord.tokenExpiresAt || undefined,
   };
 
-  return { driver: getDriver(config), config };
+  return { driver: await getDriver(config), config };
 }
 
 // ---------------------------------------------------------------------------

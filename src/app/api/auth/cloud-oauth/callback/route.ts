@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the driver factory and create a driver instance
-    const factory = getDriverFactory(driverConfig.type);
+    const factory = await getDriverFactory(driverConfig.type);
     if (!factory) {
       return NextResponse.json(
         { error: `Unknown driver type: ${driverConfig.type}` },

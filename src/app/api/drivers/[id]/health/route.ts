@@ -60,7 +60,7 @@ export async function GET(
     }
 
     // For cloud drivers, use the driver's healthCheck method
-    const factory = getDriverFactory(driverRecord.type);
+    const factory = await getDriverFactory(driverRecord.type);
     if (!factory) {
       return NextResponse.json({
         healthy: false,

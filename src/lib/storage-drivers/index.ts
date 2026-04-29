@@ -1,14 +1,9 @@
+// Barrel exports for storage-drivers
+// Only re-export types, base class, and manager functions.
+// Individual drivers are lazy-loaded via manager.ts to avoid
+// pulling in heavy deps (@aws-sdk, ssh2, basic-ftp) at startup.
+
 export * from "./types";
 export * from "./cloud-driver-base";
 export * from "./local-driver";
-export * from "./s3-driver";
-export * from "./webdav-driver";
-export * from "./mount-driver";
-export * from "./ftp-driver";
-export * from "./baidu-driver";
-export * from "./aliyun-driver";
-export * from "./onedrive-driver";
-export * from "./google-driver";
-export * from "./115-driver";
-export * from "./quark-driver";
 export * from "./manager";

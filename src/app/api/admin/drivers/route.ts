@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { existsSync } from 'fs';
-import { getDriverFactory } from '@/lib/storage-drivers';
+import { getDriverFactory } from '@/lib/storage-drivers/manager';
 import { invalidateMountCache } from '@/lib/vfs';
 
 async function requireAdmin() {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate driver type
-    const factory = getDriverFactory(type);
+    const factory = await getDriverFactory(type);
     if (!factory) {
       return NextResponse.json(
         { error: `Unsupported driver type: ${type}. Supported: local, s3, webdav, baidu, aliyun, onedrive, google, 115, quark` },

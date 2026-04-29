@@ -15,7 +15,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const factories = getAllDriverFactories();
+    const factories = await getAllDriverFactories();
 
     const driverTypes = factories.map((factory) => ({
       type: factory.type,

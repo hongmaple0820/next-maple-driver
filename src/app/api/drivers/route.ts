@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate driver type
-    const factory = getDriverFactory(type);
+    const factory = await getDriverFactory(type);
     if (!factory) {
       return NextResponse.json(
         {

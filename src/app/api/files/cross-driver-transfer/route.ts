@@ -49,7 +49,7 @@ async function getDriverInstance(driverId: string): Promise<{ driver: StorageDri
     updatedAt: driverRecord.updatedAt,
   };
 
-  return { driver: getDriver(config), config };
+  return { driver: await getDriver(config), config };
 }
 
 // ---- Recursive file counting ----
