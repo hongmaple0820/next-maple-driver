@@ -21,23 +21,6 @@ import Link from "next/link";
 
 type QrLoginState = "idle" | "loading" | "pending" | "scanned" | "confirmed" | "expired" | "error";
 
-// Loading screen component to prevent flash
-function LoadingScreen() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-          <Cloud className="w-7 h-7 text-white" />
-        </div>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -200,14 +183,39 @@ export function LoginPage() {
 
   // NOW we can do early returns after all hooks
 
-  // Show loading state while session is being resolved to prevent flash
+  // Show stable loading state while session is being resolved
+  // This prevents the flash by not switching between loading → form → loading states
   if (status === "loading") {
-    return <LoadingScreen />;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+            <Cloud className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Don't render the login form if already authenticated (redirect is handled by useEffect)
   if (status === "authenticated") {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+            <Cloud className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Redirecting...</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const features = [

@@ -1,6 +1,6 @@
 #!/bin/bash
 while true; do
-  node node_modules/.bin/next dev -p 3000
-  echo "[$(date)] Server died, restarting in 2s..." >> /home/z/my-project/server-restart.log
-  sleep 2
+  NODE_OPTIONS="--max-old-space-size=768" bun run dev 2>&1
+  echo "[$(date)] Server died, restarting in 3s..." >> /home/z/my-project/server-restart.log
+  sleep 3
 done

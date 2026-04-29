@@ -1,29 +1,35 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import CloudDriveApp from "@/app/cloud-drive-app";
 import { Loader2, Cloud } from "lucide-react";
 
+/**
+ * SessionWrapper handles the client-side session check.
+ * 
+ * Auth flow:
+ * 1. Middleware (server-side) redirects unauthenticated users to /login
+ * 2. This component is a client-side fallback that handles edge cases
+ *    and shows appropriate loading states
+ */
 export function SessionWrapper() {
   const { status } = useSession();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const hasRedirected = useRef(false);
 
   useEffect(() => {
-    // Only redirect once to prevent flickering loops
-    // Middleware handles the initial redirect, but this is a client-side fallback
+    // Client-side fallback: redirect if middleware didn't catch it
+    // (e.g., when JS takes over navigation)
     if (status === "unauthenticated" && !hasRedirected.current) {
       hasRedirected.current = true;
-      const callbackUrl = searchParams.get("callbackUrl") || "/";
-      // Only redirect if we're not already on a public page
-      // (middleware should have handled this, but just in case)
       router.replace("/login");
     }
-  }, [status, router, searchParams]);
+  }, [status, router]);
 
+  // Show a stable loading state while session is being resolved
+  // This prevents the flash of content before redirect
   if (status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -42,8 +48,8 @@ export function SessionWrapper() {
     );
   }
 
+  // Show redirecting state briefly (middleware should have already redirected)
   if (status === "unauthenticated") {
-    // Show loading while redirect is happening (instead of blank/null)
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
