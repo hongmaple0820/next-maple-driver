@@ -42,9 +42,11 @@ function buildStorageConfig(driverRecord: Record<string, unknown>): StorageDrive
  * For OAuth drivers (baidu, aliyun, onedrive, google):
  *   Generates authorization URL, saves state, returns the URL for frontend redirect.
  *
- * For non-OAuth drivers (quark, 115):
- *   Accepts credentials (phone+password/SMS, or account+password),
- *   performs login, saves cookies/tokens.
+ * For cookie-based drivers (quark):
+ *   Accepts cookies directly, validates them, saves to config.
+ *
+ * For password-based drivers (115):
+ *   Accepts cookies directly (no reliable login API), validates them.
  */
 export async function POST(
   request: NextRequest,
@@ -167,8 +169,9 @@ async function handleOAuthAuthorize(
 }
 
 /**
- * Handle credential-based login for password/SMS drivers (quark, 115).
- * Accepts credentials, performs login, saves cookies/tokens.
+ * Handle credential-based login for password/cookie drivers (quark, 115).
+ * - Quark: Accepts cookies directly (no public login API), validates them.
+ * - 115: Accepts cookies directly (no reliable login API), validates them.
  */
 async function handleCredentialLogin(
   driverRecord: Record<string, unknown>,
@@ -188,37 +191,27 @@ async function handleCredentialLogin(
   const existingConfig = JSON.parse((driverRecord.config as string) || '{}');
   const updatedConfig = { ...existingConfig };
 
-  // --- Quark Driver ---
+  // --- Quark Driver (cookie-based auth) ---
   if (driverType === 'quark') {
-    const { phone, password, smsCode } = body;
-    if (!phone) {
+    const { cookies } = body;
+    if (!cookies) {
       return NextResponse.json(
-        { error: 'Phone number is required for Quark login' },
+        { error: 'Cookie 是夸克网盘的必填认证信息。请从浏览器中获取 Cookie，或使用二维码扫描登录（/api/drivers/[id]/qr-login）' },
         { status: 400 }
       );
     }
-    updatedConfig.phone = phone as string;
-    if (password) updatedConfig.password = password as string;
-    if (smsCode) updatedConfig.smsCode = smsCode as string;
-
-    if (!updatedConfig.password && !updatedConfig.smsCode) {
-      return NextResponse.json(
-        { error: 'Either password or SMS code is required for Quark login' },
-        { status: 400 }
-      );
-    }
+    updatedConfig.cookies = cookies as string;
   }
-  // --- 115 Driver ---
+  // --- 115 Driver (cookie-based auth, like Quark) ---
   else if (driverType === '115') {
-    const { username, password } = body;
-    if (!username || !password) {
+    const { cookies } = body;
+    if (!cookies) {
       return NextResponse.json(
-        { error: 'Username and password are required for 115 login' },
+        { error: 'Cookie 是115网盘的必填认证信息。请从浏览器中获取 Cookie，或使用二维码扫描登录（/api/drivers/[id]/qr-login）' },
         { status: 400 }
       );
     }
-    updatedConfig.username = username as string;
-    updatedConfig.password = password as string;
+    updatedConfig.cookies = cookies as string;
   }
 
   // Update the driver config in DB with the new credentials
@@ -252,7 +245,7 @@ async function handleCredentialLogin(
   }
 
   try {
-    // Perform login to get cookies
+    // Perform login / validate cookies
     const cookies = await driver.login();
 
     // Save cookies to config and update auth status
@@ -262,7 +255,7 @@ async function handleCredentialLogin(
       where: { id: driverId },
       data: {
         config: JSON.stringify(configWithCookies),
-        authType: driverType === 'quark' && updatedConfig.smsCode ? 'sms' : 'password',
+        authType: 'password',
         authStatus: 'authorized',
         lastSyncAt: new Date(),
       },
@@ -274,7 +267,7 @@ async function handleCredentialLogin(
 
     return NextResponse.json({
       success: true,
-      authType: driverType === 'quark' && updatedConfig.smsCode ? 'sms' : 'password',
+      authType: 'password',
       authStatus: 'authorized',
       message: `${driverType === 'quark' ? '夸克网盘' : '115网盘'}登录成功`,
     });
@@ -324,8 +317,7 @@ export async function DELETE(
     delete cleanedConfig.cookies;
     delete cleanedConfig.accessToken;
     delete cleanedConfig.refreshToken;
-    delete cleanedConfig.smsCode;
-    // Keep phone/username/password so user can re-auth without re-entering
+    // 115 no longer uses username/password, only cookies
 
     await db.storageDriver.update({
       where: { id },

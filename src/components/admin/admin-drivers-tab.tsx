@@ -34,6 +34,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatFileSize } from "@/lib/file-utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CloudProvidersSection } from "@/components/admin/cloud-providers-section";
 
 // ---- Types ----
 interface DriverInfo {
@@ -672,6 +673,9 @@ export function AdminDriversTab() {
           </Card>
         </motion.div>
       )}
+
+      {/* Cloud Providers Configuration */}
+      <CloudProvidersSection />
 
       {/* Header */}
       <div className="flex items-center justify-between gap-4">

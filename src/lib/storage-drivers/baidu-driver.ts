@@ -5,8 +5,64 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  OAuthTokenResponse,
   FileInfo,
 } from "./types";
+
+// ---- Baidu Drive API Response Types ----
+
+interface BaiduListItem {
+  fs_id: number;
+  path: string;
+  server_filename: string;
+  size: number;
+  isdir: number;
+  mtime: number;
+  ctime: number;
+  md5?: string;
+  category?: number;
+  server_ctime?: number;
+  server_mtime?: number;
+  share?: number;
+  plas?: number;
+  file_key?: string;
+}
+
+interface BaiduListResponse {
+  list?: BaiduListItem[];
+  errno?: number;
+  guide_dir?: number;
+}
+
+interface BaiduDlinkResponse {
+  dlink?: string;
+  errno?: number;
+  list?: Array<{
+    dlink?: string;
+    fs_id?: number;
+    md5?: string;
+  }>;
+}
+
+interface BaiduQuotaResponse {
+  used?: number;
+  total?: number;
+  errno?: number;
+}
+
+interface BaiduUserInfoResponse {
+  baidu_name?: string;
+  netdisk_name?: string;
+  uk?: number;
+  vip_type?: number;
+  vip?: number;
+  errno?: number;
+}
+
+interface BaiduTokenResponse extends OAuthTokenResponse {
+  session_secret?: string;
+  session_key?: string;
+}
 
 /**
  * 百度网盘 (Baidu Wangpan) Driver
@@ -22,6 +78,10 @@ import type {
  *
  * Baidu PCS uses path-based file system. All paths should be absolute
  * starting with /apps/{app_dir}/ where app_dir is the app's directory.
+ *
+ * Direct Refresh Token Flow:
+ * If user provides a refresh_token directly, the driver automatically
+ * exchanges it for an access token without requiring the full OAuth flow.
  */
 export class BaiduDriver extends CloudDriverBase {
   readonly type = "baidu";
@@ -34,6 +94,13 @@ export class BaiduDriver extends CloudDriverBase {
 
   // Path prefix for Baidu PCS API (apps directory)
   private appDir: string;
+
+  // Session data from Baidu OAuth (stored but not used for API calls currently)
+  private sessionSecret: string = "";
+  private sessionKey: string = "";
+
+  // Whether we've attempted initial token exchange from a provided refresh_token
+  private initialTokenExchangeDone = false;
 
   constructor(config: StorageDriverConfig) {
     super(config);
@@ -63,6 +130,193 @@ export class BaiduDriver extends CloudDriverBase {
   }
 
   /**
+   * Override refreshAccessToken to use the correct Baidu token endpoint
+   * with grant_type=refresh_token and store session data.
+   */
+  async refreshAccessToken(): Promise<OAuthTokenResponse> {
+    if (!this.refreshToken) {
+      throw new Error("百度网盘刷新令牌失败：没有可用的 refresh_token");
+    }
+
+    const oauthConfig = this.getOAuthConfig();
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.refreshToken,
+      client_id: oauthConfig.clientId,
+      client_secret: oauthConfig.clientSecret,
+    });
+
+    const response = await fetch(oauthConfig.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.handleApiError("刷新令牌", response.status, errorText);
+    }
+
+    const data = await response.json() as BaiduTokenResponse;
+
+    this.accessToken = data.access_token;
+    if (data.refresh_token) {
+      this.refreshToken = data.refresh_token;
+    }
+    this.tokenExpiresAt = new Date(Date.now() + (data.expires_in || 2592000) * 1000);
+
+    // Store session data from Baidu OAuth response
+    if (data.session_secret) {
+      this.sessionSecret = data.session_secret;
+    }
+    if (data.session_key) {
+      this.sessionKey = data.session_key;
+    }
+
+    return data;
+  }
+
+  /**
+   * Override ensureValidToken to support direct refresh_token input.
+   * If a refresh_token was provided in config but no access_token exists,
+   * automatically exchange it for an access token.
+   */
+  async ensureValidToken(): Promise<string> {
+    // If we have a refresh_token but no access_token, try to exchange it
+    if (this.refreshToken && !this.accessToken && !this.initialTokenExchangeDone) {
+      this.initialTokenExchangeDone = true;
+      try {
+        await this.refreshAccessToken();
+      } catch (error) {
+        throw new Error(
+          `百度网盘使用 refresh_token 获取访问令牌失败：${error instanceof Error ? error.message : "未知错误"}`
+        );
+      }
+    }
+
+    // Check if token is expired
+    if (this.accessToken && this.tokenExpiresAt && this.tokenExpiresAt <= new Date()) {
+      if (this.refreshToken) {
+        await this.refreshAccessToken();
+      } else {
+        throw new Error("百度网盘访问令牌已过期且没有 refresh_token，请重新授权");
+      }
+    }
+
+    return this.accessToken;
+  }
+
+  /**
+   * Override apiRequest to append access_token as a query parameter
+   * for Baidu-specific API calls. Baidu requires access_token in the URL,
+   * not just in the Authorization header.
+   */
+  protected async apiRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    const token = await this.ensureValidToken();
+
+    // Append access_token to URL query string for Baidu API calls
+    const urlObj = new URL(url);
+    urlObj.searchParams.set("access_token", token);
+    const finalUrl = urlObj.toString();
+
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(finalUrl, { ...options, headers });
+
+    // Handle 401 - try to refresh token and retry
+    if (response.status === 401) {
+      try {
+        await this.refreshAccessToken();
+        const newToken = this.accessToken;
+        urlObj.searchParams.set("access_token", newToken);
+        headers.set("Authorization", `Bearer ${newToken}`);
+        return fetch(urlObj.toString(), { ...options, headers });
+      } catch {
+        // If refresh fails, return the original response
+        return response;
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Handle common Baidu API errors and throw descriptive messages.
+   */
+  private handleApiError(operation: string, statusCode: number, errorBody: string): never {
+    let message: string;
+
+    try {
+      const errorData = JSON.parse(errorBody) as { error?: string; error_description?: string; errno?: number };
+      const code = errorData.error || "";
+      const desc = errorData.error_description || "";
+      const errno = errorData.errno;
+
+      // Handle Baidu OAuth errors
+      if (code) {
+        switch (code) {
+          case "invalid_grant":
+            message = `百度网盘${operation}失败：授权码无效或已过期，请重新授权`;
+            break;
+          case "invalid_client":
+            message = `百度网盘${operation}失败：Client ID 或 Client Secret 无效`;
+            break;
+          case "expired_token":
+            message = `百度网盘${operation}失败：访问令牌已过期，请重新授权`;
+            break;
+          default:
+            message = `百度网盘${operation}失败：${desc || code}`;
+        }
+      } else if (errno !== undefined) {
+        // Handle Baidu PCS errno errors
+        switch (errno) {
+          case -1:
+            message = `百度网盘${operation}失败：文件不存在或已删除`;
+            break;
+          case -6:
+            message = `百度网盘${operation}失败：没有访问权限`;
+            break;
+          case -7:
+            message = `百度网盘${operation}失败：文件名无效或已存在`;
+            break;
+          case 2:
+            message = `百度网盘${operation}失败：参数错误`;
+            break;
+          case 10:
+            message = `百度网盘${operation}失败：创建文件数量超限`;
+            break;
+          case 12:
+            message = `百度网盘${operation}失败：高级认证过期，请重新授权`;
+            break;
+          case 36001:
+            message = `百度网盘${operation}失败：没有使用该应用的权限`;
+            break;
+          default:
+            message = `百度网盘${operation}失败：错误码 ${errno}`;
+        }
+      } else {
+        message = `百度网盘${operation}失败：HTTP ${statusCode}`;
+      }
+    } catch {
+      if (statusCode === 429) {
+        message = `百度网盘${operation}失败：请求过于频繁，请稍后重试`;
+      } else if (statusCode === 401) {
+        message = `百度网盘${operation}失败：认证失败，请重新授权`;
+      } else if (statusCode === 403) {
+        message = `百度网盘${operation}失败：没有权限执行此操作`;
+      } else {
+        message = `百度网盘${operation}失败：HTTP ${statusCode} ${errorBody}`;
+      }
+    }
+
+    throw new Error(message);
+  }
+
+  /**
    * Normalize a path to be absolute under the app directory.
    * Baidu PCS requires paths like /apps/{app_dir}/...
    */
@@ -78,6 +332,53 @@ export class BaiduDriver extends CloudDriverBase {
   // --- Baidu PCS API implementations ---
 
   /**
+   * Get detailed information about a specific file.
+   * Uses Baidu xpan file meta API: GET /rest/2.0/xpan/file?method=meta
+   */
+  async getFileInfo(path: string): Promise<FileInfo | null> {
+    return this.withRateLimit(async () => {
+      const normalizedPath = this.normalizePath(path);
+
+      const url = `${BaiduDriver.API_BASE}/file?method=meta&path=${encodeURIComponent(normalizedPath)}`;
+      const response = await this.apiRequest(url);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        const errorText = await response.text();
+        this.handleApiError("获取文件信息", response.status, errorText);
+      }
+
+      const data = await response.json() as BaiduListResponse;
+
+      if (data.errno && data.errno !== 0) {
+        // File not found
+        if (data.errno === -1 || data.errno === 2) {
+          return null;
+        }
+        throw new Error(`百度网盘获取文件信息失败：errno=${data.errno}`);
+      }
+
+      if (!data.list || data.list.length === 0) {
+        return null;
+      }
+
+      const item = data.list[0];
+      return {
+        name: item.server_filename,
+        size: item.size,
+        isDir: item.isdir === 1,
+        lastModified: new Date(item.mtime * 1000),
+        created: new Date(item.ctime * 1000),
+        id: String(item.fs_id),
+        parentPath: normalizedPath.substring(0, normalizedPath.lastIndexOf("/")),
+        md5: item.md5,
+      };
+    });
+  }
+
+  /**
    * List files in a directory on Baidu Wangpan.
    * Uses PCS API: GET /rest/2.0/xpan/file?method=list&dir={path}
    */
@@ -89,25 +390,17 @@ export class BaiduDriver extends CloudDriverBase {
       const response = await this.apiRequest(url);
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Baidu listDir failed: ${response.status} ${errorText}`);
+        this.handleApiError("列出目录", response.status, errorText);
       }
 
-      const data = await response.json() as {
-        list?: Array<{
-          fs_id: number;
-          path: string;
-          server_filename: string;
-          size: number;
-          isdir: number;
-          mtime: number;
-          ctime: number;
-          md5?: string;
-        }>;
-        errno?: number;
-      };
+      const data = await response.json() as BaiduListResponse;
 
       if (data.errno && data.errno !== 0) {
-        throw new Error(`Baidu listDir error: errno=${data.errno}`);
+        // Directory not found
+        if (data.errno === -1 || data.errno === 2) {
+          throw new Error(`百度网盘列出目录失败：目录不存在（errno=${data.errno}）`);
+        }
+        throw new Error(`百度网盘列出目录失败：errno=${data.errno}`);
       }
 
       if (!data.list) {
@@ -150,26 +443,26 @@ export class BaiduDriver extends CloudDriverBase {
    * Upload a small file (<256KB) in a single request.
    */
   private async uploadSmallFile(path: string, data: Buffer): Promise<void> {
-    const url = `${BaiduDriver.SMALL_FILE_UPLOAD_URL}?method=upload&path=${encodeURIComponent(path)}&ondup=overwrite`;
+    const token = await this.ensureValidToken();
+    const url = `${BaiduDriver.SMALL_FILE_UPLOAD_URL}?method=upload&path=${encodeURIComponent(path)}&ondup=overwrite&access_token=${token}`;
 
     const formData = new FormData();
     const blob = new Blob([data]);
     formData.append("file", blob, path.split("/").pop() || "file");
 
-    const token = await this.ensureValidToken();
-    const response = await fetch(`${url}&access_token=${token}`, {
+    const response = await fetch(url, {
       method: "POST",
       body: formData,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Baidu small file upload failed: ${response.status} ${errorText}`);
+      throw new Error(`百度网盘小文件上传失败：HTTP ${response.status} ${errorText}`);
     }
 
     const result = await response.json() as { errno?: number };
     if (result.errno && result.errno !== 0) {
-      throw new Error(`Baidu small file upload error: errno=${result.errno}`);
+      throw new Error(`百度网盘小文件上传失败：errno=${result.errno}`);
     }
   }
 
@@ -199,7 +492,7 @@ export class BaiduDriver extends CloudDriverBase {
 
     if (!precreateResponse.ok) {
       const errorText = await precreateResponse.text();
-      throw new Error(`Baidu precreate failed: ${precreateResponse.status} ${errorText}`);
+      this.handleApiError("预创建文件", precreateResponse.status, errorText);
     }
 
     const precreateData = await precreateResponse.json() as {
@@ -209,12 +502,13 @@ export class BaiduDriver extends CloudDriverBase {
     };
 
     if (precreateData.errno && precreateData.errno !== 0) {
-      throw new Error(`Baidu precreate error: errno=${precreateData.errno}`);
+      throw new Error(`百度网盘预创建文件失败：errno=${precreateData.errno}`);
     }
 
     const uploadId = precreateData.uploadid;
 
     // Step 2: Upload each block
+    const token = await this.ensureValidToken();
     for (let i = 0; i < totalBlocks; i++) {
       const start = i * blockSize;
       const end = Math.min(start + blockSize, data.length);
@@ -223,7 +517,7 @@ export class BaiduDriver extends CloudDriverBase {
       const blockMd5 = await this.calculateMD5(blockData);
       blockList.push(blockMd5);
 
-      const uploadUrl = `${BaiduDriver.UPLOAD_URL}?method=upload&access_token=${this.accessToken}&path=${encodeURIComponent(path)}&uploadid=${uploadId}&blockidx=${i}`;
+      const uploadUrl = `${BaiduDriver.UPLOAD_URL}?method=upload&access_token=${token}&path=${encodeURIComponent(path)}&uploadid=${uploadId}&blockidx=${i}`;
 
       const formData = new FormData();
       const blob = new Blob([blockData]);
@@ -235,7 +529,7 @@ export class BaiduDriver extends CloudDriverBase {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`Baidu block upload failed at index ${i}: ${uploadResponse.status}`);
+        throw new Error(`百度网盘分片上传失败（分片 ${i}）：HTTP ${uploadResponse.status}`);
       }
     }
 
@@ -257,7 +551,7 @@ export class BaiduDriver extends CloudDriverBase {
 
     if (!mergeResponse.ok) {
       const errorText = await mergeResponse.text();
-      throw new Error(`Baidu merge failed: ${mergeResponse.status} ${errorText}`);
+      this.handleApiError("合并文件", mergeResponse.status, errorText);
     }
   }
 
@@ -285,7 +579,7 @@ export class BaiduDriver extends CloudDriverBase {
       });
 
       if (!downloadResponse.ok) {
-        throw new Error(`Baidu file download failed: ${downloadResponse.status}`);
+        throw new Error(`百度网盘文件下载失败：HTTP ${downloadResponse.status}`);
       }
 
       const arrayBuffer = await downloadResponse.arrayBuffer();
@@ -301,31 +595,40 @@ export class BaiduDriver extends CloudDriverBase {
     return this.withRateLimit(async () => {
       const normalizedPath = this.normalizePath(path);
 
-      // Get download link
+      // Get download link via xpan multimedia API
       const dlinkUrl = `${BaiduDriver.API_BASE}/multimedia?method=dlink&path=${encodeURIComponent(normalizedPath)}`;
       const dlinkResponse = await this.apiRequest(dlinkUrl);
 
       if (!dlinkResponse.ok) {
         // Fallback to direct download URL
-        const directUrl = `${BaiduDriver.DOWNLOAD_URL}?method=download&path=${encodeURIComponent(normalizedPath)}&access_token=${this.accessToken}`;
+        const token = await this.ensureValidToken();
+        const directUrl = `${BaiduDriver.DOWNLOAD_URL}?method=download&path=${encodeURIComponent(normalizedPath)}&access_token=${token}`;
         return directUrl;
       }
 
-      const dlinkData = await dlinkResponse.json() as {
-        dlink?: string;
-        errno?: number;
-      };
+      const dlinkData = await dlinkResponse.json() as BaiduDlinkResponse;
 
       if (dlinkData.errno && dlinkData.errno !== 0) {
-        throw new Error(`Baidu getDownloadLink error: errno=${dlinkData.errno}`);
+        throw new Error(`百度网盘获取下载链接失败：errno=${dlinkData.errno}`);
       }
 
-      if (!dlinkData.dlink) {
-        throw new Error("Baidu getDownloadLink: no download link returned");
+      // The dlink can be in the top-level dlink field or inside list items
+      let dlink: string | undefined;
+
+      if (dlinkData.dlink) {
+        dlink = dlinkData.dlink;
+      } else if (dlinkData.list && dlinkData.list.length > 0 && dlinkData.list[0].dlink) {
+        dlink = dlinkData.list[0].dlink;
       }
 
-      // Return the dlink with access token
-      return `${dlinkData.dlink}&access_token=${this.accessToken}`;
+      if (!dlink) {
+        throw new Error("百度网盘获取下载链接失败：未返回下载地址");
+      }
+
+      // Append access_token to the dlink URL as required by Baidu
+      const token = await this.ensureValidToken();
+      const separator = dlink.includes("?") ? "&" : "?";
+      return `${dlink}${separator}access_token=${token}`;
     });
   }
 
@@ -347,50 +650,29 @@ export class BaiduDriver extends CloudDriverBase {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Baidu deleteFile failed: ${response.status} ${errorText}`);
+        this.handleApiError("删除文件", response.status, errorText);
       }
 
       const data = await response.json() as { errno?: number };
       if (data.errno && data.errno !== 0) {
-        throw new Error(`Baidu deleteFile error: errno=${data.errno}`);
+        throw new Error(`百度网盘删除文件失败：errno=${data.errno}`);
       }
     });
   }
 
   async fileExists(path: string): Promise<boolean> {
-    return this.withRateLimit(async () => {
-      const normalizedPath = this.normalizePath(path);
-      const parentPath = normalizedPath.substring(0, normalizedPath.lastIndexOf("/"));
-      const fileName = normalizedPath.substring(normalizedPath.lastIndexOf("/") + 1);
-
-      try {
-        const files = await this.listDir(parentPath.replace(this.appDir, "") || "/");
-        return files.some((f) => f.name === fileName);
-      } catch {
-        return false;
-      }
-    });
+    try {
+      const info = await this.getFileInfo(path);
+      return info !== null;
+    } catch {
+      return false;
+    }
   }
 
   async getFileSize(path: string): Promise<number> {
     return this.withRateLimit(async () => {
-      const normalizedPath = this.normalizePath(path);
-      const url = `${BaiduDriver.API_BASE}/multimedia?method=list&path=${encodeURIComponent(normalizedPath)}`;
-
-      const response = await this.apiRequest(url);
-      if (!response.ok) {
-        throw new Error(`Baidu getFileSize failed: ${response.status}`);
-      }
-
-      const data = await response.json() as {
-        list?: Array<{ size: number }>;
-        errno?: number;
-      };
-
-      if (data.list && data.list.length > 0) {
-        return data.list[0].size;
-      }
-      return 0;
+      const info = await this.getFileInfo(path);
+      return info?.size || 0;
     });
   }
 
@@ -412,12 +694,12 @@ export class BaiduDriver extends CloudDriverBase {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Baidu createDir failed: ${response.status} ${errorText}`);
+        this.handleApiError("创建目录", response.status, errorText);
       }
 
       const data = await response.json() as { errno?: number };
       if (data.errno && data.errno !== 0) {
-        throw new Error(`Baidu createDir error: errno=${data.errno}`);
+        throw new Error(`百度网盘创建目录失败：errno=${data.errno}`);
       }
     });
   }
@@ -440,29 +722,23 @@ export class BaiduDriver extends CloudDriverBase {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Baidu deleteDir failed: ${response.status} ${errorText}`);
+        this.handleApiError("删除目录", response.status, errorText);
       }
     });
   }
 
   async dirExists(path: string): Promise<boolean> {
-    return this.withRateLimit(async () => {
-      const normalizedPath = this.normalizePath(path);
-      const parentPath = normalizedPath.substring(0, normalizedPath.lastIndexOf("/"));
-      const dirName = normalizedPath.substring(normalizedPath.lastIndexOf("/") + 1);
-
-      try {
-        const files = await this.listDir(parentPath.replace(this.appDir, "") || "/");
-        return files.some((f) => f.name === dirName && f.isDir);
-      } catch {
-        return false;
-      }
-    });
+    try {
+      const info = await this.getFileInfo(path);
+      return info?.isDir === true;
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Get storage info from Baidu Wangpan.
-   * Uses user info API.
+   * Uses user info API and quota API.
    */
   async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
     return this.withRateLimit(async () => {
@@ -470,16 +746,10 @@ export class BaiduDriver extends CloudDriverBase {
 
       const response = await this.apiRequest(url);
       if (!response.ok) {
-        throw new Error(`Baidu getStorageInfo failed: ${response.status}`);
+        throw new Error(`百度网盘获取存储信息失败：HTTP ${response.status}`);
       }
 
-      const data = await response.json() as {
-        baidu_name?: string;
-        uk?: number;
-        vip_type?: number;
-        vip?: number;
-        errno?: number;
-      };
+      const data = await response.json() as BaiduUserInfoResponse;
 
       // Baidu doesn't return storage quota directly via xpan/user/info
       // We need to use the older API
@@ -491,11 +761,7 @@ export class BaiduDriver extends CloudDriverBase {
         return { used: 0, total: 2199023255552, available: 2199023255552 };
       }
 
-      const quotaData = await quotaResponse.json() as {
-        used?: number;
-        total?: number;
-        errno?: number;
-      };
+      const quotaData = await quotaResponse.json() as BaiduQuotaResponse;
 
       if (quotaData.errno && quotaData.errno !== 0) {
         return { used: 0, total: 2199023255552, available: 2199023255552 };
@@ -507,15 +773,37 @@ export class BaiduDriver extends CloudDriverBase {
     });
   }
 
+  /**
+   * Health check: actually calls the API to verify the token works.
+   */
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
-    const authStatus = this.getAuthStatus();
-    if (authStatus === "authorized") {
-      return { healthy: true, message: "百度网盘已连接" };
+    try {
+      const url = `${BaiduDriver.API_BASE}/user/info`;
+      const response = await this.apiRequest(url);
+
+      if (response.ok) {
+        const data = await response.json() as BaiduUserInfoResponse;
+        if (data.errno && data.errno !== 0) {
+          return { healthy: false, message: `百度网盘连接异常：错误码 ${data.errno}` };
+        }
+        const userName = data.baidu_name || data.netdisk_name || "";
+        return {
+          healthy: true,
+          message: userName ? `百度网盘已连接（用户：${userName}）` : "百度网盘已连接",
+        };
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        return { healthy: false, message: "百度网盘授权已过期，请重新授权" };
+      }
+
+      return { healthy: false, message: `百度网盘连接异常：HTTP ${response.status}` };
+    } catch (error) {
+      return {
+        healthy: false,
+        message: `百度网盘健康检查失败：${error instanceof Error ? error.message : "未知错误"}`,
+      };
     }
-    if (authStatus === "expired") {
-      return { healthy: false, message: "百度网盘授权已过期，请重新授权" };
-    }
-    return { healthy: false, message: "百度网盘需要授权" };
   }
 }
 
@@ -563,7 +851,7 @@ export const baiduDriverFactory: StorageDriverFactory = {
       type: "password",
       required: false,
       placeholder: "已授权的 refresh token",
-      helpText: "如已有 refresh token 可直接填入，否则通过 OAuth 授权获取",
+      helpText: "如已有 refresh token 可直接填入，将自动获取访问令牌，无需 OAuth 授权流程",
     },
   ],
   create: (config) => new BaiduDriver(config),

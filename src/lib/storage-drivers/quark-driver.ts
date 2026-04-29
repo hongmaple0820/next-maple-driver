@@ -3,16 +3,17 @@ import type {
   StorageDriverConfig,
   StorageDriverFactory,
   StorageDriverConfigField,
-  CloudAuthType,
   CloudAuthStatus,
   FileInfo,
 } from "./types";
 
 /**
- * 夸克网盘 (Quark Drive) Driver
+ * Quark Drive (夸克网盘) Driver
  *
- * Uses phone number + password authentication with SMS verification support.
- * After login, session cookies are used for subsequent API calls.
+ * Uses cookie-based authentication. There is no public login API.
+ * Users must either:
+ *   1. Manually provide cookies from their browser session, or
+ *   2. Use QR code scanning (scanning with the Quark mobile app)
  *
  * Key concepts:
  * - Uses FID-based directory identification (each folder has a unique FID)
@@ -21,7 +22,7 @@ import type {
  * - Cookies are required for all API calls
  * - API uses JSON request/response format with specific headers
  *
- * API endpoints are undocumented/reverse-engineered.
+ * API endpoints are undocumented/reverse-engineered based on AList.
  */
 export class QuarkDriver extends CookieAuthDriver {
   readonly type = "quark";
@@ -29,195 +30,203 @@ export class QuarkDriver extends CookieAuthDriver {
   // Quark API endpoints
   private static readonly API_BASE = "https://pan.quark.cn";
 
-  private smsCode: string;
-  private phone: string;
+  // Standard browser headers for Quark requests
+  private static readonly DEFAULT_HEADERS: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Referer: "https://pan.quark.cn/",
+    Origin: "https://pan.quark.cn",
+  };
 
   // FID-based path cache
   private pathCache: Map<string, string> = new Map();
 
   constructor(config: StorageDriverConfig) {
     super(config);
-    this.phone = config.config.phone || "";
-    this.smsCode = config.config.smsCode || "";
     // Initialize cache with root
     this.pathCache.set("/", "0");
   }
 
   /**
-   * Login to Quark Drive with phone + password or SMS code.
-   * Returns session cookies.
+   * Login to Quark Drive.
+   * Since Quark has no public login API, this method:
+   * - If cookies are already provided, validates them
+   * - If no cookies, throws an error instructing the user to provide cookies
+   *   or use QR code scanning
    */
   async login(): Promise<string> {
-    if (this.smsCode) {
-      return this.loginWithSms();
+    if (this.cookies) {
+      // Validate existing cookies
+      const valid = await this.validateCookies();
+      if (valid) {
+        return this.cookies;
+      }
+      // Cookies are invalid/expired - clear them
+      this.cookies = "";
     }
-    return this.loginWithPassword();
+
+    throw new Error(
+      "夸克网盘没有公开的登录 API。请通过以下方式之一提供认证信息：\n" +
+        "1. 在配置中手动填入浏览器中获取的 Cookie\n" +
+        "2. 使用二维码扫描登录（通过 /api/drivers/[id]/qr-login 接口）"
+    );
   }
 
   /**
-   * Login with phone number and password.
+   * Request a QR code for login via the Quark mobile app.
+   * Returns the QR code token and image URL for the user to scan.
    */
-  private async loginWithPassword(): Promise<string> {
-    const url = `${QuarkDriver.API_BASE}/account/login`;
-    const body = JSON.stringify({
-      phone: this.phone,
-      password: this.password,
+  async requestQrCode(): Promise<{
+    token: string;
+    imageUrl: string;
+    qrcodeUrl: string;
+  }> {
+    const url = `${QuarkDriver.API_BASE}/account/qrcode`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...QuarkDriver.DEFAULT_HEADERS,
+      },
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Quark QR code request failed: ${response.status} ${errorText}`
+      );
+    }
+
+    const data = await response.json() as {
+      status?: number;
+      data?: {
+        token?: string;
+        qrcode_url?: string;
+        image_url?: string;
+        url?: string;
+      };
+      message?: string;
+    };
+
+    if (data.status !== 200) {
+      throw new Error(
+        `Quark QR code error: ${data.message || "unknown error"}`
+      );
+    }
+
+    const token = data.data?.token || "";
+    const qrcodeUrl = data.data?.qrcode_url || data.data?.url || "";
+    const imageUrl = data.data?.image_url || qrcodeUrl;
+
+    if (!token) {
+      throw new Error("Quark QR code: no token returned");
+    }
+
+    return { token, imageUrl, qrcodeUrl };
+  }
+
+  /**
+   * Check QR code scan status.
+   * Polls the Quark API to see if the user has scanned the QR code.
+   * Returns the cookies if authorized.
+   */
+  async checkQrCodeStatus(
+    token: string
+  ): Promise<{
+    status: "waiting" | "scanned" | "confirmed" | "expired" | "error";
+    cookies?: string;
+    message?: string;
+  }> {
+    const url = `${QuarkDriver.API_BASE}/account/qrcode/result`;
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
+        ...QuarkDriver.DEFAULT_HEADERS,
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
-      body,
+      body: JSON.stringify({ token }),
       redirect: "manual",
     });
 
-    if (!response.ok && response.status !== 302) {
-      const errorText = await response.text();
-      let errorMsg = `Quark login failed: ${response.status}`;
-      try {
-        const errData = JSON.parse(errorText) as { message?: string; msg?: string };
-        errorMsg = errData.message || errData.msg || errorMsg;
-      } catch {
-        errorMsg = `${errorMsg} ${errorText}`;
+    // Check for redirect (successful login often returns a redirect with Set-Cookie)
+    if (response.status === 302 || response.status === 301) {
+      const setCookieHeaders = response.headers.getSetCookie();
+      if (setCookieHeaders && setCookieHeaders.length > 0) {
+        const cookies = setCookieHeaders
+          .map((header: string) => header.split(";")[0])
+          .join("; ");
+        this.cookies = cookies;
+        return { status: "confirmed", cookies, message: "登录成功" };
       }
-      throw new Error(errorMsg);
     }
 
-    // Extract cookies from response headers
-    const setCookieHeaders = response.headers.getSetCookie();
-    if (setCookieHeaders && setCookieHeaders.length > 0) {
-      const cookies = setCookieHeaders
-        .map((header: string) => header.split(";")[0])
-        .join("; ");
-      this.cookies = cookies;
-      return cookies;
-    }
-
-    // Try to extract from response body
-    try {
-      const data = await response.json() as {
-        status?: number;
-        data?: { cookie?: string };
-        cookie?: string;
-        message?: string;
+    if (!response.ok) {
+      return {
+        status: "error",
+        message: `QR code check failed: ${response.status}`,
       };
+    }
 
-      if (data.cookie || data.data?.cookie) {
-        this.cookies = data.cookie || data.data?.cookie || "";
-        return this.cookies;
+    const data = await response.json() as {
+      status?: number;
+      data?: {
+        cookie?: string;
+        scan_status?: number;
+        status?: number;
+      };
+      message?: string;
+    };
+
+    // Scan status codes (based on reverse-engineering):
+    // 0 = waiting for scan
+    // 1 = scanned, waiting for confirm
+    // 2 = confirmed, login successful
+    // 3 = expired
+    const scanStatus =
+      data.data?.scan_status ?? data.data?.status ?? data.status;
+
+    switch (scanStatus) {
+      case 0:
+        return { status: "waiting", message: "等待扫描" };
+      case 1:
+        return { status: "scanned", message: "已扫描，等待确认" };
+      case 2: {
+        // Confirmed - extract cookies
+        if (data.data?.cookie) {
+          this.cookies = data.data.cookie;
+          return {
+            status: "confirmed",
+            cookies: data.data.cookie,
+            message: "登录成功",
+          };
+        }
+        // Try to extract from response headers
+        return {
+          status: "confirmed",
+          message: "登录成功，但未获取到 cookies",
+        };
       }
-
-      if (data.status !== 200 && data.status !== 0) {
-        throw new Error(`Quark login failed: ${data.message || "unknown error"}`);
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.includes("Quark login failed")) {
-        throw e;
-      }
-    }
-
-    throw new Error("Quark login: no cookies returned");
-  }
-
-  /**
-   * Login with phone number and SMS verification code.
-   */
-  private async loginWithSms(): Promise<string> {
-    // Step 1: Request SMS code
-    const smsUrl = `${QuarkDriver.API_BASE}/account/sms/send`;
-    const smsBody = JSON.stringify({ phone: this.phone });
-
-    const smsResponse = await fetch(smsUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      body: smsBody,
-    });
-
-    if (!smsResponse.ok) {
-      throw new Error(`Quark SMS request failed: ${smsResponse.status}`);
-    }
-
-    // Step 2: Verify SMS code and login
-    const verifyUrl = `${QuarkDriver.API_BASE}/account/sms/verify`;
-    const verifyBody = JSON.stringify({
-      phone: this.phone,
-      code: this.smsCode,
-    });
-
-    const verifyResponse = await fetch(verifyUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      body: verifyBody,
-      redirect: "manual",
-    });
-
-    if (!verifyResponse.ok && verifyResponse.status !== 302) {
-      throw new Error(`Quark SMS verify failed: ${verifyResponse.status}`);
-    }
-
-    // Extract cookies
-    const setCookieHeaders = verifyResponse.headers.getSetCookie();
-    if (setCookieHeaders && setCookieHeaders.length > 0) {
-      const cookies = setCookieHeaders
-        .map((header: string) => header.split(";")[0])
-        .join("; ");
-      this.cookies = cookies;
-      return cookies;
-    }
-
-    throw new Error("Quark SMS login: no cookies returned");
-  }
-
-  /**
-   * Request SMS verification code.
-   * This is a separate step from login - the user needs to
-   * request a code first, then login with the code.
-   */
-  async requestSmsCode(phone?: string): Promise<{ success: boolean; message: string }> {
-    const phoneNumber = phone || this.phone;
-    if (!phoneNumber) {
-      return { success: false, message: "请输入手机号" };
-    }
-
-    try {
-      const url = `${QuarkDriver.API_BASE}/account/sms/send`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-        body: JSON.stringify({ phone: phoneNumber }),
-      });
-
-      if (!response.ok) {
-        return { success: false, message: `发送验证码失败: ${response.status}` };
-      }
-
-      return { success: true, message: "验证码已发送" };
-    } catch (e) {
-      return { success: false, message: `发送验证码失败: ${e instanceof Error ? e.message : "未知错误"}` };
+      case 3:
+        return { status: "expired", message: "二维码已过期，请重新获取" };
+      default:
+        return {
+          status: "error",
+          message: data.message || `未知状态: ${scanStatus}`,
+        };
     }
   }
 
   /**
    * Validate that the current cookies are still valid.
+   * Checks by calling the user info API.
    */
   async validateCookies(): Promise<boolean> {
     if (!this.cookies) return false;
 
     try {
       const url = `${QuarkDriver.API_BASE}/user/info`;
-      const response = await this.cookieRequest(url);
+      const response = await this.quarkRequest(url);
       if (!response.ok) return false;
 
       const data = await response.json() as {
@@ -232,25 +241,11 @@ export class QuarkDriver extends CookieAuthDriver {
   }
 
   /**
-   * Override getAuthType - Quark supports both password and SMS auth
-   */
-  getAuthType(): CloudAuthType {
-    if (this.smsCode) return "sms";
-    return "password";
-  }
-
-  /**
-   * Override getAuthStatus for Quark's specific auth flow
+   * Override getAuthStatus for Quark's cookie-based auth flow.
    */
   getAuthStatus(): CloudAuthStatus {
     if (this.cookies) {
       return "authorized";
-    }
-    if (this.phone && (this.password || this.smsCode)) {
-      return "pending";
-    }
-    if (this.phone && !this.password && !this.smsCode) {
-      return "pending"; // Need SMS code or password
     }
     return "error";
   }
@@ -261,6 +256,44 @@ export class QuarkDriver extends CookieAuthDriver {
 
   protected getMinInterval(): number {
     return 300; // 300ms between calls
+  }
+
+  /**
+   * Make an authenticated API request to Quark with proper headers.
+   * Overrides cookieRequest to add Quark-specific headers (Referer, Origin).
+   */
+  protected async quarkRequest(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    await this.ensureValidToken();
+    const headers = new Headers(options.headers || {});
+
+    // Set Quark-specific headers
+    headers.set("Cookie", this.cookies);
+    headers.set(
+      "User-Agent",
+      QuarkDriver.DEFAULT_HEADERS["User-Agent"]
+    );
+    headers.set("Referer", QuarkDriver.DEFAULT_HEADERS["Referer"]);
+    headers.set("Origin", QuarkDriver.DEFAULT_HEADERS["Origin"]);
+
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    // If 401 or auth error, cookies are invalid
+    if (response.status === 401 || response.status === 403) {
+      // For Quark, we cannot auto-re-login via API.
+      // Just throw an error so the user knows to re-authenticate.
+      throw new Error(
+        "夸克网盘认证已过期，请重新提供 Cookie 或使用二维码登录"
+      );
+    }
+
+    return response;
   }
 
   /**
@@ -293,7 +326,9 @@ export class QuarkDriver extends CookieAuthDriver {
       const found = files.find((f) => f.name === parts[i] && f.isDir);
 
       if (!found || !found.id) {
-        throw new Error(`Quark resolvePath: path component "${parts[i]}" not found`);
+        throw new Error(
+          `Quark resolvePath: path component "${parts[i]}" not found`
+        );
       }
 
       currentFid = found.id;
@@ -305,14 +340,17 @@ export class QuarkDriver extends CookieAuthDriver {
 
   /**
    * List directory contents by FID.
+   * Uses the correct Quark API endpoint with sort parameters.
    */
   private async listDirByFid(fid: string): Promise<FileInfo[]> {
-    const url = `${QuarkDriver.API_BASE}/filelist?dir=${fid}&page=1&size=500`;
+    const url = `${QuarkDriver.API_BASE}/filelist?dir=${fid}&page=1&size=500&sort=file_type:asc,file_name:asc`;
 
-    const response = await this.cookieRequest(url);
+    const response = await this.quarkRequest(url);
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Quark listDir failed: ${response.status} ${errorText}`);
+      throw new Error(
+        `Quark listDir failed: ${response.status} ${errorText}`
+      );
     }
 
     const data = await response.json() as {
@@ -334,7 +372,9 @@ export class QuarkDriver extends CookieAuthDriver {
     };
 
     if (data.status !== 200) {
-      throw new Error(`Quark listDir error: ${data.message || "unknown error"}`);
+      throw new Error(
+        `Quark listDir error: ${data.message || "unknown error"}`
+      );
     }
 
     if (!data.data?.list) {
@@ -345,7 +385,9 @@ export class QuarkDriver extends CookieAuthDriver {
       name: item.file_name || "unknown",
       size: item.file_size || 0,
       isDir: item.dir || false,
-      lastModified: item.updated_at ? new Date(item.updated_at * 1000) : undefined,
+      lastModified: item.updated_at
+        ? new Date(item.updated_at * 1000)
+        : undefined,
       created: item.created_at ? new Date(item.created_at * 1000) : undefined,
       id: item.fid || "",
       parentPath: fid === "0" ? "/" : fid,
@@ -356,7 +398,9 @@ export class QuarkDriver extends CookieAuthDriver {
   /**
    * Get parent FID and name from a path.
    */
-  private async getParentFidAndName(path: string): Promise<{ parentFid: string; name: string }> {
+  private async getParentFidAndName(
+    path: string
+  ): Promise<{ parentFid: string; name: string }> {
     const normalizedPath = path.replace(/^\/+|\/+$/g, "");
     const lastSlash = normalizedPath.lastIndexOf("/");
     const name = normalizedPath.substring(lastSlash + 1);
@@ -394,14 +438,16 @@ export class QuarkDriver extends CookieAuthDriver {
         file_size: data.length,
       });
 
-      const preCreateResponse = await this.cookieRequest(preCreateUrl, {
+      const preCreateResponse = await this.quarkRequest(preCreateUrl, {
         method: "POST",
         body: preCreateBody,
       });
 
       if (!preCreateResponse.ok) {
         const errorText = await preCreateResponse.text();
-        throw new Error(`Quark precreate failed: ${preCreateResponse.status} ${errorText}`);
+        throw new Error(
+          `Quark precreate failed: ${preCreateResponse.status} ${errorText}`
+        );
       }
 
       const preCreateData = await preCreateResponse.json() as {
@@ -415,7 +461,9 @@ export class QuarkDriver extends CookieAuthDriver {
       };
 
       if (preCreateData.status !== 200) {
-        throw new Error(`Quark precreate error: ${preCreateData.message || "unknown error"}`);
+        throw new Error(
+          `Quark precreate error: ${preCreateData.message || "unknown error"}`
+        );
       }
 
       // If fid is returned, file already exists (dedup)
@@ -434,7 +482,9 @@ export class QuarkDriver extends CookieAuthDriver {
         });
 
         if (!uploadResponse.ok) {
-          throw new Error(`Quark file upload failed: ${uploadResponse.status}`);
+          throw new Error(
+            `Quark file upload failed: ${uploadResponse.status}`
+          );
         }
       }
 
@@ -447,14 +497,16 @@ export class QuarkDriver extends CookieAuthDriver {
           file_name: name,
         });
 
-        const completeResponse = await this.cookieRequest(completeUrl, {
+        const completeResponse = await this.quarkRequest(completeUrl, {
           method: "POST",
           body: completeBody,
         });
 
         if (!completeResponse.ok) {
           const errorText = await completeResponse.text();
-          throw new Error(`Quark complete upload failed: ${completeResponse.status} ${errorText}`);
+          throw new Error(
+            `Quark complete upload failed: ${completeResponse.status} ${errorText}`
+          );
         }
       }
 
@@ -475,7 +527,7 @@ export class QuarkDriver extends CookieAuthDriver {
       // Download the file content
       const fileResponse = await fetch(fileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          ...QuarkDriver.DEFAULT_HEADERS,
           Cookie: this.cookies,
         },
       });
@@ -505,7 +557,9 @@ export class QuarkDriver extends CookieAuthDriver {
       const file = files.find((f) => f.name === fileName && !f.isDir);
 
       if (!file || !file.id) {
-        throw new Error(`Quark getDownloadLink: file "${fileName}" not found`);
+        throw new Error(
+          `Quark getDownloadLink: file "${fileName}" not found`
+        );
       }
 
       // Get download URL
@@ -514,14 +568,16 @@ export class QuarkDriver extends CookieAuthDriver {
         fid: file.id,
       });
 
-      const downloadResponse = await this.cookieRequest(downloadUrl, {
+      const downloadResponse = await this.quarkRequest(downloadUrl, {
         method: "POST",
         body: downloadBody,
       });
 
       if (!downloadResponse.ok) {
         const errorText = await downloadResponse.text();
-        throw new Error(`Quark getDownloadLink failed: ${downloadResponse.status} ${errorText}`);
+        throw new Error(
+          `Quark getDownloadLink failed: ${downloadResponse.status} ${errorText}`
+        );
       }
 
       const downloadData = await downloadResponse.json() as {
@@ -533,7 +589,8 @@ export class QuarkDriver extends CookieAuthDriver {
         message?: string;
       };
 
-      const fileUrl = downloadData.data?.download_url || downloadData.data?.url;
+      const fileUrl =
+        downloadData.data?.download_url || downloadData.data?.url;
       if (!fileUrl) {
         throw new Error("Quark getDownloadLink: no download URL returned");
       }
@@ -565,14 +622,16 @@ export class QuarkDriver extends CookieAuthDriver {
         fid: file.id,
       });
 
-      const response = await this.cookieRequest(url, {
+      const response = await this.quarkRequest(url, {
         method: "POST",
         body,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Quark deleteFile failed: ${response.status} ${errorText}`);
+        throw new Error(
+          `Quark deleteFile failed: ${response.status} ${errorText}`
+        );
       }
 
       // Invalidate cache
@@ -618,14 +677,16 @@ export class QuarkDriver extends CookieAuthDriver {
         file_name: name,
       });
 
-      const response = await this.cookieRequest(url, {
+      const response = await this.quarkRequest(url, {
         method: "POST",
         body,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Quark createDir failed: ${response.status} ${errorText}`);
+        throw new Error(
+          `Quark createDir failed: ${response.status} ${errorText}`
+        );
       }
 
       const data = await response.json() as {
@@ -635,7 +696,9 @@ export class QuarkDriver extends CookieAuthDriver {
       };
 
       if (data.status !== 200) {
-        throw new Error(`Quark createDir error: ${data.message || "unknown error"}`);
+        throw new Error(
+          `Quark createDir error: ${data.message || "unknown error"}`
+        );
       }
 
       // Cache the new FID
@@ -670,11 +733,15 @@ export class QuarkDriver extends CookieAuthDriver {
   /**
    * Get storage info from Quark Drive.
    */
-  async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
+  async getStorageInfo(): Promise<{
+    used: number;
+    total: number;
+    available: number;
+  }> {
     return this.withRateLimit(async () => {
       const url = `${QuarkDriver.API_BASE}/user/info`;
 
-      const response = await this.cookieRequest(url);
+      const response = await this.quarkRequest(url);
       if (!response.ok) {
         throw new Error(`Quark getStorageInfo failed: ${response.status}`);
       }
@@ -689,7 +756,8 @@ export class QuarkDriver extends CookieAuthDriver {
       };
 
       const used = data.data?.used_size || data.data?.space_used || 0;
-      const total = data.data?.total_size || data.data?.space_total || 10737418240;
+      const total =
+        data.data?.total_size || data.data?.space_total || 10737418240;
       return { used, total, available: total - used };
     });
   }
@@ -704,51 +772,27 @@ export class QuarkDriver extends CookieAuthDriver {
       }
       return { healthy: false, message: "夸克网盘登录已过期，请重新登录" };
     }
-    if (authStatus === "pending") {
-      return { healthy: false, message: "夸克网盘需要登录" };
-    }
-    return { healthy: false, message: "夸克网盘连接异常" };
+    return { healthy: false, message: "夸克网盘未提供 Cookie，请先登录" };
   }
 }
 
 export const quarkDriverFactory: StorageDriverFactory = {
   type: "quark",
   displayName: "夸克网盘",
-  description: "连接到夸克网盘，支持文件上传、下载和管理（支持手机号+密码或短信验证码登录）",
-  authType: "sms", // Primary auth type is SMS, but also supports password
+  description:
+    "连接到夸克网盘，支持文件上传、下载和管理。通过 Cookie 或二维码扫描登录（无公开登录 API）",
+  authType: "password", // Cookie-based auth maps to "password" type
   configFields: [
     {
-      key: "phone",
-      label: "手机号",
-      type: "text",
-      required: true,
-      placeholder: "13800138000",
-      helpText: "夸克网盘注册手机号",
-    },
-    {
-      key: "password",
-      label: "密码（可选）",
-      type: "password",
-      required: false,
-      placeholder: "••••••••",
-      helpText: "夸克网盘登录密码，如使用短信验证码登录可不填",
-    },
-    {
-      key: "smsCode",
-      label: "短信验证码（可选）",
-      type: "text",
-      required: false,
-      placeholder: "123456",
-      helpText: "短信验证码，点击「发送验证码」获取",
-    },
-    {
       key: "cookies",
-      label: "Cookies（可选）",
+      label: "Cookie",
       type: "password",
-      required: false,
-      placeholder: "已有的登录 cookies",
-      helpText: "如已有 cookies 可直接填入，避免重复登录",
+      required: true,
+      placeholder:
+        "从浏览器中复制夸克网盘的 Cookie",
+      helpText:
+        "【主要登录方式】请从浏览器中登录夸克网盘 (pan.quark.cn)，然后从开发者工具 (F12) → 网络 → 请求头 中复制 Cookie。也可以使用二维码扫描登录自动获取。",
     },
-  ],
+  ] as StorageDriverConfigField[],
   create: (config) => new QuarkDriver(config),
 };

@@ -4,8 +4,70 @@ import type {
   StorageDriverFactory,
   StorageDriverConfigField,
   OAuthConfig,
+  OAuthTokenResponse,
   FileInfo,
 } from "./types";
+
+// ---- Aliyun Drive API Response Types ----
+
+interface AliyunDriveInfoResponse {
+  default_drive_id?: string;
+  drive_id?: string;
+  used_size?: number;
+  total_size?: number;
+  drive_used_size?: number;
+  drive_total_size?: number;
+}
+
+interface AliyunFileItem {
+  file_id: string;
+  name: string;
+  type: string;
+  size?: number;
+  updated_at?: string;
+  created_at?: string;
+  mime_type?: string;
+  mime_extension?: string;
+  thumbnail_url?: string;
+  md5?: string;
+  parent_file_id?: string;
+  file_name?: string;
+  category?: string;
+  encrypt_mode?: string;
+  trashed?: boolean;
+}
+
+interface AliyunListResponse {
+  items?: AliyunFileItem[];
+  next_marker?: string;
+}
+
+interface AliyunPrecreateResponse {
+  file_id: string;
+  upload_id: string;
+  part_info_list?: Array<{
+    part_number: number;
+    upload_url: string;
+  }>;
+  exist?: boolean;
+}
+
+interface AliyunDownloadUrlResponse {
+  url?: string;
+  expiration?: string;
+  method?: string;
+}
+
+interface AliyunUserInfoResponse {
+  user_id?: string;
+  nick_name?: string;
+  avatar?: string;
+}
+
+interface AliyunErrorResponse {
+  code?: string;
+  message?: string;
+}
 
 /**
  * 阿里云盘 (Aliyun Drive) Driver
@@ -25,18 +87,25 @@ import type {
  * 2. Aliyun redirects back with authorization code
  * 3. Exchange code for access token + refresh token
  * 4. Use access token to call Aliyun Drive Open API
+ *
+ * Direct Refresh Token Flow:
+ * If user provides a refresh_token directly, the driver automatically
+ * exchanges it for an access token without requiring the full OAuth flow.
  */
 export class AliyunDriver extends CloudDriverBase {
   readonly type = "aliyun";
 
-  // Aliyun Drive Open API endpoints
-  private static readonly API_BASE = "https://openapi.alipan.com";
+  // Aliyun Drive Open API endpoints (open.alipan.com is the current domain)
+  private static readonly API_BASE = "https://open.alipan.com";
 
   // Cached drive_id
   private driveId: string | null = null;
 
   // Path to file_id cache for efficient resolution
   private pathCache: Map<string, string> = new Map();
+
+  // Whether we've attempted initial token exchange from a provided refresh_token
+  private initialTokenExchangeDone = false;
 
   constructor(config: StorageDriverConfig) {
     super(config);
@@ -48,10 +117,14 @@ export class AliyunDriver extends CloudDriverBase {
     return {
       clientId: this.config.config.clientId || "",
       clientSecret: this.config.config.clientSecret || "",
-      authorizationUrl: "https://openapi.alipan.com/oauth/authorize",
-      tokenUrl: "https://openapi.alipan.com/oauth/access_token",
+      authorizationUrl: "https://open.alipan.com/oauth/authorize",
+      tokenUrl: "https://open.alipan.com/oauth/access_token",
       scopes: ["user:base", "file:all:read", "file:all:write"],
       redirectUri: this.config.config.redirectUri || "",
+      // Aliyun requires biz_type=openspace for open space authorization
+      extraAuthParams: {
+        biz_type: "openspace",
+      },
     };
   }
 
@@ -61,6 +134,127 @@ export class AliyunDriver extends CloudDriverBase {
 
   protected getMinInterval(): number {
     return 100;
+  }
+
+  /**
+   * Override refreshAccessToken to properly pass refresh_token in request body.
+   * Aliyun requires the refresh_token to be included explicitly in the body.
+   */
+  async refreshAccessToken(): Promise<OAuthTokenResponse> {
+    if (!this.refreshToken) {
+      throw new Error("阿里云盘刷新令牌失败：没有可用的 refresh_token");
+    }
+
+    const oauthConfig = this.getOAuthConfig();
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.refreshToken,
+      client_id: oauthConfig.clientId,
+      client_secret: oauthConfig.clientSecret,
+    });
+
+    const response = await fetch(oauthConfig.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.handleApiError("刷新令牌", response.status, errorText);
+    }
+
+    const data = await response.json() as OAuthTokenResponse & { refresh_token: string };
+
+    // Aliyun rotates refresh tokens — always update with the new one
+    this.accessToken = data.access_token;
+    if (data.refresh_token) {
+      this.refreshToken = data.refresh_token;
+    }
+    this.tokenExpiresAt = new Date(Date.now() + (data.expires_in || 7200) * 1000);
+
+    return data;
+  }
+
+  /**
+   * Override ensureValidToken to support direct refresh_token input.
+   * If a refresh_token was provided in config but no access_token exists,
+   * automatically exchange it for an access token.
+   */
+  async ensureValidToken(): Promise<string> {
+    // If we have a refresh_token but no access_token, try to exchange it
+    if (this.refreshToken && !this.accessToken && !this.initialTokenExchangeDone) {
+      this.initialTokenExchangeDone = true;
+      try {
+        await this.refreshAccessToken();
+      } catch (error) {
+        throw new Error(
+          `阿里云盘使用 refresh_token 获取访问令牌失败：${error instanceof Error ? error.message : "未知错误"}`
+        );
+      }
+    }
+
+    // Check if token is expired
+    if (this.accessToken && this.tokenExpiresAt && this.tokenExpiresAt <= new Date()) {
+      if (this.refreshToken) {
+        await this.refreshAccessToken();
+      } else {
+        throw new Error("阿里云盘访问令牌已过期且没有 refresh_token，请重新授权");
+      }
+    }
+
+    return this.accessToken;
+  }
+
+  /**
+   * Handle common Aliyun API errors and throw descriptive messages.
+   */
+  private handleApiError(operation: string, statusCode: number, errorBody: string): never {
+    let message: string;
+
+    try {
+      const errorData = JSON.parse(errorBody) as AliyunErrorResponse;
+      const code = errorData.code || "";
+      const msg = errorData.message || "";
+
+      switch (code) {
+        case "AccessTokenInvalid":
+          message = `阿里云盘${operation}失败：访问令牌无效，请重新授权`;
+          break;
+        case "RefreshTokenInvalid":
+          message = `阿里云盘${operation}失败：刷新令牌无效，请重新授权`;
+          break;
+        case "AccessTokenExpired":
+          message = `阿里云盘${operation}失败：访问令牌已过期，请重新授权`;
+          break;
+        case "ForbiddenFileNotExists":
+          message = `阿里云盘${operation}失败：文件不存在或无权访问`;
+          break;
+        case "ForbiddenNoPermissionFile":
+          message = `阿里云盘${operation}失败：没有文件操作权限`;
+          break;
+        case "TooManyRequests":
+          message = `阿里云盘${operation}失败：请求过于频繁，请稍后重试`;
+          break;
+        case "DeviceSessionSignatureInvalid":
+          message = `阿里云盘${operation}失败：设备会话签名无效`;
+          break;
+        default:
+          message = `阿里云盘${operation}失败：${code ? `[${code}] ` : ""}${msg || `HTTP ${statusCode}`}`;
+      }
+    } catch {
+      if (statusCode === 429) {
+        message = `阿里云盘${operation}失败：请求过于频繁，请稍后重试`;
+      } else if (statusCode === 401) {
+        message = `阿里云盘${operation}失败：认证失败，请重新授权`;
+      } else if (statusCode === 403) {
+        message = `阿里云盘${operation}失败：没有权限执行此操作`;
+      } else {
+        message = `阿里云盘${operation}失败：HTTP ${statusCode} ${errorBody}`;
+      }
+    }
+
+    throw new Error(message);
   }
 
   /**
@@ -79,17 +273,14 @@ export class AliyunDriver extends CloudDriverBase {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Aliyun getDriveId failed: ${response.status} ${errorText}`);
+      this.handleApiError("获取驱动信息", response.status, errorText);
     }
 
-    const data = await response.json() as {
-      default_drive_id?: string;
-      drive_id?: string;
-    };
+    const data = await response.json() as AliyunDriveInfoResponse;
 
     this.driveId = data.default_drive_id || data.drive_id || "";
     if (!this.driveId) {
-      throw new Error("Aliyun getDriveId: no drive_id returned");
+      throw new Error("阿里云盘获取驱动信息失败：未返回 drive_id");
     }
 
     return this.driveId;
@@ -134,20 +325,15 @@ export class AliyunDriver extends CloudDriverBase {
       });
 
       if (!listResponse.ok) {
-        throw new Error(`Aliyun resolvePath failed at ${partialPath}: ${listResponse.status}`);
+        const errorText = await listResponse.text();
+        this.handleApiError(`路径解析（${partialPath}）`, listResponse.status, errorText);
       }
 
-      const listData = await listResponse.json() as {
-        items?: Array<{
-          file_id: string;
-          name: string;
-          type: string;
-        }>;
-      };
+      const listData = await listResponse.json() as AliyunListResponse;
 
       const found = listData.items?.find((item) => item.name === part);
       if (!found) {
-        throw new Error(`Aliyun resolvePath: path component "${part}" not found`);
+        throw new Error(`阿里云盘路径解析失败：路径组件 "${part}" 不存在`);
       }
 
       currentFileId = found.file_id;
@@ -171,6 +357,61 @@ export class AliyunDriver extends CloudDriverBase {
   }
 
   // --- Aliyun Drive Open API implementations ---
+
+  /**
+   * Get detailed information about a specific file.
+   * Uses POST /adrive/v1.0/openFile/get
+   */
+  async getFileInfo(path: string): Promise<FileInfo | null> {
+    return this.withRateLimit(async () => {
+      try {
+        const fileId = await this.resolvePathToFileId(path);
+        const driveId = await this.getDriveId();
+
+        const url = `${AliyunDriver.API_BASE}/adrive/v1.0/openFile/get`;
+        const response = await this.apiRequest(url, {
+          method: "POST",
+          body: JSON.stringify({
+            drive_id: driveId,
+            file_id: fileId,
+          }),
+        });
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            return null;
+          }
+          const errorText = await response.text();
+          this.handleApiError("获取文件信息", response.status, errorText);
+        }
+
+        const data = await response.json() as AliyunFileItem;
+        const normalizedPath = path.replace(/^\/+|\/+$/g, "");
+
+        return {
+          name: data.name || data.file_name || "",
+          size: data.size || 0,
+          isDir: data.type === "folder",
+          lastModified: data.updated_at ? new Date(data.updated_at) : undefined,
+          created: data.created_at ? new Date(data.created_at) : undefined,
+          mimeType: data.mime_type,
+          id: data.file_id,
+          parentPath: normalizedPath.substring(0, normalizedPath.lastIndexOf("/")) || "/",
+          extension: data.mime_extension,
+          thumbnailUrl: data.thumbnail_url,
+          md5: data.md5,
+        };
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("不存在")
+        ) {
+          return null;
+        }
+        throw error;
+      }
+    });
+  }
 
   /**
    * List files in a directory on Aliyun Drive.
@@ -204,24 +445,10 @@ export class AliyunDriver extends CloudDriverBase {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Aliyun listDir failed: ${response.status} ${errorText}`);
+          this.handleApiError("列出目录", response.status, errorText);
         }
 
-        const data = await response.json() as {
-          items?: Array<{
-            file_id: string;
-            name: string;
-            type: string;
-            size?: number;
-            updated_at?: string;
-            created_at?: string;
-            mime_type?: string;
-            mime_extension?: string;
-            thumbnail_url?: string;
-            md5?: string;
-          }>;
-          next_marker?: string;
-        };
+        const data = await response.json() as AliyunListResponse;
 
         if (data.items) {
           for (const item of data.items) {
@@ -277,18 +504,10 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!precreateResponse.ok) {
         const errorText = await precreateResponse.text();
-        throw new Error(`Aliyun precreate failed: ${precreateResponse.status} ${errorText}`);
+        this.handleApiError("创建文件", precreateResponse.status, errorText);
       }
 
-      const precreateData = await precreateResponse.json() as {
-        file_id: string;
-        upload_id: string;
-        part_info_list?: Array<{
-          part_number: number;
-          upload_url: string;
-        }>;
-        exist?: boolean;
-      };
+      const precreateData = await precreateResponse.json() as AliyunPrecreateResponse;
 
       // If file already exists and is the same, skip upload
       if (precreateData.exist) {
@@ -315,7 +534,7 @@ export class AliyunDriver extends CloudDriverBase {
           });
 
           if (!uploadResponse.ok) {
-            throw new Error(`Aliyun part upload failed for part ${partInfo.part_number}: ${uploadResponse.status}`);
+            throw new Error(`阿里云盘分片上传失败（分片 ${partInfo.part_number}）：HTTP ${uploadResponse.status}`);
           }
         }
       }
@@ -333,7 +552,7 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!completeResponse.ok) {
         const errorText = await completeResponse.text();
-        throw new Error(`Aliyun complete upload failed: ${completeResponse.status} ${errorText}`);
+        this.handleApiError("完成上传", completeResponse.status, errorText);
       }
 
       // Invalidate cache for parent path
@@ -355,7 +574,7 @@ export class AliyunDriver extends CloudDriverBase {
       // Download the file content
       const fileResponse = await fetch(downloadUrl);
       if (!fileResponse.ok) {
-        throw new Error(`Aliyun file download failed: ${fileResponse.status}`);
+        throw new Error(`阿里云盘文件下载失败：HTTP ${fileResponse.status}`);
       }
 
       const arrayBuffer = await fileResponse.arrayBuffer();
@@ -384,16 +603,13 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!downloadResponse.ok) {
         const errorText = await downloadResponse.text();
-        throw new Error(`Aliyun getDownloadLink failed: ${downloadResponse.status} ${errorText}`);
+        this.handleApiError("获取下载链接", downloadResponse.status, errorText);
       }
 
-      const downloadData = await downloadResponse.json() as {
-        url?: string;
-        expiration?: string;
-      };
+      const downloadData = await downloadResponse.json() as AliyunDownloadUrlResponse;
 
       if (!downloadData.url) {
-        throw new Error("Aliyun getDownloadLink: no download URL returned");
+        throw new Error("阿里云盘获取下载链接失败：未返回下载地址");
       }
 
       return downloadData.url;
@@ -420,7 +636,7 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Aliyun deleteFile failed: ${response.status} ${errorText}`);
+        this.handleApiError("删除文件", response.status, errorText);
       }
 
       // Invalidate cache
@@ -439,24 +655,8 @@ export class AliyunDriver extends CloudDriverBase {
 
   async getFileSize(path: string): Promise<number> {
     return this.withRateLimit(async () => {
-      const fileId = await this.resolvePathToFileId(path);
-      const driveId = await this.getDriveId();
-
-      const url = `${AliyunDriver.API_BASE}/adrive/v1.0/openFile/get`;
-      const response = await this.apiRequest(url, {
-        method: "POST",
-        body: JSON.stringify({
-          drive_id: driveId,
-          file_id: fileId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Aliyun getFileSize failed: ${response.status}`);
-      }
-
-      const data = await response.json() as { size?: number };
-      return data.size || 0;
+      const info = await this.getFileInfo(path);
+      return info?.size || 0;
     });
   }
 
@@ -483,7 +683,7 @@ export class AliyunDriver extends CloudDriverBase {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Aliyun createDir failed: ${response.status} ${errorText}`);
+        this.handleApiError("创建目录", response.status, errorText);
       }
 
       const data = await response.json() as { file_id?: string };
@@ -503,24 +703,8 @@ export class AliyunDriver extends CloudDriverBase {
 
   async dirExists(path: string): Promise<boolean> {
     try {
-      const fileId = await this.resolvePathToFileId(path);
-      const driveId = await this.getDriveId();
-
-      const url = `${AliyunDriver.API_BASE}/adrive/v1.0/openFile/get`;
-      const response = await this.apiRequest(url, {
-        method: "POST",
-        body: JSON.stringify({
-          drive_id: driveId,
-          file_id: fileId,
-        }),
-      });
-
-      if (!response.ok) {
-        return false;
-      }
-
-      const data = await response.json() as { type?: string };
-      return data.type === "folder";
+      const info = await this.getFileInfo(path);
+      return info?.isDir === true;
     } catch {
       return false;
     }
@@ -531,8 +715,6 @@ export class AliyunDriver extends CloudDriverBase {
    */
   async getStorageInfo(): Promise<{ used: number; total: number; available: number }> {
     return this.withRateLimit(async () => {
-      const driveId = await this.getDriveId();
-
       const url = `${AliyunDriver.API_BASE}/adrive/v1.0/user/getDriveInfo`;
       const response = await this.apiRequest(url, {
         method: "POST",
@@ -540,15 +722,10 @@ export class AliyunDriver extends CloudDriverBase {
       });
 
       if (!response.ok) {
-        throw new Error(`Aliyun getStorageInfo failed: ${response.status}`);
+        throw new Error(`阿里云盘获取存储信息失败：HTTP ${response.status}`);
       }
 
-      const data = await response.json() as {
-        used_size?: number;
-        total_size?: number;
-        drive_used_size?: number;
-        drive_total_size?: number;
-      };
+      const data = await response.json() as AliyunDriveInfoResponse;
 
       const used = data.used_size || data.drive_used_size || 0;
       const total = data.total_size || data.drive_total_size || 107374182400;
@@ -556,15 +733,38 @@ export class AliyunDriver extends CloudDriverBase {
     });
   }
 
+  /**
+   * Health check: actually calls the API to verify the token works.
+   */
   async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
-    const authStatus = this.getAuthStatus();
-    if (authStatus === "authorized") {
-      return { healthy: true, message: "阿里云盘已连接" };
+    try {
+      // Try to get user info to verify the token is valid
+      const url = `${AliyunDriver.API_BASE}/adrive/v1.0/user/getDriveInfo`;
+      const response = await this.apiRequest(url, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        const data = await response.json() as AliyunUserInfoResponse & AliyunDriveInfoResponse;
+        const nickName = data.nick_name || "";
+        return {
+          healthy: true,
+          message: nickName ? `阿里云盘已连接（用户：${nickName}）` : "阿里云盘已连接",
+        };
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        return { healthy: false, message: "阿里云盘授权已过期，请重新授权" };
+      }
+
+      return { healthy: false, message: `阿里云盘连接异常：HTTP ${response.status}` };
+    } catch (error) {
+      return {
+        healthy: false,
+        message: `阿里云盘健康检查失败：${error instanceof Error ? error.message : "未知错误"}`,
+      };
     }
-    if (authStatus === "expired") {
-      return { healthy: false, message: "阿里云盘授权已过期，请重新授权" };
-    }
-    return { healthy: false, message: "阿里云盘需要授权" };
   }
 }
 
@@ -604,7 +804,7 @@ export const aliyunDriverFactory: StorageDriverFactory = {
       type: "password",
       required: false,
       placeholder: "已授权的 refresh token",
-      helpText: "如已有 refresh token 可直接填入",
+      helpText: "如已有 refresh token 可直接填入，将自动获取访问令牌，无需 OAuth 授权流程",
     },
   ],
   create: (config) => new AliyunDriver(config),

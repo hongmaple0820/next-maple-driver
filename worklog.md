@@ -1,57 +1,57 @@
-# Maple Driver - 项目交接文档
+# Worklog - Task ID: 9
 
-## 项目当前状态描述/判断
+## Agent: Main Agent
+## Date: 2026-03-04
 
-**状态**: 可运行，核心功能完整，存在环境相关稳定性问题
+## Summary
+Improved the VFS (Virtual File System) browser so it can display real cloud drive file lists by connecting to actual StorageDriver instances.
 
-### 核心问题
-1. **Next.js 开发服务器稳定性问题**: Turbopack 开发服务器在沙箱环境中，当浏览器并发加载 JS/CSS 资源时会导致进程崩溃（无错误日志，静默退出）。curl 顺序请求完全正常，但浏览器并发请求会触发崩溃。
-2. **生产模式相对稳定**: `next build` + `next start` (standalone) 模式在 curl 测试下稳定，内存占用仅 ~120MB。但浏览器高并发请求仍可能导致崩溃。
-3. **根本原因**: 沙箱环境的资源限制（可能是进程级并发连接数限制）导致 Node.js 处理大量并发请求时被系统杀死。
+## Changes Made
 
-### 已完成的修复
-1. **创建 `src/lib/storage-drivers/local-driver.ts`**: 之前缺失的关键文件，实现本地文件系统存储驱动
-2. **重构 `src/lib/storage-drivers/manager.ts`**: 将 11 个急切导入（eager import）改为懒加载（lazy import），大幅降低初始编译内存峰值
-   - 仅 `local-driver`（无外部依赖）急切加载
-   - S3/FTP/SSH2/WebDAV 等重型驱动按需加载
-   - `getDriverFactory()`, `getDriver()`, `getAllDriverFactories()` 改为异步（async）
-3. **修复 `src/lib/storage-drivers/index.ts`**: 移除所有驱动的 `export *` 桶导出，避免意外拉入重型依赖
-4. **更新所有 API 路由**: 为异步驱动函数调用添加 `await`，涉及 11 个 API 路由文件
-5. **修复 `.env` 配置**: 添加缺失的 `NEXTAUTH_URL` 和 `NEXTAUTH_SECRET`
-6. **优化 `next.config.ts`**: 添加 `output: "standalone"` 和更多 `allowedDevOrigins`
+### 1. Created `/src/lib/vfs.ts` (NEW FILE)
+The VFS module was completely missing — the API route imported from it but the file didn't exist. Created it with:
 
-## 当前目标/已完成的修改/验证结果
+- **`getMountPoints()`** — Queries the database for active `StorageDriver` records with mount paths or cloud driver types, returns `VFSMountPointInfo[]`
+- **`resolveVirtualPath(path)`** — Resolves a virtual path (e.g. `/quark/Documents`) to a driver instance + real path within that driver using longest-prefix match against mount points
+- **`listVirtualDir(path)`** — Lists directory contents. Returns mount points for root `/`, delegates to driver's `listDir()` for mounted paths
+- **`readVirtualFile()`**, **`writeVirtualFile()`**, **`deleteVirtualFile()`**, **`getVirtualFileInfo()`**, **`getVirtualDownloadLink()`** — All delegate to the resolved driver
+- **Caching** — 30-second TTL cache for directory listings via `invalidateMountCache()`
+- **Auth status checks** — Throws descriptive errors with codes (`AUTH_REQUIRED`, `AUTH_EXPIRED`) when cloud drivers need authorization
+- **Driver config construction** — `buildDriverConfig()` converts DB records to `StorageDriverConfig` including auth tokens
 
-### 验证结果
-- ✅ `bun run lint` 通过（零错误）
-- ✅ `next build` 成功（standalone 模式）
-- ✅ curl 请求所有路由正常（/, /login, /api/auth/*, /api/files/*, /api/drivers/*）
-- ✅ 登录认证流程正常（CSRF → POST callback → 302 重定向）
-- ✅ 数据库正常（7个用户，admin@clouddrive.com 可登录）
-- ⚠️ agent-browser 测试不稳定（服务器在高并发请求时崩溃）
-- ✅ 生产 standalone 模式内存占用 ~120MB，非常高效
+### 2. Updated `/src/app/api/vfs/[...path]/route.ts`
+- **GET handler** now returns properly formatted responses with:
+  - `path` — the virtual path
+  - `items` — serialized `FileInfo[]` with ISO date strings
+  - `mountPoint` — driver metadata (driverId, driverType, driverName, isReadOnly, authStatus)
+- **Auth error handling** — Detects `AUTH_REQUIRED` and `AUTH_EXPIRED` error codes and returns 403 with structured error info including the mount point
+- **Chinese error messages** — All error responses use Chinese text
+- **POST mkdir** — Now properly invalidates the mount cache after creating a directory
 
-### 架构概览
-- **前端**: Next.js 16 + React 19 + Tailwind CSS 4 + shadcn/ui + Framer Motion
-- **后端**: Next.js API Routes + Prisma/SQLite + NextAuth.js v4
-- **存储**: 本地文件系统 + 多协议驱动适配器（WebDAV/S3/SFTP/FTP/云盘）
-- **驱动工厂**: 懒加载模式，按需初始化驱动实例
-- **认证**: JWT session + Credentials Provider + QR Token 登录
-- **虚拟文件系统**: VFS 层支持多驱动挂载点
+### 3. Updated `/src/components/vfs-browser.tsx`
+- **Mount point auth status** — Mount point cards now show auth status badges:
+  - ✅ "已连接" (authorized) — green badge
+  - ⚠️ "已过期" (expired) — amber badge with icon
+  - 🔒 "需授权" (pending) — sky badge with lock icon
+  - ❌ "授权错误" (error) — red badge with shield icon
+- **Auth-aware click handling** — Clicking a drive that needs auth shows a toast error instead of navigating
+- **Driver display names** — Added `driverDisplayNameMap` with Chinese names for each driver type (百度网盘, 夸克网盘, 阿里云盘, etc.)
+- **Error state UI** — When directory listing fails with an auth error, shows a dedicated error view with lock icon and "需要授权" message, plus a button to guide the user
+- **Toast notifications** — Download and delete operations now show success/error toasts
+- **API response type safety** — Added `DirApiResponse` and `MountPointApiResponse` types for proper API response handling
+- **Date serialization** — Properly converts ISO date strings from API back to `Date` objects for `FileInfo`
 
-## 未解决问题或风险，建议下一阶段优先事项
+## Files Modified
+- `src/lib/vfs.ts` (NEW)
+- `src/app/api/vfs/[...path]/route.ts` (MODIFIED)
+- `src/components/vfs-browser.tsx` (MODIFIED)
 
-### 高优先级
-1. **服务器稳定性**: 沙箱环境中浏览器并发请求导致崩溃，需要排查具体资源限制（可能是 fd 或并发连接数）
-2. **真实云盘 API 对接**: 当前云盘驱动（百度/阿里/夸克/115/OneDrive/Google）仅为框架代码，需参考 AList 实现真实 API 调用
-3. **OAuth 完整流程**: 需要配置真实的 OAuth 凭据（clientId/clientSecret）才能测试 OAuth 登录
+## Test Results
+- `bun run lint` — PASSED (no errors)
+- Dev server compiles successfully
 
-### 中优先级
-4. **文件上传/下载**: 确保本地文件存储的实际上传/下载功能可用
-5. **跨盘传输引擎**: 框架已搭建，但实际跨驱动文件复制/移动未测试
-6. **VFS 浏览器**: 虚拟文件系统浏览器 UI 已有，但需真实驱动数据测试
-
-### 低优先级
-7. **性能优化**: 考虑对大型文件列表进行分页/虚拟滚动
-8. **国际化完善**: 当前支持中英文，但翻译覆盖率需检查
-9. **暗色模式细节**: 部分 UI 组件暗色模式样式需微调
+## Architecture Notes
+- The VFS uses a longest-prefix-match algorithm to resolve virtual paths to mount points
+- Cloud drivers (quark, aliyun, baidu, 115, onedrive, google) automatically get mount points based on their driver type if no explicit mountPath is set
+- Driver instances are created lazily via the existing `getDriver()` from the driver manager
+- Auth tokens from the database are passed to driver configs so drivers can authenticate with cloud APIs

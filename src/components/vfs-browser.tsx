@@ -8,6 +8,7 @@ import {
   Folder, File, Server, Cloud, Globe, Network, HardDrive,
   FolderOpen, ArrowUpDown, Clock, Download, Trash2, FolderPlus,
   Image as ImageIcon, Film, Music, FileText, FileCode, Archive, Table2,
+  AlertTriangle, Lock, ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { useFileStore, type ViewMode, type VfsBreadcrumbItem } from "@/store/file-store";
@@ -44,7 +45,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import type { FileInfo } from "@/lib/storage-drivers/types";
 
-// Static icon map to avoid creating components during render (lint rule)
+// ---------- Static maps ----------
+
 const driverIconMap: Record<string, LucideIcon> = {
   local: Server,
   webdav: Globe,
@@ -85,7 +87,20 @@ const driverBgColorMap: Record<string, string> = {
   ftp: "bg-sky-500/10",
 };
 
-// Static icon map for file type icons
+const driverDisplayNameMap: Record<string, string> = {
+  local: "本地存储",
+  webdav: "WebDAV",
+  s3: "S3",
+  baidu: "百度网盘",
+  aliyun: "阿里云盘",
+  onedrive: "OneDrive",
+  google: "Google Drive",
+  "115": "115网盘",
+  quark: "夸克网盘",
+  ftp: "FTP",
+  mount: "挂载",
+};
+
 const fileIconMap: Record<string, LucideIcon> = {
   Folder,
   ImageIcon,
@@ -97,6 +112,8 @@ const fileIconMap: Record<string, LucideIcon> = {
   Table2,
   File,
 };
+
+// ---------- Helpers ----------
 
 function getVfsFileIconName(item: FileInfo): string {
   if (item.isDir) return "Folder";
@@ -129,39 +146,85 @@ function getVfsFileIconColor(item: FileInfo): string {
   return "text-muted-foreground";
 }
 
-// Renders the correct driver icon using a static map lookup
+// ---------- Sub-components ----------
+
 function DriverIcon({ type, className }: { type: string; className?: string }) {
   const Comp = driverIconMap[type] || Cloud;
   return <Comp className={className} />;
 }
 
-// Renders the correct file icon using a static map lookup
 function VfsFileIcon({ item, className }: { item: FileInfo; className?: string }) {
   const iconName = getVfsFileIconName(item);
   const Comp = fileIconMap[iconName] || File;
   return <Comp className={className} />;
 }
 
-// Mount point card component
+// ---------- Mount point types ----------
+
+interface MountPointData {
+  id: string;
+  driverId: string;
+  mountPath: string;
+  driverType: string;
+  driverName: string;
+  isReadOnly: boolean;
+  isEnabled: boolean;
+  authStatus: string;
+  isDefault?: boolean;
+}
+
+function getAuthStatusBadge(
+  authStatus: string,
+  t: ReturnType<typeof useI18n>["t"]
+) {
+  switch (authStatus) {
+    case "authorized":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+          {t.app.connected || "已连接"}
+        </Badge>
+      );
+    case "expired":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+          <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />
+          {t.app.expired || "已过期"}
+        </Badge>
+      );
+    case "pending":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
+          <Lock className="w-2.5 h-2.5 mr-0.5" />
+          {t.app.authRequired || "需授权"}
+        </Badge>
+      );
+    case "error":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+          <ShieldAlert className="w-2.5 h-2.5 mr-0.5" />
+          {t.app.authError || "授权错误"}
+        </Badge>
+      );
+    default:
+      // For non-cloud drivers (local, etc.), show read/write status
+      return null;
+  }
+}
+
 function MountPointCard({
   mount,
   onClick,
   t,
 }: {
-  mount: {
-    id: string;
-    driverId: string;
-    mountPath: string;
-    driverType: string;
-    isReadOnly: boolean;
-    driverName?: string;
-  };
+  mount: MountPointData;
   onClick: () => void;
   t: ReturnType<typeof useI18n>["t"];
 }) {
   const iconColor = driverIconColorMap[mount.driverType] || "text-muted-foreground";
   const bgColor = driverBgColorMap[mount.driverType] || "bg-muted/50";
-  const displayName = mount.mountPath.replace(/^\/+/, "").split("/")[0] || mount.mountPath;
+  const displayName = mount.driverName || mount.mountPath.replace(/^\/+/, "").split("/")[0] || mount.mountPath;
+  const typeLabel = driverDisplayNameMap[mount.driverType] || mount.driverType;
+  const needsAuth = mount.authStatus === "pending" || mount.authStatus === "error" || mount.authStatus === "expired";
 
   return (
     <motion.div
@@ -172,26 +235,37 @@ function MountPointCard({
       whileTap={{ scale: 0.98 }}
     >
       <Card
-        className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5 hover:border-emerald-500/30 group overflow-hidden"
+        className={cn(
+          "cursor-pointer transition-all duration-200 group overflow-hidden",
+          needsAuth
+            ? "hover:shadow-lg hover:shadow-amber-500/5 hover:border-amber-500/30"
+            : "hover:shadow-lg hover:shadow-emerald-500/5 hover:border-emerald-500/30"
+        )}
         onClick={onClick}
       >
         <div className="p-5 flex flex-col items-center gap-3">
-          <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110", bgColor)}>
+          <div className={cn(
+            "w-14 h-14 rounded-2xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110",
+            bgColor,
+            needsAuth && "opacity-60"
+          )}>
             <DriverIcon type={mount.driverType} className={cn("w-7 h-7", iconColor)} />
           </div>
           <div className="text-center">
             <p className="font-semibold text-sm truncate max-w-[120px]">{displayName}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5 capitalize">{mount.driverType} {t.app.storage}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{typeLabel}</p>
           </div>
-          <div className="flex items-center gap-1.5">
-            {mount.isReadOnly ? (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                {t.app.readOnly}
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                {t.app.readWrite}
-              </Badge>
+          <div className="flex items-center gap-1 flex-wrap justify-center">
+            {getAuthStatusBadge(mount.authStatus, t) || (
+              mount.isReadOnly ? (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                  {t.app.readOnly}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                  {t.app.readWrite}
+                </Badge>
+              )
             )}
           </div>
         </div>
@@ -376,6 +450,54 @@ function VfsFileRow({
   );
 }
 
+// ---------- API response types ----------
+
+interface MountPointApiResponse {
+  id: string;
+  driverId: string;
+  mountPath: string;
+  driverType: string;
+  driverName: string;
+  isReadOnly: boolean;
+  isEnabled: boolean;
+  authStatus: string;
+  isDefault?: boolean;
+}
+
+interface DirApiResponse {
+  path: string;
+  items: Array<{
+    name: string;
+    size: number;
+    isDir: boolean;
+    lastModified: string | null;
+    id: string | null;
+    mimeType: string | null;
+  }>;
+  mountPoint?: {
+    driverId: string;
+    driverType: string;
+    driverName: string;
+    isReadOnly: boolean;
+    authStatus: string;
+  };
+  error?: string;
+  code?: string;
+}
+
+function apiItemToFileInfo(item: DirApiResponse["items"][number]): FileInfo {
+  return {
+    name: item.name,
+    size: item.size,
+    isDir: item.isDir,
+    lastModified: item.lastModified ? new Date(item.lastModified) : undefined,
+    id: item.id ?? undefined,
+    mimeType: item.mimeType ?? undefined,
+  };
+}
+
+// ---------- Main component ----------
+
 export function VfsBrowser() {
   const {
     vfsPath, vfsBreadcrumb, navigateToVfsPath, navigateToVfsRoot, navigateToVfsParent,
@@ -398,26 +520,61 @@ export function VfsBrowser() {
     queryKey: ["vfs-mounts-browser"],
     queryFn: async () => {
       const res = await fetch("/api/vfs?action=mounts");
-      if (!res.ok) throw new Error("Failed to fetch VFS mounts");
-      return res.json();
+      if (!res.ok) throw new Error("获取挂载点失败");
+      return res.json() as Promise<{ mounts: MountPointApiResponse[] }>;
     },
   });
 
   // Fetch directory listing
-  const { data: dirData, isLoading: dirLoading, refetch: refetchDir } = useQuery({
+  const { data: dirData, isLoading: dirLoading, refetch: refetchDir, error: dirError } = useQuery({
     queryKey: ["vfs-dir", vfsPath],
     queryFn: async () => {
-      if (isRoot) return { items: [], path: "/" };
+      if (isRoot) return { path: "/", items: [] } as DirApiResponse;
       const pathSegments = vfsPath.replace(/^\/+/, "");
       const res = await fetch(`/api/vfs/${pathSegments}`);
-      if (!res.ok) throw new Error("Failed to list VFS directory");
-      return res.json();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "未知错误" })) as { error?: string; code?: string };
+        if (data.code === "AUTH_REQUIRED" || data.code === "AUTH_EXPIRED") {
+          throw new Error(data.error || "需要授权");
+        }
+        throw new Error(data.error || "列出目录失败");
+      }
+      return res.json() as Promise<DirApiResponse>;
     },
     enabled: !isRoot,
   });
 
-  const mounts = mountsData?.mounts || [];
-  const items: FileInfo[] = dirData?.items || [];
+  const mounts: MountPointData[] = (mountsData?.mounts || []).map((m) => ({
+    id: m.id,
+    driverId: m.driverId,
+    mountPath: m.mountPath,
+    driverType: m.driverType,
+    driverName: m.driverName,
+    isReadOnly: m.isReadOnly,
+    isEnabled: m.isEnabled,
+    authStatus: m.authStatus,
+    isDefault: m.isDefault,
+  }));
+
+  const items: FileInfo[] = (dirData?.items || []).map(apiItemToFileInfo);
+
+  // Current mount info from directory response
+  const currentMountFromApi = dirData?.mountPoint;
+
+  // Find current mount info for read-only check (from either API response or local mount data)
+  const currentMount = currentMountFromApi
+    ? {
+        isReadOnly: currentMountFromApi.isReadOnly,
+        driverType: currentMountFromApi.driverType,
+        driverName: currentMountFromApi.driverName,
+        authStatus: currentMountFromApi.authStatus,
+      }
+    : mounts.find((m) => {
+        const normalizedMountPath = "/" + m.mountPath.replace(/^\/+/, "").replace(/\/+$/, "");
+        const normalizedVfsPath = "/" + vfsPath.replace(/^\/+/, "").replace(/\/+$/, "");
+        return normalizedVfsPath === normalizedMountPath || normalizedVfsPath.startsWith(normalizedMountPath + "/");
+      });
+  const isReadOnly = currentMount?.isReadOnly ?? false;
 
   // Sort items
   const sortedItems = [...items].sort((a, b) => {
@@ -442,16 +599,21 @@ export function VfsBrowser() {
     return sortDirection === "asc" ? cmp : -cmp;
   });
 
-  // Find current mount info for read-only check
-  const currentMount = mounts.find((m: { mountPath: string; driverId: string }) => {
-    const normalizedMountPath = "/" + m.mountPath.replace(/^\/+/, "").replace(/\/+$/, "");
-    const normalizedVfsPath = "/" + vfsPath.replace(/^\/+/, "").replace(/\/+$/, "");
-    return normalizedVfsPath === normalizedMountPath || normalizedVfsPath.startsWith(normalizedMountPath + "/");
-  });
-  const isReadOnly = currentMount?.isReadOnly ?? false;
-
   // Handle mount point click
-  const handleMountClick = useCallback((mount: { mountPath: string; driverId: string; driverType: string }) => {
+  const handleMountClick = useCallback((mount: MountPointData) => {
+    // If the drive needs auth, show a toast
+    if (mount.authStatus === "pending" || mount.authStatus === "error") {
+      toast.error(`${mount.driverName} 需要先完成授权才能浏览文件`, {
+        description: "请前往管理面板完成授权配置",
+      });
+      return;
+    }
+    if (mount.authStatus === "expired") {
+      toast.error(`${mount.driverName} 授权已过期`, {
+        description: "请前往管理面板重新授权",
+      });
+      return;
+    }
     navigateToVfsPath(mount.mountPath, mount.driverId, mount.driverType);
   }, [navigateToVfsPath]);
 
@@ -487,7 +649,7 @@ export function VfsBrowser() {
         }
       }
     } catch {
-      // Silent - could add toast
+      toast.error("获取下载链接失败");
     }
   }, [vfsPath]);
 
@@ -498,10 +660,14 @@ export function VfsBrowser() {
     try {
       const res = await fetch(`/api/vfs/${pathSegments}`, { method: "DELETE" });
       if (res.ok) {
+        toast.success("删除成功");
         refetchDir();
+      } else {
+        const data = await res.json().catch(() => ({ error: "删除失败" }));
+        toast.error(data.error || "删除失败");
       }
     } catch {
-      // Silent - could add toast
+      toast.error("删除失败");
     }
   }, [vfsPath, refetchDir]);
 
@@ -547,6 +713,11 @@ export function VfsBrowser() {
       setCreatingFolder(false);
     }
   }, [newFolderName, vfsPath, refetchDir, t]);
+
+  // Determine error message for auth errors
+  const dirErrorMessage = dirError instanceof Error ? dirError.message : null;
+  const isAuthError = dirError instanceof Error &&
+    (dirError.message.includes("授权") || dirError.message.includes("认证"));
 
   return (
     <div className="flex flex-col h-full">
@@ -651,7 +822,7 @@ export function VfsBrowser() {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">{t.app.admin?.refresh || "Refresh"}</TooltipContent>
+              <TooltipContent side="bottom" className="text-xs">{t.app.admin?.refresh || "刷新"}</TooltipContent>
             </Tooltip>
 
             {/* View toggle */}
@@ -777,14 +948,7 @@ export function VfsBrowser() {
                 </motion.div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {mounts.map((mount: {
-                    id: string;
-                    driverId: string;
-                    mountPath: string;
-                    driverType: string;
-                    isReadOnly: boolean;
-                    driverName?: string;
-                  }) => (
+                  {mounts.map((mount) => (
                     <MountPointCard
                       key={mount.id}
                       mount={mount}
@@ -826,6 +990,46 @@ export function VfsBrowser() {
                 </div>
               )}
             </motion.div>
+          ) : dirError ? (
+            /* Error state (auth errors, etc.) */
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-24 text-muted-foreground min-h-[300px]"
+            >
+              <motion.div
+                animate={{ y: [0, -8, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                className={cn(
+                  "w-24 h-24 rounded-3xl flex items-center justify-center mb-6",
+                  isAuthError ? "bg-amber-500/10" : "bg-red-500/10"
+                )}
+              >
+                {isAuthError ? (
+                  <Lock className="w-12 h-12 text-amber-500/60" />
+                ) : (
+                  <AlertTriangle className="w-12 h-12 text-red-500/60" />
+                )}
+              </motion.div>
+              <p className="text-lg font-semibold mb-1">
+                {isAuthError ? "需要授权" : "加载失败"}
+              </p>
+              <p className="text-sm max-w-xs text-center text-muted-foreground/70">
+                {dirErrorMessage || "无法加载目录内容"}
+              </p>
+              {isAuthError && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    toast.info("请前往管理面板完成授权配置");
+                  }}
+                >
+                  前往授权
+                </Button>
+              )}
+            </motion.div>
           ) : sortedItems.length === 0 ? (
             /* Empty directory */
             <motion.div
@@ -857,7 +1061,7 @@ export function VfsBrowser() {
             >
               {sortedItems.map((item, index) => (
                 <motion.div
-                  key={item.name}
+                  key={item.name + (item.id || "")}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, delay: index * 0.03 }}
@@ -896,7 +1100,7 @@ export function VfsBrowser() {
                 <tbody>
                   {sortedItems.map((item) => (
                     <VfsFileRow
-                      key={item.name}
+                      key={item.name + (item.id || "")}
                       item={item}
                       onNavigate={handleFolderNavigate}
                       onFileClick={handleFileClick}

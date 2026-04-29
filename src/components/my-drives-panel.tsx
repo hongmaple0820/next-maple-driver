@@ -31,6 +31,7 @@ import {
 import { useFileStore } from "@/store/file-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DriverAuthorizationDialog } from "@/components/driver-authorization-dialog";
 
 // Driver type visual config
 const DRIVER_TYPE_CONFIG: Record<string, {
@@ -192,10 +193,12 @@ function AddDriveDialog({
   open,
   onOpenChange,
   driverType,
+  onDriverCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   driverType: string | null;
+  onDriverCreated?: (driver: { id: string; name: string; type: string; status: string; authType: string; authStatus: string }) => void;
 }) {
   const queryClient = useQueryClient();
   const config = driverType ? DRIVER_TYPE_CONFIG[driverType] : null;
@@ -273,6 +276,7 @@ function AddDriveDialog({
     onSuccess: (data) => {
       setCreatedDriverId(data.id);
       toast.success(`驱动 "${name}" 创建成功`);
+      onDriverCreated?.(data);
     },
     onError: (error) => {
       toast.error(error.message);
@@ -833,6 +837,19 @@ export function MyDrivesPanel() {
   const [addDriveType, setAddDriveType] = useState<string | null>(null);
   const [addDriveOpen, setAddDriveOpen] = useState(false);
 
+  // State for authorization dialog
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authDriver, setAuthDriver] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    authType: string;
+    authStatus: string;
+    config?: string;
+    mountPath?: string;
+  } | null>(null);
+
   // Fetch user's drivers
   const {
     data: driversData,
@@ -979,6 +996,20 @@ export function MyDrivesPanel() {
     setAddDriveOpen(true);
   }, []);
 
+  const handleAuthorize = useCallback((driver: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    authType: string;
+    authStatus: string;
+    config?: string;
+    mountPath?: string;
+  }) => {
+    setAuthDriver(driver);
+    setAuthDialogOpen(true);
+  }, []);
+
   const nonDefaultDrivers = drivers.filter((d) => !d.isDefault);
   const defaultDriver = drivers.find((d) => d.isDefault);
 
@@ -1100,6 +1131,7 @@ export function MyDrivesPanel() {
                           onDelete={(id) => deleteDriverMutation.mutate(id)}
                           deleteLoading={deleteDriverMutation.isPending}
                           onDeauth={(id) => deauthMutation.mutate(id)}
+                          onAuthorize={handleAuthorize}
                         />
                       )}
 
@@ -1122,6 +1154,7 @@ export function MyDrivesPanel() {
                               onDelete={(id) => deleteDriverMutation.mutate(id)}
                               deleteLoading={deleteDriverMutation.isPending}
                               onDeauth={(id) => deauthMutation.mutate(id)}
+                              onAuthorize={handleAuthorize}
                             />
                           </motion.div>
                         ))}
@@ -1148,6 +1181,34 @@ export function MyDrivesPanel() {
         open={addDriveOpen}
         onOpenChange={setAddDriveOpen}
         driverType={addDriveType}
+        onDriverCreated={(createdDriver) => {
+          // For cloud driver types that need auth, open the authorization dialog
+          const isOAuthType = ["baidu", "aliyun", "onedrive", "google"].includes(createdDriver.type);
+          const isCookieType = ["115", "quark"].includes(createdDriver.type);
+          if (isOAuthType || isCookieType) {
+            setAuthDriver({
+              id: createdDriver.id,
+              name: createdDriver.name,
+              type: createdDriver.type,
+              status: createdDriver.status || "active",
+              authType: createdDriver.authType || (isOAuthType ? "oauth" : "password"),
+              authStatus: createdDriver.authStatus || "pending",
+            });
+            setAddDriveOpen(false);
+            setTimeout(() => setAuthDialogOpen(true), 300);
+          }
+        }}
+      />
+
+      {/* Driver Authorization Dialog */}
+      <DriverAuthorizationDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        driver={authDriver}
+        onAuthorized={() => {
+          queryClient.invalidateQueries({ queryKey: ["my-drivers"] });
+          queryClient.invalidateQueries({ queryKey: ["sidebar-drivers"] });
+        }}
       />
     </>
   );
@@ -1164,6 +1225,7 @@ function DriverCard({
   onDelete,
   deleteLoading,
   onDeauth,
+  onAuthorize,
 }: {
   driver: {
     id: string;
@@ -1184,6 +1246,16 @@ function DriverCard({
   onDelete: (id: string) => void;
   deleteLoading: boolean;
   onDeauth: (id: string) => void;
+  onAuthorize?: (driver: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    authType: string;
+    authStatus: string;
+    config?: string;
+    mountPath?: string;
+  }) => void;
 }) {
   const { browseDriver, setMyDrivesOpen } = useFileStore();
   const [showActions, setShowActions] = useState(false);
@@ -1294,21 +1366,29 @@ function DriverCard({
                 浏览文件
               </Button>
 
-              {/* Re-authorize */}
+              {/* Re-authorize / Authorize */}
               {needsAuth && !isDefault && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs gap-1"
-                  onClick={() => onReauth(driver.id)}
+                  onClick={() => {
+                    if (onAuthorize) {
+                      onAuthorize(driver);
+                    } else {
+                      onReauth(driver.id);
+                    }
+                  }}
                   disabled={reauthLoading}
                 >
                   {reauthLoading ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : driver.authStatus === "pending" || driver.authStatus === "expired" || driver.authStatus === "error" ? (
+                    <ShieldCheck className="w-3 h-3" />
                   ) : (
                     <RefreshCw className="w-3 h-3" />
                   )}
-                  重新授权
+                  {driver.authStatus === "pending" || driver.authStatus === "expired" || driver.authStatus === "error" ? "去授权" : "重新授权"}
                 </Button>
               )}
 

@@ -37,7 +37,7 @@ export async function GET(
     if (action === 'info') {
       const info = await getVirtualFileInfo(virtualPath);
       if (!info) {
-        return NextResponse.json({ error: 'Path not found' }, { status: 404 });
+        return NextResponse.json({ error: '未找到该路径' }, { status: 404 });
       }
       return NextResponse.json({ info });
     }
@@ -46,18 +46,53 @@ export async function GET(
     if (action === 'download') {
       const link = await getVirtualDownloadLink(virtualPath);
       if (!link) {
-        return NextResponse.json({ error: 'No download link available' }, { status: 404 });
+        return NextResponse.json({ error: '无法获取下载链接' }, { status: 404 });
       }
       return NextResponse.json({ url: link });
     }
 
     // Default: list directory
-    const items = await listVirtualDir(virtualPath);
-    return NextResponse.json({ items, path: virtualPath });
+    const result = await listVirtualDir(virtualPath);
+    return NextResponse.json({
+      path: result.path,
+      items: result.items.map((item) => ({
+        name: item.name,
+        size: item.size,
+        isDir: item.isDir,
+        lastModified: item.lastModified?.toISOString() ?? null,
+        id: item.id ?? null,
+        mimeType: item.mimeType ?? null,
+      })),
+      mountPoint: result.mountPoint
+        ? {
+            driverId: result.mountPoint.driverId,
+            driverType: result.mountPoint.driverType,
+            driverName: result.mountPoint.driverName,
+            isReadOnly: result.mountPoint.isReadOnly,
+            authStatus: result.mountPoint.authStatus,
+          }
+        : undefined,
+    });
   } catch (error) {
     console.error('VFS GET error:', error);
+
+    // Check for auth-related errors
+    if (error instanceof Error) {
+      const errWithCode = error as Error & { code?: string; mountPoint?: unknown };
+      if (errWithCode.code === 'AUTH_REQUIRED' || errWithCode.code === 'AUTH_EXPIRED') {
+        return NextResponse.json(
+          {
+            error: error.message,
+            code: errWithCode.code,
+            mountPoint: errWithCode.mountPoint,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
+      { error: error instanceof Error ? error.message : '内部错误' },
       { status: 500 }
     );
   }
@@ -80,12 +115,13 @@ export async function POST(
     if (action === 'mkdir') {
       const resolved = await resolveVirtualPath(virtualPath);
       if (!resolved) {
-        return NextResponse.json({ error: 'Mount point not found' }, { status: 404 });
+        return NextResponse.json({ error: '未找到挂载点' }, { status: 404 });
       }
       if (resolved.mountPoint.isReadOnly) {
-        return NextResponse.json({ error: 'Mount point is read-only' }, { status: 403 });
+        return NextResponse.json({ error: '该挂载点为只读' }, { status: 403 });
       }
       await resolved.driver.createDir(resolved.realPath);
+      invalidateMountCache(resolved.mountPoint.mountPath);
       return NextResponse.json({ success: true, path: virtualPath });
     }
 
@@ -93,7 +129,7 @@ export async function POST(
       const formData = await request.formData();
       const file = formData.get('file') as File;
       if (!file) {
-        return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        return NextResponse.json({ error: '未提供文件' }, { status: 400 });
       }
       const data = Buffer.from(await file.arrayBuffer());
       const filePath = virtualPath + '/' + file.name;
@@ -101,11 +137,11 @@ export async function POST(
       return NextResponse.json({ success: true, path: filePath });
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    return NextResponse.json({ error: '未知操作' }, { status: 400 });
   } catch (error) {
     console.error('VFS POST error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
+      { error: error instanceof Error ? error.message : '内部错误' },
       { status: 500 }
     );
   }
@@ -120,7 +156,7 @@ export async function DELETE(
   if (!user) return unauthorizedResponse();
   const isAdmin = (user as Record<string, unknown>).role === 'admin';
   if (!isAdmin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    return NextResponse.json({ error: '需要管理员权限' }, { status: 403 });
   }
 
   const { path: pathSegments } = await params;
@@ -133,7 +169,7 @@ export async function DELETE(
   } catch (error) {
     console.error('VFS DELETE error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
+      { error: error instanceof Error ? error.message : '内部错误' },
       { status: 500 }
     );
   }
